@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v23';
+const VERSIONE = 'taximanager-v24';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -118,6 +118,20 @@ function reteConScadenza(richiesta, ms) {
   });
 }
 
+// Sullo stesso sito vive anche l'app "Conti", nella cartella /finanze/.
+// Questo service worker copre tutta la radice, quindi si troverebbe a
+// rispondere anche per lei: senza rete servirebbe la propria index.html,
+// cioe' TaxiManager al posto dell'app dei conti. Le sue richieste vanno
+// lasciate al service worker di quella cartella.
+const ALTRE_APP = ['/finanze/'];
+function diUnAltraApp(url) {
+  try {
+    return ALTRE_APP.some((cartella) => new URL(url).pathname.includes(cartella));
+  } catch (err) {
+    return false;
+  }
+}
+
 self.addEventListener('fetch', (evento) => {
   const richiesta = evento.request;
 
@@ -125,6 +139,7 @@ self.addEventListener('fetch', (evento) => {
   // Estensioni del browser e simili: non sono roba nostra
   if (!richiesta.url.startsWith('http')) return;
   if (daNonIntercettare(richiesta.url)) return;
+  if (diUnAltraApp(richiesta.url)) return;
 
   // Navigazione (apertura dell'app): prima la rete, se manca o è troppo lenta
   // uso la copia salvata. In cache va solo una risposta valida: prima ci finiva
