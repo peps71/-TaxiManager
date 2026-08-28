@@ -2,7 +2,7 @@
    Aumenta il numero di VERSIONE a ogni modifica dei file: è così che il
    telefono capisce di dover scaricare la versione nuova. */
 
-const VERSIONE = 'conti-v1';
+const VERSIONE = 'conti-v2';
 
 // L'app non dipende da niente di esterno: sono tutti file di questa cartella.
 const FILE_APP = [

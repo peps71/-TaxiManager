@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Conti">
-<meta name="description" content="Gestione dei conti correnti aziendale e famigliare: movimenti, giroconti, budget, scadenze e report.">
+<meta name="description" content="Gestione dei conti correnti aziendale e famigliare: caricamento dell'estratto conto, movimenti, giroconti, budget, scadenze e report.">
 <link rel="icon" href="./favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
@@ -38,6 +38,8 @@
 
   --marchio:       #1e3a5f;
   --marchio-chiaro:#e8eef5;
+  --pulsante:      #1e3a5f;
+  --pulsante-testo:#ffffff;
   --azienda:       #2563eb;
   --azienda-tenue: #dbeafe;
   --famiglia:      #0d9488;
@@ -72,6 +74,8 @@
 
     --marchio:       #7aa5df;
     --marchio-chiaro:#1b2739;
+    --pulsante:      #2563eb;
+    --pulsante-testo:#ffffff;
     --azienda:       #60a5fa;
     --azienda-tenue: #17293f;
     --famiglia:      #2dd4bf;
@@ -299,7 +303,8 @@ input[type=number] { font-variant-numeric: tabular-nums; }
   font-weight: 700; font-size: 14px;
 }
 .bottone:hover { background: var(--superficie-2); }
-.bottone.pieno { background: var(--marchio); border-color: var(--marchio); color: #fff; }
+.bottone.pieno { background: var(--pulsante); border-color: var(--pulsante); color: var(--pulsante-testo); }
+.bottone[disabled] { opacity: .45; cursor: not-allowed; }
 .bottone.pieno:hover { filter: brightness(1.12); }
 .bottone.pericolo { background: var(--uscita); border-color: var(--uscita); color: #fff; }
 .bottone.piccolo { padding: 6px 10px; font-size: 12.5px; border-radius: 8px; }
@@ -368,6 +373,27 @@ tfoot td { font-weight: 800; border-top: 2px solid var(--bordo-forte); }
 }
 #messaggio.visibile { opacity: 1; transform: translateX(-50%) translateY(0); }
 @media (min-width: 900px) { #messaggio { bottom: 20px; } }
+
+/* ---------- passi della procedura di importazione ---------- */
+.passi { display: flex; gap: 6px; flex-wrap: wrap; }
+.passo {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 750; color: var(--testo-3);
+  padding: 5px 10px; border-radius: 999px; border: 1px solid var(--bordo);
+}
+.passo b {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bordo); color: var(--testo-2);
+  display: grid; place-items: center; font-size: 11px;
+}
+.passo.attivo { color: var(--marchio); border-color: var(--marchio); background: var(--marchio-chiaro); }
+.passo.attivo b { background: var(--marchio); color: #fff; }
+.passo.fatto { color: var(--entrata); border-color: var(--entrata); }
+.passo.fatto b { background: var(--entrata); color: #fff; }
+
+/* Nella tabella di controllo le descrizioni della banca sono lunghe */
+.tabella-scorre table input[type=text] { min-width: 150px; }
+.tabella-scorre table input[type=checkbox] { width: 20px; height: 20px; }
 
 /* ---------- stampa ---------- */
 @media print {
@@ -477,13 +503,13 @@ const CATEGORIE_INIZIALI = {
     ENTRATA: ['Incassi', 'Corse convenzionate', 'Rimborsi', 'Altre entrate'],
     USCITA:  ['Carburante', 'Manutenzione', 'Assicurazione', 'Radio taxi', 'Bollo e tasse auto',
               'Commercialista', 'Contributi INPS', 'Imposte', 'Finanziamento veicolo',
-              'Licenza', 'Telefono e internet', 'Altre spese']
+              'Licenza', 'Telefono e internet', 'Spese bancarie', 'Prelievo contanti', 'Altre spese']
   },
   famigliare: {
     ENTRATA: ['Prelievo dal conto aziendale', 'Stipendio', 'Pensione', 'Rimborsi', 'Altre entrate'],
     USCITA:  ['Spesa alimentare', 'Casa (mutuo o affitto)', 'Utenze', 'Auto privata', 'Salute',
-              'Scuola e figli', 'Abbigliamento', 'Svago e vacanze', 'Assicurazioni',
-              'Risparmio', 'Altre spese']
+              'Scuola e figli', 'Abbigliamento', 'Svago e vacanze', 'Assicurazione',
+              'Spese bancarie', 'Prelievo contanti', 'Risparmio', 'Altre spese']
   }
 };
 
@@ -526,7 +552,8 @@ const stato = {
     filtri: { conto: 'TUTTI', tipo: 'TUTTI', categoria: 'TUTTE', mese: 'TUTTI', cerca: '' },
     moduloBudget: false,
     moduloRicorrente: false,
-    ricorrenteInModifica: null
+    ricorrenteInModifica: null,
+    importazione: null        // procedura di caricamento dell'estratto conto
   }
 };
 
@@ -1236,6 +1263,10 @@ function mesiDellAnno() {
 }
 
 function vistaMovimenti() {
+  // Caricamento di un estratto conto in corso: prende tutta la scheda,
+  // così non si rischia di registrare un movimento a mano nel frattempo.
+  if (stato.ui.importazione) return vistaImportazione();
+
   const f = stato.ui.filtri;
   const elenco = movimentiFiltrati();
   const entrate = elenco.filter(m => m.tipo === 'ENTRATA').reduce((t, m) => t + Number(m.importo || 0), 0);
@@ -1246,7 +1277,10 @@ function vistaMovimenti() {
     <div class="pila">
 
       ${stato.ui.modulo ? moduloMovimento() : `
-        <button class="bottone pieno largo no-stampa" onclick="apriModulo()">+ Registra un movimento</button>`}
+        <div class="bottoni no-stampa" style="display:grid;grid-template-columns:1fr;gap:8px">
+          <button class="bottone pieno largo" onclick="apriModulo()">+ Registra un movimento</button>
+          <button class="bottone largo" onclick="avviaImportazione()">📄 Carica l'estratto conto della banca</button>
+        </div>`}
 
       <div class="riquadro no-stampa">
         <div class="corpo stretto" style="padding-top:14px;padding-bottom:14px">
@@ -1913,6 +1947,34 @@ function vistaImpostazioni() {
         </div>
       </div>
 
+      <div class="riquadro">
+        <header><h3>Estratto conto e categorie automatiche</h3></header>
+        <div class="corpo">
+          <p class="aiuto" style="margin:0 0 12px">
+            Carica il file dei movimenti scaricato dall'home banking (CSV o Excel): l'app riconosce
+            le colonne, propone la categoria di ogni operazione e scarta quelle già in archivio.
+          </p>
+          <button class="bottone pieno" onclick="avviaImportazione()">Carica un estratto conto</button>
+
+          ${Object.keys(stato.impostazioni.regoleApprese || {}).length ? `
+            <p class="titolo-sezione" style="margin:20px 0 8px">Categorie che l'app ha imparato</p>
+            <p class="aiuto" style="margin:0 0 10px">
+              Ogni volta che correggi una categoria durante l'importazione, l'app se la ricorda per
+              le operazioni che si ripetono uguali. Qui puoi cancellare quelle sbagliate.
+            </p>
+            <ul class="elenco" style="border:1px solid var(--bordo);border-radius:var(--raggio-s)">
+              ${Object.keys(stato.impostazioni.regoleApprese).sort().map(chiave => `
+                <li><div class="voce">
+                  <span class="centro">
+                    <span class="desc libera">${e(stato.impostazioni.regoleApprese[chiave])}</span>
+                    <span class="meta libera">quando la descrizione somiglia a: ${e(chiave)}</span>
+                  </span>
+                  <button class="bottone piccolo" onclick="dimentica('${ej(chiave)}')">Togli</button>
+                </div></li>`).join('')}
+            </ul>` : ''}
+        </div>
+      </div>
+
       <div class="riquadro" style="border-color:var(--uscita)">
         <header><h3 style="color:var(--uscita)">Azzera tutto</h3></header>
         <div class="corpo">
@@ -2058,6 +2120,16 @@ function importaBackup(ev) {
   lettore.readAsText(file);
 }
 
+function dimentica(chiave) {
+  const apprese = stato.impostazioni.regoleApprese || {};
+  if (!apprese[chiave]) return;
+  if (!confirm(`Dimentico la categoria «${apprese[chiave]}» per queste operazioni?`)) return;
+  delete apprese[chiave];
+  salva.impostazioni();
+  messaggio('Regola dimenticata.');
+  render();
+}
+
 function azzeraTutto() {
   if (!confirm('Cancello movimenti, budget e pagamenti ricorrenti di questo dispositivo?')) return;
   if (!confirm('Conferma definitiva: l\'operazione non si può annullare. Hai già scaricato un backup?')) return;
@@ -2067,6 +2139,894 @@ function azzeraTutto() {
   salva.movimenti(); salva.budget(); salva.ricorrenti();
   messaggio('Dati azzerati.');
   render(true);
+}
+
+
+/* ------------------------------------------------------------
+   16. LETTURA DI UN ESTRATTO CONTO
+   Il file viene letto qui, dentro il telefono: non esce da questo
+   dispositivo e non viene mandato a nessun servizio.
+   Si accettano CSV ed Excel (.xlsx), i due formati che tutte le
+   banche italiane mettono a disposizione nell'home banking.
+   ------------------------------------------------------------ */
+
+// --- numeri e date nei formati usati dalle banche ---
+
+// "1.234,56"  "-1.234,56"  "1234.56"  "(120,00)"  "45,00-"  "€ 89,90"
+function numeroBanca(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  let t = String(v === null || v === undefined ? '' : v).trim();
+  if (!t) return null;
+  t = t.replace(/[€$\s ]/g, '');
+  let negativo = false;
+  if (/^\(.*\)$/.test(t)) { negativo = true; t = t.slice(1, -1); }
+  if (/-$/.test(t)) { negativo = true; t = t.slice(0, -1); }
+  if (/^-/.test(t)) { negativo = true; t = t.slice(1); }
+  if (!t) return null;
+  const virgola = t.lastIndexOf(',');
+  const punto = t.lastIndexOf('.');
+  if (virgola > -1 && virgola > punto) {
+    // formato italiano: il punto separa le migliaia
+    t = t.replace(/\./g, '').replace(',', '.');
+  } else if (punto > -1 && virgola > -1) {
+    // formato inglese: la virgola separa le migliaia
+    t = t.replace(/,/g, '');
+  } else if (virgola > -1) {
+    t = t.replace(',', '.');
+  }
+  if (!/^\d*\.?\d+$/.test(t)) return null;
+  const n = parseFloat(t);
+  if (!Number.isFinite(n)) return null;
+  return Math.round((negativo ? -n : n) * 100) / 100;
+}
+
+// "31/12/2026"  "31-12-26"  "2026-12-31"  "31.12.2026"  e il numero seriale di Excel
+function dataBanca(v) {
+  if (typeof v === 'number') return dataDaSerialeExcel(v);
+  const t = String(v === null || v === undefined ? '' : v).trim();
+  if (!t) return null;
+
+  let m = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (m) return componiData(m[1], m[2], m[3]);
+
+  m = t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/);
+  if (m) {
+    let anno = m[3];
+    if (anno.length === 2) anno = (Number(anno) > 70 ? '19' : '20') + anno;
+    return componiData(anno, m[2], m[1]);
+  }
+  // Solo cifre attaccate: potrebbe essere un seriale di Excel finito in stringa
+  if (/^\d+(\.\d+)?$/.test(t)) return dataDaSerialeExcel(Number(t));
+  return null;
+}
+
+function componiData(a, m, g) {
+  const anno = Number(a), mese = Number(m), giorno = Number(g);
+  if (!anno || mese < 1 || mese > 12 || giorno < 1 || giorno > 31) return null;
+  if (anno < 1990 || anno > 2100) return null;
+  return `${anno}-${String(mese).padStart(2, '0')}-${String(giorno).padStart(2, '0')}`;
+}
+
+// Excel conta i giorni dal 30/12/1899 (l'anno 1900 gli risulta bisestile per un
+// vecchio errore, e questa base lo compensa).
+function dataDaSerialeExcel(n) {
+  if (!Number.isFinite(n) || n < 20000 || n > 80000) return null;
+  const d = new Date(Date.UTC(1899, 11, 30) + Math.round(n) * 86400000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+// --- lettura CSV ---
+
+function delimitatoreProbabile(testo) {
+  const righe = testo.split(/\r?\n/).filter(r => r.trim()).slice(0, 12);
+  const candidati = [';', ',', '\t', '|'];
+  let migliore = ';', punteggioMigliore = -1;
+  candidati.forEach(d => {
+    const conteggi = righe.map(r => (r.match(new RegExp('\\' + d, 'g')) || []).length);
+    const media = conteggi.reduce((a, b) => a + b, 0) / (conteggi.length || 1);
+    if (media < 1) return;
+    // Vince il separatore che compare lo stesso numero di volte in tutte le righe
+    const varianza = conteggi.reduce((a, c) => a + Math.pow(c - media, 2), 0) / (conteggi.length || 1);
+    const punteggio = media - varianza;
+    if (punteggio > punteggioMigliore) { punteggioMigliore = punteggio; migliore = d; }
+  });
+  return migliore;
+}
+
+function leggiCSV(testo) {
+  const d = delimitatoreProbabile(testo);
+  const righe = [];
+  let riga = [], campo = '', traVirgolette = false;
+  for (let i = 0; i < testo.length; i++) {
+    const c = testo[i];
+    if (traVirgolette) {
+      if (c === '"') {
+        if (testo[i + 1] === '"') { campo += '"'; i++; }
+        else traVirgolette = false;
+      } else campo += c;
+      continue;
+    }
+    if (c === '"') { traVirgolette = true; continue; }
+    if (c === d) { riga.push(campo.trim()); campo = ''; continue; }
+    if (c === '\n') { riga.push(campo.trim()); righe.push(riga); riga = []; campo = ''; continue; }
+    if (c === '\r') continue;
+    campo += c;
+  }
+  if (campo || riga.length) { riga.push(campo.trim()); righe.push(riga); }
+  return righe.filter(r => r.some(x => x !== ''));
+}
+
+// --- lettura Excel (.xlsx) ---
+// Un .xlsx è un archivio zip di file XML. Il browser sa già scompattare
+// (DecompressionStream), quindi non serve nessuna libreria esterna.
+
+async function scompattaZip(buffer) {
+  const dati = new Uint8Array(buffer);
+  const vista = new DataView(buffer);
+  // Coda dell'archivio: contiene la posizione dell'indice dei file
+  let fine = -1;
+  for (let i = dati.length - 22; i >= Math.max(0, dati.length - 66000); i--) {
+    if (vista.getUint32(i, true) === 0x06054b50) { fine = i; break; }
+  }
+  if (fine < 0) throw new Error('Non sembra un file Excel valido.');
+
+  const quanti = vista.getUint16(fine + 10, true);
+  let p = vista.getUint32(fine + 16, true);
+  const file = {};
+
+  for (let n = 0; n < quanti; n++) {
+    if (vista.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = vista.getUint16(p + 10, true);
+    const dimCompressa = vista.getUint32(p + 20, true);
+    const lunNome = vista.getUint16(p + 28, true);
+    const lunExtra = vista.getUint16(p + 30, true);
+    const lunCommento = vista.getUint16(p + 32, true);
+    const inizioLocale = vista.getUint32(p + 42, true);
+    const nome = new TextDecoder().decode(dati.subarray(p + 46, p + 46 + lunNome));
+    p += 46 + lunNome + lunExtra + lunCommento;
+
+    const lunNomeLoc = vista.getUint16(inizioLocale + 26, true);
+    const lunExtraLoc = vista.getUint16(inizioLocale + 28, true);
+    const inizioDati = inizioLocale + 30 + lunNomeLoc + lunExtraLoc;
+    const pezzo = dati.subarray(inizioDati, inizioDati + dimCompressa);
+
+    if (metodo === 0) {
+      file[nome] = new TextDecoder().decode(pezzo);
+    } else if (metodo === 8) {
+      if (typeof DecompressionStream === 'undefined') {
+        throw new Error('Questo browser non sa aprire i file Excel: esporta l\'estratto conto in CSV.');
+      }
+      const flusso = new Blob([pezzo]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      file[nome] = await new Response(flusso).text();
+    }
+  }
+  return file;
+}
+
+// "BC12" -> 54 (indice della colonna, partendo da 0)
+function indiceColonna(riferimento) {
+  const lettere = String(riferimento || '').replace(/[^A-Z]/g, '');
+  let n = 0;
+  for (let i = 0; i < lettere.length; i++) n = n * 26 + (lettere.charCodeAt(i) - 64);
+  return n - 1;
+}
+
+async function leggiXLSX(buffer) {
+  const file = await scompattaZip(buffer);
+  const nomeFoglio = Object.keys(file)
+    .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+    .sort()[0];
+  if (!nomeFoglio) throw new Error('Nel file Excel non c\'è nessun foglio da leggere.');
+
+  const parser = new DOMParser();
+  const condivise = [];
+  if (file['xl/sharedStrings.xml']) {
+    const doc = parser.parseFromString(file['xl/sharedStrings.xml'], 'application/xml');
+    Array.from(doc.getElementsByTagName('si')).forEach(si => {
+      condivise.push(Array.from(si.getElementsByTagName('t')).map(t => t.textContent).join(''));
+    });
+  }
+
+  const doc = parser.parseFromString(file[nomeFoglio], 'application/xml');
+  const righe = [];
+  Array.from(doc.getElementsByTagName('row')).forEach(r => {
+    const riga = [];
+    Array.from(r.getElementsByTagName('c')).forEach(c => {
+      const dove = indiceColonna(c.getAttribute('r'));
+      const tipo = c.getAttribute('t');
+      let valore = '';
+      if (tipo === 's') {
+        const v = c.getElementsByTagName('v')[0];
+        valore = v ? (condivise[Number(v.textContent)] || '') : '';
+      } else if (tipo === 'inlineStr') {
+        valore = Array.from(c.getElementsByTagName('t')).map(t => t.textContent).join('');
+      } else {
+        const v = c.getElementsByTagName('v')[0];
+        if (v) {
+          const n = Number(v.textContent);
+          valore = Number.isFinite(n) ? n : v.textContent;
+        }
+      }
+      if (dove >= 0) riga[dove] = valore;
+    });
+    for (let i = 0; i < riga.length; i++) if (riga[i] === undefined) riga[i] = '';
+    if (riga.some(x => String(x).trim() !== '')) righe.push(riga);
+  });
+  return righe;
+}
+
+// --- riconoscimento delle colonne ---
+
+const PAROLE_COLONNA = {
+  data:        ['data contabile', 'data operazione', 'data valuta', 'data', 'date'],
+  descrizione: ['descrizione', 'causale', 'operazione', 'dettagli', 'descrizione operazione', 'note', 'beneficiario'],
+  importo:     ['importo', 'importo (eur)', 'amount', 'movimento'],
+  entrata:     ['entrate', 'avere', 'accrediti', 'accredito', 'credito'],
+  uscita:      ['uscite', 'dare', 'addebiti', 'addebito', 'debito']
+};
+
+function normalizza(t) {
+  return String(t || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// L'intestazione vera spesso non è la prima riga: sopra ci sono intestazioni
+// della banca, IBAN, saldo. Si cerca la riga che contiene "data" più almeno
+// una colonna di importo o descrizione.
+function trovaIntestazione(righe) {
+  for (let i = 0; i < Math.min(righe.length, 30); i++) {
+    const celle = righe[i].map(normalizza);
+    const haData = celle.some(c => c === 'data' || c.startsWith('data '));
+    const haAltro = celle.some(c =>
+      PAROLE_COLONNA.descrizione.includes(c) || PAROLE_COLONNA.importo.includes(c) ||
+      PAROLE_COLONNA.entrata.includes(c) || PAROLE_COLONNA.uscita.includes(c));
+    if (haData && haAltro) return i;
+  }
+  return -1;
+}
+
+function riconosciColonne(intestazione, corpo) {
+  const mappa = { data: -1, descrizione: -1, importo: -1, entrata: -1, uscita: -1 };
+
+  if (intestazione) {
+    const celle = intestazione.map(normalizza);
+    Object.keys(PAROLE_COLONNA).forEach(campo => {
+      let migliore = -1, punteggio = 0;
+      celle.forEach((c, i) => {
+        if (!c) return;
+        PAROLE_COLONNA[campo].forEach((parola, ordine) => {
+          const p = c === parola ? 100 - ordine : (c.includes(parola) ? 50 - ordine : 0);
+          if (p > punteggio) { punteggio = p; migliore = i; }
+        });
+      });
+      if (migliore > -1) mappa[campo] = migliore;
+    });
+    // "Data valuta" e "Data contabile" insieme: se una colonna è finita due
+    // volte, la descrizione non può coincidere con la data.
+    if (mappa.descrizione === mappa.data) mappa.descrizione = -1;
+  }
+
+  // Quello che l'intestazione non dice lo si deduce dal contenuto
+  const colonne = Math.max(...corpo.map(r => r.length), 0);
+  const campione = corpo.slice(0, 40);
+  for (let i = 0; i < colonne; i++) {
+    const valori = campione.map(r => r[i]).filter(v => String(v || '').trim() !== '');
+    if (!valori.length) continue;
+    const quanteDate = valori.filter(v => dataBanca(v)).length / valori.length;
+    const quantiNumeri = valori.filter(v => numeroBanca(v) !== null).length / valori.length;
+    const lunghezzaMedia = valori.reduce((a, v) => a + String(v).length, 0) / valori.length;
+
+    if (mappa.data === -1 && quanteDate > 0.8) { mappa.data = i; continue; }
+    if (mappa.descrizione === -1 && quantiNumeri < 0.3 && lunghezzaMedia > 8) { mappa.descrizione = i; continue; }
+    if (mappa.importo === -1 && mappa.entrata === -1 && mappa.uscita === -1 && quantiNumeri > 0.8 && quanteDate < 0.3) {
+      mappa.importo = i;
+    }
+  }
+  return mappa;
+}
+
+/* --- regole di categoria ---
+   Prima si guarda come sono state classificate le voci simili già presenti in
+   archivio (così l'app impara dal tuo uso), poi le regole che hai salvato tu,
+   e solo alla fine questo elenco di partenza. */
+
+const REGOLE_INIZIALI = [
+  ['Carburante',            ['q8','eni ','agip','tamoil','esso','shell','ip ','api ','carburant','benzin','gasolio','distributore','rifornim','gpl','metano']],
+  ['Spesa alimentare',      ['esselunga','coop','conad','carrefour','lidl','eurospin','penny','pam ','bennet','crai','todis','despar','supermerc','alimentar','iper ','famila','basko','md discount']],
+  ['Utenze',                ['enel','servizio elettrico','hera','a2a','iren','acea','sorgenia','illumia','edison','eni gas','acquedotto','smat','tim ','telecom','vodafone','windtre','wind tre','fastweb','iliad','sky italia']],
+  ['Casa (mutuo o affitto)',['mutuo','affitto','canone locazione','locazione']],
+  ['Assicurazione',         ['assicuraz','polizza','rca ','unipol','generali','allianz','axa','zurich','groupama','reale mutua','sara assicur','quixa','linear']],
+  ['Contributi INPS',       ['inps','contributi']],
+  ['Imposte',               ['f24','agenzia entrate','erario','tributi','imu','tari','pagopa','bollo auto','tassa automob']],
+  ['Manutenzione',          ['officina','autoripar','gommist','pneumatic','carrozzeria','tagliando','revisione','ricambi','autofficina']],
+  ['Radio taxi',            ['radio taxi','radiotaxi','cooperativa taxi','pronto taxi']],
+  ['Commercialista',        ['commercialist','consulenza fiscale','studio associato','caf ']],
+  ['Salute',                ['farmac','parafarm','ospedale','poliambul','analisi clinic','dentist','ottica','medic ','dott ']],
+  ['Auto privata',          ['autostrad','telepass','pedagg','parchegg','sosta','strisce blu','multa','contravvenz']],
+  ['Svago e vacanze',       ['ristorant','pizzer','trattoria','osteria','cinema','netflix','spotify','disney','prime video','hotel','booking','airbnb','trenitalia','italo treno','ryanair','easyjet','agenzia viaggi']],
+  ['Finanziamento veicolo', ['finanziam','leasing','findomestic','agos','compass','santander consumer','rata fin']],
+  ['Scuola e figli',        ['scuola','asilo','universit','mensa scolast','retta','libri di testo']],
+  ['Abbigliamento',         ['abbigliam','calzatur','zara','h&m','ovs','decathlon','scarpe']],
+  ['Spese bancarie',        ['commission','spese tenuta','canone conto','imposta di bollo','spese conto','competenze','oneri banc']],
+  ['Prelievo contanti',     ['prelievo','prelev','atm ','bancomat prelie']],
+  ['Incassi',               ['pos ','incasso pos','nexi','sumup','satispay','worldline','axepta','versamento contanti','accredito pos']],
+  ['Stipendio',             ['stipendio','emolumenti','retribuz','busta paga']],
+  ['Pensione',              ['pensione','inps pensione']]
+];
+
+// Riduce una descrizione bancaria alla sua parte stabile: via numeri, date,
+// codici di riferimento. "ADDEBITO SDD ENEL ENERGIA 0012345 DEL 12/03/26"
+// diventa "addebito sdd enel energia del", che si ripete uguale ogni mese.
+function impronta(descrizione) {
+  return normalizza(descrizione)
+    .replace(/[0-9]+/g, ' ')
+    .replace(/[^a-z ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(p => p.length > 2)
+    .slice(0, 8)
+    .join(' ');
+}
+
+const _regex = {};
+function contieneParola(testo, parola) {
+  if (!_regex[parola]) {
+    const pulita = String(parola).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    _regex[parola] = new RegExp('(^|[^a-z0-9])' + pulita);
+  }
+  return _regex[parola].test(testo);
+}
+
+function categoriaDaTesto(descrizione, tipo) {
+  const testo = normalizza(descrizione);
+  if (!testo) return '';
+
+  // 1. come hai già classificato una voce uguale in passato
+  const segno = impronta(descrizione);
+  if (segno) {
+    const apprese = stato.impostazioni.regoleApprese || {};
+    if (apprese[segno]) return apprese[segno];
+    const simile = stato.movimenti.find(m => m.categoria && impronta(m.descrizione) === segno);
+    if (simile) return simile.categoria;
+  }
+
+  // 2. le regole che hai scritto tu
+  const tue = stato.impostazioni.regole || [];
+  const tua = tue.find(r => r.contiene && contieneParola(testo, normalizza(r.contiene)));
+  if (tua) return tua.categoria;
+
+  // 3. l'elenco di partenza
+  for (const [categoria, parole] of REGOLE_INIZIALI) {
+    if (parole.some(p => contieneParola(testo, p))) {
+      // Una parola da entrata non deve finire su un'uscita e viceversa
+      const diEntrata = ['Incassi', 'Stipendio', 'Pensione'].includes(categoria);
+      if (tipo === 'ENTRATA' && !diEntrata && categoria !== 'Prelievo contanti') continue;
+      if (tipo === 'USCITA' && diEntrata) continue;
+      return categoria;
+    }
+  }
+  return '';
+}
+
+function ricorda(descrizione, categoria) {
+  const segno = impronta(descrizione);
+  if (!segno || !categoria) return;
+  stato.impostazioni.regoleApprese = stato.impostazioni.regoleApprese || {};
+  stato.impostazioni.regoleApprese[segno] = categoria;
+  salva.impostazioni();
+}
+
+// --- doppioni ---
+// Ricaricando un estratto conto che si sovrappone al precedente le stesse
+// operazioni non devono entrare due volte.
+function chiaveMovimento(data, importo, descrizione) {
+  return `${data}|${Math.round(Math.abs(Number(importo) || 0) * 100)}|${impronta(descrizione)}`;
+}
+
+function chiaviGiaPresenti() {
+  const insieme = new Set();
+  stato.movimenti.forEach(m => {
+    insieme.add(chiaveMovimento(m.data, m.importo, m.descrizione));
+    insieme.add(chiaveMovimento(m.data, m.importo, m.categoria));
+  });
+  return insieme;
+}
+
+
+/* ------------------------------------------------------------
+   17. PROCEDURA DI IMPORTAZIONE
+   Tre passi: si sceglie il file, si controlla che le colonne siano
+   state riconosciute bene, si rivede l'elenco con le categorie
+   proposte e si conferma. Niente entra in archivio prima dell'ultimo
+   tocco: fino a lì si può cambiare tutto o annullare.
+   ------------------------------------------------------------ */
+
+function avviaImportazione() {
+  stato.ui.importazione = {
+    passo: 'file',
+    conto: (stato.conti[0] || {}).id || '',
+    nomeFile: '',
+    righe: [],
+    intestazione: null,
+    mappa: null,
+    voci: [],
+    errore: ''
+  };
+  stato.ui.modulo = false;
+  // La procedura vive dentro la scheda Movimenti: richiamandola dalle
+  // Impostazioni bisogna anche spostarsi lì, altrimenti non si vedrebbe nulla.
+  stato.ui.scheda = 'movimenti';
+  scrivi(CHIAVE.scheda, 'movimenti');
+  window.scrollTo(0, 0);
+  render(true);
+}
+
+function annullaImportazione() {
+  stato.ui.importazione = null;
+  render(true);
+}
+
+async function onFileEstratto(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const imp = stato.ui.importazione;
+  imp.nomeFile = file.name;
+  imp.errore = '';
+  messaggio('Sto leggendo ' + file.name + '…');
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const primi = new Uint8Array(buffer.slice(0, 2));
+    let righe;
+
+    if (primi[0] === 0x50 && primi[1] === 0x4b) {          // "PK": è uno zip, quindi .xlsx
+      righe = await leggiXLSX(buffer);
+    } else {
+      const testo = decodificaTesto(buffer);
+      if (sembraBinario(testo)) {
+        throw new Error('Questo non è un file di testo: sembra un\'immagine o un PDF. Dall\'home banking esporta i movimenti in CSV o in Excel.');
+      }
+      righe = leggiCSV(testo);
+    }
+
+    if (!righe.length) throw new Error('Il file è vuoto.');
+
+    const i = trovaIntestazione(righe);
+    imp.righe = righe;
+    imp.intestazione = i > -1 ? righe[i] : null;
+    const corpo = righe.slice(i > -1 ? i + 1 : 0);
+    imp.corpo = corpo;
+    imp.mappa = riconosciColonne(imp.intestazione, corpo);
+    // Se non si trova nemmeno una colonna di date, quasi sempre il file non è
+    // un estratto conto: meglio dirlo subito invece di far scoprire il problema
+    // dopo aver compilato tutto.
+    imp.avvertenza = imp.mappa.data === -1
+      ? 'Non ho trovato nessuna colonna con delle date. Controlla di aver scelto il file dei movimenti (e non, per esempio, la lista dei bonifici o un altro documento); se il file è giusto, indica tu le colonne qui sotto.'
+      : '';
+    imp.passo = 'colonne';
+    render(true);
+    messaggio(`Lette ${corpo.length} righe da ${file.name}.`);
+  } catch (err) {
+    console.error(err);
+    imp.errore = err && err.message ? err.message : 'Non sono riuscito a leggere il file.';
+    render(true);
+  }
+}
+
+// Un file di testo non ha caratteri di controllo: se ce ne sono parecchi
+// vuol dire che è un'immagine, un PDF o un altro formato non leggibile.
+function sembraBinario(testo) {
+  const campione = testo.slice(0, 2000);
+  if (!campione) return false;
+  const strani = (campione.match(/[\u0000-\u0008\u000e-\u001f\ufffd]/g) || []).length;
+  return strani / campione.length > 0.05;
+}
+
+// Gli estratti conto italiani arrivano spesso in Windows-1252, non in UTF-8:
+// letti nel modo sbagliato, gli accenti diventano caratteri strani.
+function decodificaTesto(buffer) {
+  const dati = new Uint8Array(buffer);
+  if (dati[0] === 0xef && dati[1] === 0xbb && dati[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(dati.subarray(3));
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(dati);
+  } catch (err) {
+    return new TextDecoder('windows-1252').decode(dati);
+  }
+}
+
+function impostaColonna(campo, valore) {
+  const imp = stato.ui.importazione;
+  imp.mappa[campo] = parseInt(valore, 10);
+  // Importo unico ed Entrate/Uscite si escludono a vicenda
+  if (campo === 'importo' && imp.mappa.importo > -1) { imp.mappa.entrata = -1; imp.mappa.uscita = -1; }
+  if ((campo === 'entrata' || campo === 'uscita') && imp.mappa[campo] > -1) imp.mappa.importo = -1;
+  render();
+}
+
+function impostaContoImportazione(v) {
+  stato.ui.importazione.conto = v;
+  if (stato.ui.importazione.voci.length) preparaVoci();
+  render();
+}
+
+// Dalle righe grezze alle voci pronte: data, descrizione, importo con il segno,
+// categoria proposta e segnalazione dei doppioni.
+function preparaVoci() {
+  const imp = stato.ui.importazione;
+  const m = imp.mappa;
+  const gia = chiaviGiaPresenti();
+  const dentro = new Set();
+  const voci = [];
+  let scartate = 0;
+
+  (imp.corpo || []).forEach((riga, indice) => {
+    const data = dataBanca(riga[m.data]);
+    if (!data) { scartate++; return; }
+
+    let importo = null;
+    if (m.importo > -1) {
+      importo = numeroBanca(riga[m.importo]);
+    } else {
+      const entrata = m.entrata > -1 ? numeroBanca(riga[m.entrata]) : null;
+      const uscita = m.uscita > -1 ? numeroBanca(riga[m.uscita]) : null;
+      if (entrata !== null && Math.abs(entrata) > 0) importo = Math.abs(entrata);
+      else if (uscita !== null && Math.abs(uscita) > 0) importo = -Math.abs(uscita);
+    }
+    if (importo === null || importo === 0) { scartate++; return; }
+
+    const descrizione = m.descrizione > -1 ? String(riga[m.descrizione] || '').trim() : '';
+    const tipo = importo > 0 ? 'ENTRATA' : 'USCITA';
+    const chiave = chiaveMovimento(data, importo, descrizione);
+    const doppione = gia.has(chiave) || dentro.has(chiave);
+    dentro.add(chiave);
+
+    voci.push({
+      indice,
+      data,
+      descrizione: descrizione || (tipo === 'ENTRATA' ? 'Accredito' : 'Addebito'),
+      importo: Math.abs(importo),
+      tipo,
+      categoria: categoriaDaTesto(descrizione, tipo),
+      doppione,
+      prendi: !doppione
+    });
+  });
+
+  voci.sort((a, b) => String(b.data).localeCompare(String(a.data)));
+  imp.voci = voci;
+  imp.scartate = scartate;
+}
+
+function vaiAAnteprima() {
+  const imp = stato.ui.importazione;
+  const m = imp.mappa;
+  if (m.data === -1) { messaggio('Indica quale colonna contiene la data.'); return; }
+  if (m.importo === -1 && m.entrata === -1 && m.uscita === -1) {
+    messaggio('Indica la colonna dell\'importo, oppure quelle di entrate e uscite.'); return;
+  }
+  preparaVoci();
+  if (!imp.voci.length) {
+    messaggio('Con queste colonne non risulta nessuna riga valida: controlla la scelta.');
+    return;
+  }
+  imp.passo = 'anteprima';
+  render(true);
+}
+
+function cambiaCategoriaVoce(indice, valore) {
+  const imp = stato.ui.importazione;
+  const v = imp.voci.find(x => x.indice === Number(indice));
+  if (!v) return;
+  v.categoria = valore;
+  v.imparata = true;   // scelta a mano: la si ricorda al momento di importare
+}
+
+function cambiaPrendiVoce(indice, prendi) {
+  const imp = stato.ui.importazione;
+  const v = imp.voci.find(x => x.indice === Number(indice));
+  if (v) v.prendi = !!prendi;
+  aggiornaRiepilogoImportazione();
+}
+
+function selezionaTutte(prendi) {
+  const imp = stato.ui.importazione;
+  imp.voci.forEach(v => { if (!(prendi && v.doppione)) v.prendi = prendi; });
+  render();
+}
+
+// Aggiorna solo il contatore, senza ridisegnare tutta la tabella: altrimenti
+// a ogni spunta si perderebbe il punto in cui si stava leggendo.
+function aggiornaRiepilogoImportazione() {
+  const imp = stato.ui.importazione;
+  const scelte = imp.voci.filter(v => v.prendi);
+  const el = document.getElementById('riepilogo-import');
+  if (!el) return;
+  const entrate = scelte.filter(v => v.tipo === 'ENTRATA').reduce((t, v) => t + v.importo, 0);
+  const uscite = scelte.filter(v => v.tipo === 'USCITA').reduce((t, v) => t + v.importo, 0);
+  el.innerHTML = `<strong>${scelte.length}</strong> da importare ·
+    <span style="color:var(--entrata)">↑ ${euro(entrate)}</span> ·
+    <span style="color:var(--uscita)">↓ ${euro(uscite)}</span>`;
+  const bottone = document.getElementById('bottone-import');
+  if (bottone) {
+    bottone.textContent = scelte.length ? `Importa ${scelte.length} movimenti` : 'Nessuna riga selezionata';
+    bottone.disabled = !scelte.length;
+  }
+}
+
+function confermaImportazione() {
+  const imp = stato.ui.importazione;
+  const scelte = imp.voci.filter(v => v.prendi);
+  if (!scelte.length) return;
+
+  const senzaCategoria = scelte.filter(v => !v.categoria).length;
+  const doppioni = scelte.filter(v => v.doppione).length;
+  let avviso = `Importo ${scelte.length} movimenti su «${nomeConto(imp.conto)}».`;
+  if (senzaCategoria) avviso += `\n${senzaCategoria} senza categoria: le troverai come «Da classificare».`;
+  if (doppioni) avviso += `\nAttenzione: ${doppioni} risultano già presenti in archivio.`;
+  if (!confirm(avviso + '\nProcedo?')) return;
+
+  scelte.forEach(v => {
+    if (v.imparata && v.categoria) ricorda(v.descrizione, v.categoria);
+    stato.movimenti.push({
+      id: nuovoId(),
+      data: v.data,
+      tipo: v.tipo,
+      contoId: imp.conto,
+      contoDestinazione: null,
+      categoria: v.categoria || 'Da classificare',
+      descrizione: v.descrizione,
+      importo: v.importo,
+      metodo: 'Estratto conto',
+      daEstrattoConto: true
+    });
+  });
+  salva.movimenti();
+  stato.movimenti.slice(-scelte.length).forEach(m => Sync.inviato('movimenti', m));
+
+  stato.ui.importazione = null;
+  stato.ui.filtri = { conto: imp.conto, tipo: 'TUTTI', categoria: 'TUTTE', mese: 'TUTTI', cerca: '' };
+  messaggio(`${scelte.length} movimenti importati.`);
+  render(true);
+}
+
+/* --- schermate della procedura --- */
+
+function vistaImportazione() {
+  const imp = stato.ui.importazione;
+  const passi = [['file', 'File'], ['colonne', 'Colonne'], ['anteprima', 'Controllo']];
+  const indicePasso = passi.findIndex(p => p[0] === imp.passo);
+
+  return `
+    <div class="pila">
+      <div class="riquadro">
+        <header>
+          <h3>Carica l'estratto conto</h3>
+          <button class="bottone piccolo" onclick="annullaImportazione()">Annulla</button>
+        </header>
+        <div class="corpo stretto" style="padding-top:12px;padding-bottom:12px">
+          <div class="passi">
+            ${passi.map((p, i) => `
+              <span class="passo ${i === indicePasso ? 'attivo' : (i < indicePasso ? 'fatto' : '')}">
+                <b>${i + 1}</b>${p[1]}
+              </span>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      ${imp.errore ? `<div class="avviso" style="border-color:var(--uscita);background:var(--uscita-tenue);color:var(--uscita)">${e(imp.errore)}</div>` : ''}
+
+      ${imp.passo === 'file' ? passoFile() : ''}
+      ${imp.passo === 'colonne' ? passoColonne() : ''}
+      ${imp.passo === 'anteprima' ? passoAnteprima() : ''}
+    </div>`;
+}
+
+function passoFile() {
+  return `
+    <div class="riquadro">
+      <div class="corpo">
+        <label class="campo" style="max-width:340px"><span>Su quale conto sono queste operazioni</span>
+          <select onchange="impostaContoImportazione(this.value)">
+            ${stato.conti.map(c => `<option value="${e(c.id)}" ${stato.ui.importazione.conto === c.id ? 'selected' : ''}>${e(c.nome)}</option>`).join('')}
+          </select>
+        </label>
+
+        <div style="margin-top:18px">
+          <label class="bottone pieno largo" style="padding:18px">
+            Scegli il file dell'estratto conto
+            <input type="file" accept=".csv,.xlsx,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="onFileEstratto(event)">
+          </label>
+        </div>
+
+        <div style="margin-top:18px;border-top:1px solid var(--bordo);padding-top:16px">
+          <p class="titolo-sezione" style="margin-bottom:8px">Come si scarica dalla banca</p>
+          <p class="aiuto" style="margin:0 0 10px">
+            Nell'home banking cerca la lista movimenti, scegli il periodo e usa il pulsante di
+            esportazione: va bene <strong>CSV</strong> oppure <strong>Excel (.xlsx)</strong>.
+            Le colonne le riconosce l'app, qualunque banca sia.
+          </p>
+          <p class="aiuto" style="margin:0 0 10px">
+            Il <strong>PDF non va bene</strong>: è fatto per essere stampato, non per essere letto
+            da un programma, e i numeri verrebbero sbagliati. Tutte le banche italiane offrono anche
+            il CSV, di solito accanto al pulsante del PDF.
+          </p>
+          <p class="aiuto" style="margin:0">
+            Il file resta su questo dispositivo: viene letto qui dentro e non viene inviato da nessuna parte.
+          </p>
+        </div>
+      </div>
+    </div>`;
+}
+
+function passoColonne() {
+  const imp = stato.ui.importazione;
+  const m = imp.mappa;
+  const colonne = Math.max(...(imp.corpo || []).map(r => r.length), (imp.intestazione || []).length, 0);
+  const nomeCol = (i) => {
+    const testo = imp.intestazione && imp.intestazione[i] ? String(imp.intestazione[i]).trim() : '';
+    return testo ? `${testo}` : `Colonna ${i + 1}`;
+  };
+  const scelta = (campo, etichetta, aiuto) => `
+    <label class="campo"><span>${etichetta}</span>
+      <select onchange="impostaColonna('${campo}', this.value)">
+        <option value="-1" ${m[campo] === -1 ? 'selected' : ''}>— nessuna —</option>
+        ${Array.from({ length: colonne }, (_, i) =>
+          `<option value="${i}" ${m[campo] === i ? 'selected' : ''}>${e(nomeCol(i))}</option>`).join('')}
+      </select>
+      ${aiuto ? `<p class="aiuto">${aiuto}</p>` : ''}
+    </label>`;
+
+  const anteprima = (imp.corpo || []).slice(0, 5);
+
+  return `
+    <div class="pila">
+      ${imp.avvertenza ? `<div class="avviso">${e(imp.avvertenza)}</div>` : ''}
+
+      <div class="riquadro">
+        <header><h3>Controlla le colonne</h3><span class="nota">${e(imp.nomeFile)} · ${(imp.corpo || []).length} righe</span></header>
+        <div class="corpo">
+          <p class="aiuto" style="margin:0 0 14px">
+            L'app le ha riconosciute da sola: correggile solo se qualcosa non torna.
+          </p>
+          <div class="campi due">
+            ${scelta('data', 'Data')}
+            ${scelta('descrizione', 'Descrizione')}
+          </div>
+          <p class="titolo-sezione" style="margin:18px 0 8px">Importi</p>
+          <p class="aiuto" style="margin:0 0 10px">
+            Alcune banche mettono un'unica colonna con il segno (−120,00), altre due colonne
+            separate per entrate e uscite. Compila quella che corrisponde al tuo file.
+          </p>
+          <div class="campi tre">
+            ${scelta('importo', 'Colonna unica con il segno')}
+            ${scelta('entrata', 'Entrate / Avere')}
+            ${scelta('uscita', 'Uscite / Dare')}
+          </div>
+        </div>
+      </div>
+
+      <div class="riquadro">
+        <header><h3>Prime righe del file</h3></header>
+        <div class="tabella-scorre">
+          <table>
+            <thead><tr>${Array.from({ length: colonne }, (_, i) => {
+              const usata = Object.keys(m).find(k => m[k] === i);
+              return `<th style="${usata ? 'color:var(--azienda)' : ''}">${e(nomeCol(i))}${usata ? `<br><span style="font-size:9.5px">→ ${usata}</span>` : ''}</th>`;
+            }).join('')}</tr></thead>
+            <tbody>
+              ${anteprima.map(r => `<tr>${Array.from({ length: colonne }, (_, i) =>
+                `<td>${e(String(r[i] === undefined ? '' : r[i]).slice(0, 40))}</td>`).join('')}</tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bottoni">
+        <button class="bottone pieno" onclick="vaiAAnteprima()">Avanti: vedi le categorie</button>
+        <button class="bottone" onclick="avviaImportazione()">Cambia file</button>
+      </div>
+    </div>`;
+}
+
+function passoAnteprima() {
+  const imp = stato.ui.importazione;
+  const voci = imp.voci;
+  const doppioni = voci.filter(v => v.doppione).length;
+  const senzaCategoria = voci.filter(v => v.prendi && !v.categoria).length;
+  const scelte = voci.filter(v => v.prendi);
+  const entrate = scelte.filter(v => v.tipo === 'ENTRATA').reduce((t, v) => t + v.importo, 0);
+  const uscite = scelte.filter(v => v.tipo === 'USCITA').reduce((t, v) => t + v.importo, 0);
+
+  const tutteLeCategorie = Array.from(new Set([].concat(
+    categorieDi('aziendale', 'ENTRATA'), categorieDi('aziendale', 'USCITA'),
+    categorieDi('famigliare', 'ENTRATA'), categorieDi('famigliare', 'USCITA'),
+    categorieUsate(), REGOLE_INIZIALI.map(r => r[0])
+  ))).filter(Boolean).sort((a, b) => a.localeCompare(b, 'it'));
+
+  return `
+    <div class="pila">
+      <div class="riquadro">
+        <header>
+          <h3>Controlla e conferma</h3>
+          <span class="nota">su ${e(nomeConto(imp.conto))}</span>
+        </header>
+        <div class="corpo">
+          <div class="griglia-dati">
+            <div class="dato"><p class="k">Righe lette</p><p class="v">${voci.length}</p></div>
+            <div class="dato"><p class="k">Già presenti</p><p class="v" style="color:${doppioni ? 'var(--avviso)' : 'inherit'}">${doppioni}</p></div>
+            <div class="dato"><p class="k">Senza categoria</p><p class="v" style="color:${senzaCategoria ? 'var(--avviso)' : 'inherit'}">${senzaCategoria}</p></div>
+            <div class="dato"><p class="k">Scartate</p><p class="v">${imp.scartate || 0}</p></div>
+          </div>
+          <p class="aiuto" style="margin:12px 0 0">
+            Le categorie sono proposte in automatico dalla descrizione della banca: correggi quelle
+            sbagliate, l'app se le ricorda per le prossime volte.
+            ${doppioni ? ' Le righe già in archivio sono escluse: spunta la casella se vuoi importarle lo stesso.' : ''}
+          </p>
+          <div class="bottoni" style="margin-top:12px">
+            <button class="bottone piccolo" onclick="selezionaTutte(true)">Seleziona tutte</button>
+            <button class="bottone piccolo" onclick="selezionaTutte(false)">Deseleziona tutte</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="riquadro">
+        <div class="tabella-scorre">
+          <table>
+            <thead><tr>
+              <th style="width:34px"></th><th>Data</th><th>Descrizione</th>
+              <th class="num">Importo</th><th>Categoria</th>
+            </tr></thead>
+            <tbody>
+              ${voci.slice(0, 500).map(v => `
+                <tr style="${v.doppione ? 'background:var(--avviso-tenue)' : ''}">
+                  <td><input type="checkbox" ${v.prendi ? 'checked' : ''}
+                             onchange="cambiaPrendiVoce('${v.indice}', this.checked)"
+                             aria-label="Importa questa riga"></td>
+                  <td style="white-space:nowrap">${dataBreve(v.data)}<br><span style="color:var(--testo-3);font-size:11px">${e(v.data.slice(0, 4))}</span></td>
+                  <td style="white-space:normal;min-width:180px;max-width:320px">
+                    ${e(v.descrizione)}
+                    ${v.doppione ? '<br><span class="pastiglia p-avviso">già in archivio</span>' : ''}
+                  </td>
+                  <td class="num" style="color:${v.tipo === 'ENTRATA' ? 'var(--entrata)' : 'var(--uscita)'};white-space:nowrap">
+                    ${v.tipo === 'ENTRATA' ? '+' : '−'}${euro(v.importo)}
+                  </td>
+                  <td style="min-width:180px">
+                    <input type="text" list="categorie-import" value="${e(v.categoria)}"
+                           placeholder="da classificare"
+                           style="padding:6px 8px;font-size:13px;${v.categoria ? '' : 'border-color:var(--avviso)'}"
+                           onchange="cambiaCategoriaVoce('${v.indice}', this.value)">
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+          <datalist id="categorie-import">
+            ${tutteLeCategorie.map(c => `<option value="${e(c)}"></option>`).join('')}
+          </datalist>
+        </div>
+        ${voci.length > 500 ? `<div class="corpo" style="text-align:center;color:var(--testo-3);font-size:12.5px">Mostrate le prime 500 righe su ${voci.length}. Verranno importate tutte quelle selezionate.</div>` : ''}
+      </div>
+
+      <div class="riquadro">
+        <div class="corpo">
+          <p id="riepilogo-import" style="font-size:14px;margin-bottom:12px">
+            <strong>${scelte.length}</strong> da importare ·
+            <span style="color:var(--entrata)">↑ ${euro(entrate)}</span> ·
+            <span style="color:var(--uscita)">↓ ${euro(uscite)}</span>
+          </p>
+          <div class="bottoni">
+            <button class="bottone pieno" id="bottone-import" onclick="confermaImportazione()" ${scelte.length ? '' : 'disabled'}>
+              ${scelte.length ? `Importa ${scelte.length} movimenti` : 'Nessuna riga selezionata'}
+            </button>
+            <button class="bottone" onclick="stato.ui.importazione.passo='colonne';render(true)">Torna alle colonne</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ------------------------------------------------------------

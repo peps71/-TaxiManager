@@ -41,6 +41,52 @@ Tutto resta nella memoria del browser di questo dispositivo. Da Impostazioni si
 scarica un backup JSON (è anche il modo per spostare i dati su un altro
 dispositivo) e un CSV dell'anno per il commercialista.
 
+## Caricare l'estratto conto della banca
+
+Da **Movimenti → Carica l'estratto conto** (o dalle Impostazioni) si carica il file dei
+movimenti scaricato dall'home banking. La procedura ha tre passi: scelta del file,
+controllo delle colonne, revisione delle categorie proposte. **Niente entra in archivio
+prima dell'ultimo tocco.**
+
+Il file viene letto dentro il browser del dispositivo: non viene inviato da nessuna parte.
+
+### Formati
+
+`CSV` e `Excel (.xlsx)` — i due che tutte le banche italiane offrono. Vengono gestiti da
+soli: separatore `;` `,` o tabulazione, testo in UTF-8 o Windows-1252, righe di
+intestazione della banca prima della tabella vera, importi `1.234,56` o `1234.56`, date
+`gg/mm/aaaa` `aaaa-mm-gg` o numero seriale di Excel, e sia la colonna unica con il segno
+sia le due colonne separate Dare/Avere.
+
+Il **PDF non è supportato**: è un formato di impaginazione, non di dati, e l'estrazione
+dei numeri sarebbe inaffidabile proprio dove sbagliare costa di più. Nell'home banking il
+CSV sta di norma accanto al pulsante del PDF.
+
+L'Excel viene aperto con `DecompressionStream`, incluso nei browser recenti (iOS 16.4+).
+Su un browser più vecchio l'app lo dice e chiede il CSV.
+
+### Come vengono assegnate le categorie
+
+Nell'ordine:
+
+1. **Come hai già classificato tu** un'operazione con la stessa descrizione, guardando i
+   movimenti in archivio e le correzioni fatte nelle importazioni precedenti.
+2. **Le regole che hai salvato**.
+3. **Un elenco di partenza** di insegne e causali italiane (Q8, Esselunga, Enel, SDD, F24,
+   INPS, Telepass, POS, prelievi ATM, commissioni bancarie…).
+
+Il confronto avviene sull'*impronta* della descrizione: tolti numeri, date e codici di
+riferimento, resta la parte che si ripete uguale ogni mese. Ogni categoria corretta a mano
+durante l'importazione viene ricordata e si ritrova alla volta successiva; le regole
+imparate si vedono e si cancellano dalle Impostazioni.
+
+### Doppioni
+
+Ricaricando un estratto conto che si sovrappone al precedente, le operazioni già presenti
+vengono riconosciute (stessa data, stesso importo, stessa impronta della descrizione),
+segnalate in giallo ed **escluse dalla selezione**. Restano importabili spuntandole a mano,
+se sono davvero due operazioni identiche nello stesso giorno.
+
 ## Accendere la sincronizzazione fra dispositivi
 
 L'app è già predisposta ma parte in locale. In `index.html` c'è l'oggetto
