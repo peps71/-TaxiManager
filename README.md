@@ -13,7 +13,6 @@ tramite Firebase/Firestore.
 | `sw.js` | Service worker: tiene l'app disponibile anche senza campo |
 | `manifest.json` | Dati di installazione (nome, icone, colori) |
 | `icon-*.png`, `favicon*`, `apple-touch-icon-180.png` | Icone dell'app |
-| `finanze/` | **Conti** — seconda app, per i conti correnti aziendale e famigliare ([istruzioni](finanze/README.md)) |
 | `Gestione_Taxi_2026.txt` | Appunti e conteggi di partenza |
 | `TaxiManager_2026_iPhone.html` | Prima versione, tenuta come riferimento |
 
