@@ -670,6 +670,7 @@
 
         // Secondo livello di dettaglio: dalla stringa salvata alla tipologia di spesa.
         // "Costi fissi - Radio taxi (31 gg x 10,50 €)"  -> "Radio taxi"
+        // "Costi fissi - Finanziamento licenza (rata mensile)" -> "Finanziamento licenza"
         // "Carburante - Q8 corso Francia"               -> "Q8 corso Francia"
         // "Carburante / Diesel (233362 Km)"             -> "Carburante / Diesel"
         // "Finanziamento licenza (70.000 € x 10 anni) (31 gg x 26,60 €)" -> tiene la prima parentesi
@@ -680,6 +681,7 @@
             if (i > -1) t = t.slice(i + 3).trim();
             // via solo le code automatiche: conteggio giorni e chilometraggio
             t = t.replace(/\s*\(\s*\d+\s*gg[^()]*\)\s*$/i, '').trim();
+            t = t.replace(/\s*\(\s*rata mensile\s*\)\s*$/i, '').trim();
             t = t.replace(/\s*\([^()]*\bkm\b[^()]*\)\s*$/i, '').trim();
             return t || 'Senza descrizione';
         }
@@ -4119,7 +4121,10 @@
                             <h3 class="text-lg font-bold text-gray-900">Costi fissi dell'anno</h3>
                             <p class="text-xs text-gray-500 leading-relaxed">
                                 Genera le spese fisse mensili per un anno intero: per ogni mese crea una voce
-                                per categoria, pari alla quota giornaliera moltiplicata per i giorni del mese.
+                                per categoria. Scegli tu l'unità: <strong>€/mese</strong> per una rata fissa che
+                                arriva sempre uguale (il finanziamento), <strong>€/gg</strong> per un costo annuo
+                                da spalmare giorno per giorno (le assicurazioni), che viene moltiplicato per i
+                                giorni di ogni mese.
                                 Rilanciarlo sullo stesso anno aggiorna le voci esistenti invece di duplicarle.
                                 Non inserire qui manutenzione, INPS e IRPEF: le prime le registri come spese reali,
                                 le seconde le stima gia' l'app.
@@ -4131,8 +4136,14 @@
                                 </div>
                                 ${VOCI_COSTI_FISSI.map(v => `
                                     <div>
-                                        <label class="block text-xs font-bold text-gray-700 mb-1">${v.nome} <span class="text-gray-400 font-normal">€/gg</span></label>
-                                        <input type="number" step="0.01" id="cf-${v.slug}" value="${v.quota}" class="w-full p-2 border rounded-lg outline-none" />
+                                        <label class="block text-xs font-bold text-gray-700 mb-1">${esc(v.nome)}</label>
+                                        <div class="flex gap-1">
+                                            <input type="number" step="0.01" id="cf-${v.slug}" value="${v.quota}" class="w-full min-w-0 p-2 border rounded-lg outline-none" />
+                                            <select id="cf-unita-${v.slug}" class="p-2 border rounded-lg outline-none text-xs font-bold bg-gray-50 flex-shrink-0">
+                                                <option value="giorno" ${v.unita !== 'mese' ? 'selected' : ''}>€/gg</option>
+                                                <option value="mese" ${v.unita === 'mese' ? 'selected' : ''}>€/mese</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -5012,12 +5023,17 @@
         // Voci di costo fisso con la quota giornaliera predefinita.
         // Sono quelle che non compaiono altrove: manutenzione, INPS e IRPEF sono
         // volutamente escluse per non contarle due volte.
+        // Alcune di queste spese sono una rata fissa che arriva ogni mese uguale
+        // (il finanziamento); altre sono un importo annuo che ha senso spalmare
+        // giorno per giorno (le assicurazioni). Con l'unita' sbagliata i conti
+        // ballano: una rata mensile spalmata a giornata darebbe 733,60 € a
+        // febbraio e 812,20 € a gennaio, quando la banca ne addebita 797 sempre.
         const VOCI_COSTI_FISSI = [
-            { slug: 'finanziamento',  nome: 'Finanziamento licenza',   quota: 26.60 },
-            { slug: 'radiotaxi',      nome: 'Radio taxi',              quota: 10.50 },
-            { slug: 'commercialista', nome: 'Commercialista',          quota: 4.50 },
-            { slug: 'assic-auto',     nome: 'Assicurazione auto',      quota: 3.80 },
-            { slug: 'assic-infort',   nome: 'Assicurazione infortuni', quota: 1.37 }
+            { slug: 'finanziamento',  nome: 'Finanziamento licenza',   quota: 797.00, unita: 'mese' },
+            { slug: 'radiotaxi',      nome: 'Radio taxi',              quota: 10.50,  unita: 'giorno' },
+            { slug: 'commercialista', nome: 'Commercialista',          quota: 4.50,   unita: 'giorno' },
+            { slug: 'assic-auto',     nome: 'Assicurazione auto',      quota: 3.80,   unita: 'giorno' },
+            { slug: 'assic-infort',   nome: 'Assicurazione infortuni', quota: 1.37,   unita: 'giorno' }
         ];
 
         async function generaCostiFissi() {
@@ -5029,30 +5045,44 @@
 
             const voci = VOCI_COSTI_FISSI.map(v => {
                 const campo = document.getElementById('cf-' + v.slug);
+                const scelta = document.getElementById('cf-unita-' + v.slug);
                 const q = parseFloat(campo ? campo.value : v.quota);
-                return { slug: v.slug, nome: v.nome, quota: isNaN(q) ? 0 : q };
+                return {
+                    slug: v.slug, nome: v.nome,
+                    quota: isNaN(q) ? 0 : q,
+                    unita: scelta ? scelta.value : (v.unita || 'giorno')
+                };
             }).filter(v => v.quota > 0);
 
             if (!voci.length) {
-                showToast('Inserisci almeno una quota giornaliera.');
+                showToast('Inserisci almeno un importo.');
                 return;
             }
 
-            const totGiorno = voci.reduce((a, v) => a + v.quota, 0);
-            if (!confirm(`Genero le spese fisse ${anno}: ${voci.length} voci per 12 mesi, ${totGiorno.toFixed(2)} € al giorno. Procedo?`)) return;
+            // Il totale annuo si calcola con l'unita' di ciascuna voce
+            const giorniAnno = ((anno % 4 === 0 && anno % 100 !== 0) || anno % 400 === 0) ? 366 : 365;
+            const totAnno = voci.reduce((a, v) => a + (v.unita === 'mese' ? v.quota * 12 : v.quota * giorniAnno), 0);
+            if (!confirm(`Genero le spese fisse ${anno}: ${voci.length} voci per 12 mesi, ${formatCurrency(totAnno)} in tutto. Procedo?`)) return;
 
             const nuovi = [];
             for (let m = 1; m <= 12; m++) {
                 const gg = new Date(anno, m, 0).getDate();
                 const ultimo = `${anno}-${String(m).padStart(2, '0')}-${gg}`;
                 voci.forEach(v => {
+                    // Una rata mensile si registra tale e quale; un importo
+                    // giornaliero si moltiplica per i giorni di quel mese.
+                    const perMese = v.unita === 'mese';
+                    const importo = perMese ? v.quota : Math.round(v.quota * gg * 100) / 100;
+                    const dettaglio = perMese
+                        ? 'rata mensile'
+                        : `${gg} gg x ${v.quota.toFixed(2).replace('.', ',')} €`;
                     nuovi.push({
                         id: `fissi-${anno}-${String(m).padStart(2, '0')}-${v.slug}`,
                         data: ultimo,
                         tipo: 'USCITA',
-                        categoria: `Costi fissi - ${v.nome} (${gg} gg x ${v.quota.toFixed(2).replace('.', ',')} €)`,
+                        categoria: `Costi fissi - ${v.nome} (${dettaglio})`,
                         metodo: 'Fattura',
-                        importo: Math.round(v.quota * gg * 100) / 100
+                        importo: Math.round(importo * 100) / 100
                     });
                 });
             }
