@@ -60,6 +60,10 @@ l'acquisto di un'auto nuova, dove ripartire da capo è normale.
 Da `Cloud & Sync` si tiene l'elenco delle proprie spese fisse — si aggiungono, si
 modificano, si tolgono — e si genera un anno intero di movimenti.
 
+**L'elenco è permanente**: si compila una volta e vale per tutti gli anni. Generare un
+anno non lo tocca, e un elenco vuoto arrivato dal Cloud non lo cancella. Gli importi si
+scrivono con la virgola o con il punto, indifferentemente.
+
 Ogni voce ha la sua unità: **€/mese** per una rata che arriva sempre uguale (il
 finanziamento della licenza), **€/gg** per un costo annuo da spalmare, moltiplicato per i
 giorni di ogni mese (le assicurazioni).

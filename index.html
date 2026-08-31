@@ -295,6 +295,10 @@
                     return;
                 }
 
+                if (!cloudVoci.length && (window.vociFisse || []).length) {
+                    console.warn('Elenco voci fisse vuoto dal Cloud: tengo quello locale.');
+                    return;
+                }
                 window.vociFisse = cloudVoci;
                 localStorage.setItem('taxi_voci_fisse', JSON.stringify(cloudVoci));
                 if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
@@ -4314,18 +4318,19 @@
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                             <h3 class="text-lg font-bold text-gray-900">Costi fissi dell'anno</h3>
                             <p class="text-xs text-gray-500 leading-relaxed">
-                                Le tue spese fisse: aggiungile, modificale e togli quelle che non hai.
-                                Per ognuna scegli l'unità — <strong>€/mese</strong> per una rata che arriva
-                                sempre uguale, <strong>€/gg</strong> per un costo annuo da spalmare, che viene
-                                moltiplicato per i giorni del mese — e il periodo in cui vale.
-                                <strong>Dal</strong> e <strong>Al</strong> sono facoltativi: lasciandoli vuoti
-                                la voce vale sempre. Una polizza che parte il 15 marzo non comparirà a gennaio,
-                                e su marzo verrà contata solo per i giorni coperti.
-                                Rilanciarlo sullo stesso anno aggiorna le voci esistenti invece di duplicarle.
-                                Non inserire qui manutenzione, INPS e IRPEF: le prime le registri come spese reali,
-                                le seconde le stima gia' l'app.
+                                <strong>L'elenco resta.</strong> Lo compili una volta e vale per tutti gli anni:
+                                generare un anno non lo tocca, quindi non devi riscrivere niente ogni gennaio.
+                                Le voci si modificano quando vuoi, e la modifica vale dalla prossima generazione
+                                in poi.<br><br>
+                                Per ognuna scegli l'importo con la sua unità — <strong>ogni mese</strong> per una
+                                rata che arriva sempre uguale, <strong>ogni giorno</strong> per un costo da
+                                spalmare, che viene moltiplicato per i giorni del mese — e il periodo in cui vale.
+                                Una polizza che parte il 15 marzo non compare a gennaio, e su marzo viene contata
+                                solo per i giorni coperti.<br><br>
+                                Non mettere qui manutenzione, INPS e IRPEF: le prime le registri come spese reali,
+                                le seconde le stima già l'app.
                             </p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
                                 ${elencoVociFisse().map(rigaVoceFissa).join('')}
                             </div>
                             <div class="flex flex-wrap gap-2">
@@ -5357,8 +5362,9 @@
                 if (nome !== null) v.nome = nome;
                 const importo = leggi('cf-imp-');
                 if (importo !== null) {
-                    const n = parseFloat(importo.replace(',', '.'));
-                    v.importo = Number.isFinite(n) ? n : 0;
+                    const pulito = importo.replace(/[€\s]/g, '').replace(',', '.');
+                    const n = parseFloat(pulito);
+                    v.importo = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
                 }
                 const unita = leggi('cf-unita-');
                 if (unita !== null) v.unita = unita;
@@ -5393,39 +5399,53 @@
             renderContent();
         }
 
-        // Riquadro di una voce: nome, importo con la sua unita' e periodo
+        // Scheda di una voce. I campi hanno la loro etichetta e la loro riga:
+        // stipandoli su una riga sola, su iPad il campo dell'importo si
+        // schiacciava fino a sparire e il nome restava troncato.
         function rigaVoceFissa(v) {
             const val = (x) => x === null || x === undefined ? '' : esc(x);
+            const etichetta = (t) => `<span class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">${t}</span>`;
             return `
-                <div class="border border-gray-200 rounded-xl p-3 space-y-2 bg-gray-50/60">
-                    <div class="flex gap-2">
-                        <input type="text" id="cf-nome-${esc(v.slug)}" value="${val(v.nome)}" placeholder="Nome della spesa"
-                               class="flex-1 min-w-0 p-2 border rounded-lg outline-none font-bold text-sm bg-white" />
-                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')"
-                                class="flex-shrink-0 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 rounded-lg text-xs font-bold">Togli</button>
-                    </div>
+                <div class="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50/60">
+                    <label class="block">
+                        ${etichetta('Che spesa è')}
+                        <div class="flex gap-2">
+                            <input type="text" id="cf-nome-${esc(v.slug)}" value="${val(v.nome)}" placeholder="Es. Radio taxi"
+                                   class="flex-1 min-w-0 p-2.5 border rounded-lg outline-none font-bold bg-white" />
+                            <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')"
+                                    class="flex-shrink-0 text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 rounded-lg text-xs font-bold">Togli</button>
+                        </div>
+                    </label>
+
                     <div class="grid grid-cols-2 gap-2">
-                        <div class="flex gap-1">
-                            <input type="number" step="0.01" min="0" id="cf-imp-${esc(v.slug)}" value="${val(v.importo)}"
-                                   class="w-full min-w-0 p-2 border rounded-lg outline-none bg-white" />
-                            <select id="cf-unita-${esc(v.slug)}" class="p-2 border rounded-lg outline-none text-xs font-bold bg-white flex-shrink-0">
-                                <option value="giorno" ${v.unita !== 'mese' ? 'selected' : ''}>€/gg</option>
-                                <option value="mese" ${v.unita === 'mese' ? 'selected' : ''}>€/mese</option>
+                        <label class="block">
+                            ${etichetta('Importo')}
+                            <input type="text" inputmode="decimal" id="cf-imp-${esc(v.slug)}"
+                                   value="${val(String(v.importo).replace('.', ','))}" placeholder="0,00"
+                                   class="w-full p-2.5 border rounded-lg outline-none font-bold bg-white" style="min-width:0" />
+                        </label>
+                        <label class="block">
+                            ${etichetta('Ogni')}
+                            <select id="cf-unita-${esc(v.slug)}" class="w-full p-2.5 border rounded-lg outline-none font-bold bg-white">
+                                <option value="giorno" ${v.unita !== 'mese' ? 'selected' : ''}>giorno</option>
+                                <option value="mese" ${v.unita === 'mese' ? 'selected' : ''}>mese</option>
                             </select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-1">
-                            <label class="block">
-                                <span class="block text-[9px] font-black uppercase tracking-wider text-gray-400">Dal</span>
-                                <input type="date" id="cf-dal-${esc(v.slug)}" value="${val(v.dataInizio)}"
-                                       class="w-full min-w-0 p-1.5 border rounded-lg outline-none text-xs bg-white" />
-                            </label>
-                            <label class="block">
-                                <span class="block text-[9px] font-black uppercase tracking-wider text-gray-400">Al</span>
-                                <input type="date" id="cf-al-${esc(v.slug)}" value="${val(v.dataFine)}"
-                                       class="w-full min-w-0 p-1.5 border rounded-lg outline-none text-xs bg-white" />
-                            </label>
-                        </div>
+                        </label>
                     </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="block">
+                            ${etichetta('Dal')}
+                            <input type="date" id="cf-dal-${esc(v.slug)}" value="${val(v.dataInizio)}"
+                                   class="w-full p-2.5 border rounded-lg outline-none text-sm bg-white" />
+                        </label>
+                        <label class="block">
+                            ${etichetta('Al')}
+                            <input type="date" id="cf-al-${esc(v.slug)}" value="${val(v.dataFine)}"
+                                   class="w-full p-2.5 border rounded-lg outline-none text-sm bg-white" />
+                        </label>
+                    </div>
+                    <p class="text-[11px] text-gray-400">Dal e Al vuoti = la voce vale sempre, anno dopo anno.</p>
                 </div>`;
         }
 
