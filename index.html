@@ -2057,11 +2057,13 @@
 
         // ============================================================
         //  QUOTA GIORNALIERA DEI COSTI FISSI
-        //  I costi fissi restano registrati una volta al mese, il giorno in cui
-        //  escono davvero dal conto: e' cosi' che li vede la banca e cosi' vanno
-        //  in contabilita'. Ma per capire com'e' andata una giornata quel numero
-        //  non serve: serve sapere quanto pesa ogni singolo giorno. Quella quota
-        //  si calcola qui, dividendo il mese per i suoi giorni, e resta una
+        //  Ogni spesa resta registrata nel giorno in cui e' stata fatta: e' cosi'
+        //  che se ne tiene traccia ed e' cosi' che va in contabilita'. Ma per
+        //  capire com'e' andata una giornata quel numero non serve: un pieno, un
+        //  tagliando, il commercialista o i contributi servono per tutto il mese,
+        //  non per il giorno in cui li hai pagati, e la giornata in cui capitano
+        //  risulta disastrosa mentre tutte le altre sembrano piu' ricche del vero.
+        //  Qui le spese del mese si dividono per i suoi giorni, e resta una
         //  lettura: non e' un movimento e non entra in nessun totale.
         // ============================================================
 
@@ -2069,6 +2071,55 @@
             const [a, m] = String(ym).split('-').map(Number);
             if (!a || !m) return 30;
             return new Date(a, m, 0).getDate();
+        }
+
+        // Giornate in cui si e' davvero lavorato in quel mese: nei riposi le
+        // spese corrono lo stesso, ma non c'e' nessun incasso a coprirle.
+        function giorniLavoratiDelMese(ym) {
+            const giorni = new Set();
+            (window.shifts || []).forEach(t => {
+                if (!t.data || String(t.data).slice(0, 7) !== String(ym)) return;
+                if (isRiposo(t)) return;
+                giorni.add(String(t.data));
+            });
+            return giorni.size;
+        }
+
+        // Tutte le spese del mese divise per i giorni.
+        //  - i costi fissi si conoscono per l'intero mese comunque siano
+        //    registrati, quindi si dividono per i giorni del mese;
+        //  - le altre spese si conoscono solo fino a oggi: a meta' mese
+        //    dividerle per trentuno le farebbe sembrare la meta' di quello che
+        //    sono, quindi si fa la media sui giorni gia' passati.
+        function quotaSpeseMese(ym) {
+            const gg = giorniDelMese(ym);
+            let fissi = 0, altre = 0, voci = 0;
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                if (String(r.data || '').slice(0, 7) !== String(ym)) return;
+                const imp = parseFloat(r.importo || 0);
+                voci++;
+                if (categoriaBase(r.categoria) === 'Costi fissi') fissi += imp;
+                else altre += imp;
+            });
+            const oggi = oggiISO();
+            const inCorso = String(ym) === oggi.slice(0, 7);
+            const giorniAltre = inCorso
+                ? Math.min(gg, Math.max(1, Number(oggi.slice(8, 10))))
+                : gg;
+            const quotaFissi = gg ? fissi / gg : 0;
+            const quotaAltre = giorniAltre ? altre / giorniAltre : 0;
+            const quota = quotaFissi + quotaAltre;
+            // Spese della finestra considerata: il mese intero se e' finito,
+            // i giorni gia' passati se e' ancora in corso.
+            const speseFinestra = quotaFissi * giorniAltre + altre;
+            const lavorati = giorniLavoratiDelMese(ym);
+            return {
+                fissi, altre, voci, totale: fissi + altre,
+                giorni: gg, giorniAltre, inCorso, lavorati,
+                quotaFissi, quotaAltre, quota,
+                quotaLavorati: lavorati ? speseFinestra / lavorati : 0
+            };
         }
 
         function costiFissiDelMese(ym) {
@@ -2149,45 +2200,47 @@
         }
 
         // Riquadro che spiega quanto pesa ogni giorno e quanto serve incassare
-        // per coprire le spese: e' il numero che dice se la giornata e' andata
-        // davvero in attivo.
-        function bloccoQuotaFissi(iso, incassiGiorno, usciteGiorno) {
-            const q = quotaFissiGiorno(iso);
+        // per coprire tutto: e' il numero che dice se la giornata e' andata
+        // davvero in attivo. Le spese ci sono tutte, non solo quelle fisse:
+        // il pieno di gasolio e il tagliando servono per tutto il mese.
+        function bloccoQuotaSpese(iso, incassiGiorno, usciteGiorno) {
+            const ym = String(iso).slice(0, 7);
+            const q = quotaSpeseMese(ym);
             if (!(q.totale > 0)) return '';
-            const [, mese] = String(iso).split('-');
-            const ultimo = `${String(iso).slice(0, 7)}-${String(q.giorni).padStart(2, '0')}`;
-            // Se in questa giornata ci sono gia' dei costi fissi registrati, le
-            // sue spese li comprendono: sommarci anche la quota li conterebbe
-            // due volte. Vale sia per la registrazione mensile (solo l'ultimo
-            // giorno) sia per quella giornaliera (tutti i giorni).
-            const fissiGiaDentro = fissiDelGiorno(iso);
-            const spesePulite = Math.max(0, (usciteGiorno || 0) - fissiGiaDentro);
-            const pareggio = spesePulite + q.quota;
-            const risultato = (incassiGiorno || 0) - pareggio;
+            const mese = nomeMese(parseInt(ym.slice(5, 7), 10));
+            const risultato = (incassiGiorno || 0) - q.quota;
+            const speseOggi = usciteGiorno || 0;
 
             return `
                 <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <p class="text-[10px] font-black uppercase tracking-wider text-indigo-700">Quota costi fissi del giorno</p>
-                        <p class="text-xs font-bold text-indigo-500">${nomeMese(parseInt(mese, 10))} · ${formatCurrency(q.totale)} su ${q.giorni} giorni</p>
+                        <p class="text-[10px] font-black uppercase tracking-wider text-indigo-700">Quota spese del giorno</p>
+                        <p class="text-xs font-bold text-indigo-500">${mese} · ${formatCurrency(q.totale)} di spese${q.inCorso ? ' finora' : ''}</p>
                     </div>
                     <p class="text-2xl font-black text-indigo-900 mt-1">${formatCurrency(q.quota)} <span class="text-sm font-bold text-indigo-500">al giorno</span></p>
+                    <p class="text-[11px] font-bold text-indigo-500 mt-0.5">
+                        costi fissi ${formatCurrency(q.quotaFissi)} + altre spese ${formatCurrency(q.quotaAltre)}
+                    </p>
                     <div class="grid grid-cols-2 gap-3 mt-3">
                         <div class="bg-white/70 rounded-lg p-2.5">
                             <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Pareggio della giornata</p>
-                            <p class="text-base font-black text-indigo-900">${formatCurrency(pareggio)}</p>
+                            <p class="text-base font-black text-indigo-900">${formatCurrency(q.quota)}</p>
                         </div>
                         <div class="bg-white/70 rounded-lg p-2.5">
-                            <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Risultato con la quota</p>
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Incasso reale della giornata</p>
                             <p class="text-base font-black ${risultato >= 0 ? 'text-green-700' : 'text-red-600'}">${formatCurrency(risultato)}</p>
                         </div>
                     </div>
+                    ${q.lavorati ? `
+                        <p class="text-[11px] text-indigo-600 mt-2 leading-relaxed">
+                            Sui ${q.lavorati} ${q.lavorati === 1 ? 'giorno' : 'giorni'} in cui hai davvero lavorato la quota sale a
+                            <strong>${formatCurrency(q.quotaLavorati)}</strong>: nei riposi le spese corrono lo stesso, ma non c'è incasso a coprirle.
+                        </p>` : ''}
                     <p class="text-[11px] text-indigo-500 mt-2 leading-relaxed">
-                        ${fissiGiaDentro > 0
-                            ? (fissiInSfondo()
-                                ? `I costi fissi sono spalmati su tutte le giornate: quelli di oggi (${formatCurrency(fissiGiaDentro)}) sono già dentro le spese qui sopra, anche se nel registro non li vedi voce per voce. Il pareggio li conta una volta sola.`
-                                : `In questa giornata i costi fissi sono già registrati fra le spese (${formatCurrency(fissiGiaDentro)}): il pareggio qui sopra li conta una volta sola.`)
-                            : `I costi fissi di questo mese sono registrati il ${ggMm(ultimo)}, quando escono dal conto: qui sono divisi per i giorni del mese, per far vedere quanto pesano ogni giorno. È solo una lettura, non un movimento.`}
+                        Le spese restano registrate nel giorno in cui le hai fatte${speseOggi > 0 ? ` (in questa giornata ${formatCurrency(speseOggi)})` : ''}, così ne resta traccia.
+                        Qui sono divise per i giorni del mese: un pieno o un tagliando servono per tutto il mese, non solo per il giorno in cui li hai pagati.
+                        È una lettura, non un movimento: nei totali di mese e anno le spese contano una volta sola.
+                        ${q.inCorso ? `${mese} è ancora in corso, quindi le spese diverse da quelle fisse sono la media dei primi ${q.giorniAltre} giorni.` : ''}
                     </p>
                 </div>`;
         }
@@ -2345,7 +2398,7 @@
                                 ${boxDato('Corse', `${d.nCorse} <span class="text-xs font-bold text-gray-400">${formatCurrency(d.mediaCorsa)}/corsa</span>`)}
                             </div>
 
-                            ${bloccoQuotaFissi(g, d.incassi, d.uscite)}
+                            ${bloccoQuotaSpese(g, d.incassi, d.uscite)}
 
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                 <div class="space-y-3">
@@ -3603,8 +3656,9 @@
                                     ${eIlGiorno
                                         ? `<strong>Oggi ci sono i costi fissi del mese</strong> (${formatCurrency(q.totale)}): escono dal conto una volta sola, l'ultimo giorno, quindi il totale di questa giornata risulta molto più alto degli altri. Da «Cloud & Sync» puoi spalmarli su tutte le giornate e toglierli dal registro.`
                                         : `<strong>I costi fissi del mese</strong> (${formatCurrency(q.totale)}) sono registrati il ${ggMm(ultimo)}, quando escono dal conto: per questo non compaiono in questa giornata.`}
-                                    Divisi per i ${q.giorni} giorni del mese pesano <strong>${formatCurrency(q.quota)} al giorno</strong>.
-                                    Il conto giorno per giorno lo trovi nella Dashboard.
+                                    Tutte le spese del mese, divise per i suoi giorni, pesano
+                                    <strong>${formatCurrency(quotaSpeseMese(String(giorno).slice(0, 7)).quota)} al giorno</strong>:
+                                    il conto giornata per giornata lo trovi nella Dashboard.
                                 </div>`;
                           })()}
 

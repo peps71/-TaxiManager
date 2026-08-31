@@ -101,11 +101,9 @@ Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voc
 `fissi-{anno}-{mese}-{giorno}-{voce}`): rigenerare lo stesso anno le **aggiorna**, non le
 duplica.
 
-Comunque siano registrati, il riepilogo giornaliero della Dashboard mostra la **quota del
-giorno** (costi fissi del mese ÷ giorni del mese), il **pareggio** — quanto bisogna
-incassare per coprire tutto — e il risultato che ne deriva. Nei totali di mese e anno i
-costi fissi contano una volta sola, e nei giorni in cui sono già registrati la quota non
-viene sommata due volte.
+Comunque siano registrati, il riepilogo giornaliero della Dashboard mostra la loro quota
+del giorno insieme a quella di tutte le altre spese: vedi sotto, «Quota spese del
+giorno».
 
 Sotto, «Costi fissi già registrati» mostra tutto quello che c'è in archivio raggruppato
 per nome e provenienza. Le voci che non ha generato questa app — rimaste da versioni
@@ -113,6 +111,32 @@ precedenti, con altri identificativi — sono segnate «versione precedente» e 
 tutte insieme con un pulsante: altrimenti si sommano alle nuove e il mese risulta pagato
 due volte. La distinzione è sulla provenienza e non sul nome, perché alcune voci si
 chiamano allo stesso modo in entrambe le serie.
+
+## Quota spese del giorno
+
+Ogni spesa resta registrata nel giorno in cui è stata fatta — è così che se ne tiene
+traccia ed è così che va in contabilità. Ma un pieno di gasolio, un tagliando, il
+commercialista o i contributi servono per **tutto il mese**, non per il giorno in cui li
+hai pagati: la giornata in cui capitano risulta disastrosa e tutte le altre sembrano più
+ricche del vero.
+
+Per questo il riepilogo giornaliero della Dashboard mostra la **quota spese del giorno**:
+tutte le spese del mese divise per i suoi giorni, con accanto il **pareggio** — quanto
+bisogna incassare per coprire tutto — e l'**incasso reale della giornata**, cioè quello
+che resta davvero in tasca una volta tolta la quota. Sotto, la stessa quota calcolata sui
+soli **giorni lavorati**: nei riposi le spese corrono lo stesso, ma non c'è nessun incasso
+a coprirle.
+
+Il calcolo distingue due cose:
+
+- i **costi fissi** si conoscono per l'intero mese comunque siano registrati, quindi si
+  dividono per i giorni del mese;
+- le **altre spese** si conoscono solo fino a oggi, quindi in un mese ancora in corso si
+  fa la media sui giorni già passati: dividerle per trentuno le farebbe sembrare la metà
+  di quello che sono.
+
+È una lettura, non un movimento: nei totali di giorno, mese e anno ogni spesa conta una
+volta sola, e nel registro resta dov'era.
 
 ## Pubblicare un aggiornamento
 
