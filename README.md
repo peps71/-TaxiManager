@@ -1,7 +1,7 @@
 # TaxiManager
 
 Applicazione web (PWA) per la gestione quotidiana del lavoro di taxi: corse e incassi,
-spese, turni, calendario, scadenze, rendimento e stima delle tasse. Funziona da browser,
+spese, turni, calendario, parco auto, scadenze, rendimento e stima delle tasse. Funziona da browser,
 si installa sulla schermata Home di iPhone e Mac e sincronizza i dati fra i dispositivi
 tramite Firebase/Firestore.
 
@@ -27,6 +27,31 @@ tramite Firebase/Firestore.
 
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
+
+## Parco auto
+
+Nella scheda **Parco Auto** si registrano le vetture avute, quella in uso e quelle future:
+marca e modello, targa, anno, alimentazione, telaio, data e km e costo di acquisto, e
+quando esce dal parco anche data, km e valore di realizzo (vendita, permuta, rottamazione,
+incidente, fine leasing).
+
+Da lì l'app calcola da sola, senza chiedere altri dati:
+
+- **Km percorsi** — per le vetture uscite dai km dichiarati, per quella in uso dal
+  contachilometri più alto registrato nei turni di quel periodo.
+- **Valore perso** — costo di acquisto meno valore di realizzo. Per l'auto in uso il conto
+  si fa solo se indichi quanto vale oggi, ed è segnalato come stima.
+- **Spese del periodo** — prese dai movimenti già registrati, per data di possesso:
+  carburante, manutenzione, lavaggio, assicurazione, bollo, pedaggi, multe e la quota di
+  finanziamento fra i costi fissi. Radio taxi, commercialista e ristoro restano fuori:
+  quelli ci sarebbero con qualsiasi vettura.
+- **Costo al chilometro**, diviso fra la vettura in sé e le spese di gestione, con il
+  confronto fra le auto già uscite, dalla più economica.
+
+Due avvertenze incorporate: se due vetture risultano possedute negli stessi giorni l'app
+lo segnala, perché le spese di quei giorni verrebbero contate su entrambe; e nei turni
+l'avviso «contachilometri all'indietro» non compare più quando fra i due turni c'è
+l'acquisto di un'auto nuova, dove ripartire da capo è normale.
 
 ## Pubblicare un aggiornamento
 

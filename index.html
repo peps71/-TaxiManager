@@ -131,7 +131,8 @@
         // si aggiornano solo i dati in memoria e si avvisa, senza ridisegnare.
         let ultimoAvvisoSyncBloccato = 0;
         function formConDatiNonSalvati() {
-            return !!(window.showCorsaForm || window.showUscitaForm || window.showShiftForm || window.editRecordId || window.editKmId);
+            return !!(window.showCorsaForm || window.showUscitaForm || window.showShiftForm
+                || window.editRecordId || window.editKmId || window.veicoloInModifica);
         }
         function avvisaSyncInAttesa() {
             const ora = Date.now();
@@ -155,6 +156,7 @@
             const recordsCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_records');
             const shiftsCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_shifts');
             const scadenzeCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_scadenze');
+            const veicoliCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_veicoli');
 
             onSnapshot(recordsCol, (snapshot) => {
                 if (!snapshot.empty || vuotoDaApplicare('records', snapshot)) {
@@ -222,12 +224,43 @@
                 if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
                 window.renderContent();
             }, (error) => console.error("Errore Sync Scadenze:", error));
+
+            // Parco auto: stesso trattamento delle scadenze. Uno snapshot vuoto si
+            // applica solo dopo aver visto che il Cloud accetta i dati, altrimenti
+            // al primo avvio cancellerebbe le vetture salvate solo qui.
+            onSnapshot(veicoliCol, async (snapshot) => {
+                const cloudVeicoli = [];
+                snapshot.forEach(d => cloudVeicoli.push({ id: d.id, ...d.data() }));
+
+                if (!snapshot.empty) veicoliCloudOk = true;
+
+                if (snapshot.empty && (window.veicoli || []).length && !veicoliCloudOk) {
+                    try {
+                        for (const v of window.veicoli) {
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'taxi_veicoli', String(v.id)), v);
+                        }
+                        veicoliCloudOk = true;
+                        if (window.showToast) window.showToast('☁️ Parco auto caricato sul Cloud.');
+                    } catch (err) {
+                        console.error("Errore migrazione veicoli:", err);
+                        if (window.showToast) window.showToast('⚠️ Parco auto salvato solo qui: il Cloud ha rifiutato la scrittura.');
+                    }
+                    return;
+                }
+
+                window.veicoli = cloudVeicoli;
+                localStorage.setItem('taxi_veicoli', JSON.stringify(cloudVeicoli));
+                window.renderNav();
+                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
+                window.renderContent();
+            }, (error) => console.error("Errore Sync Parco Auto:", error));
         }
 
         // Diventa true quando il Cloud ha dimostrato di funzionare per le scadenze:
         // o perche' conteneva gia' dei dati, o perche' ha accettato una scrittura.
         let scadenzeMigrate = false;
         let scadenzeCloudOk = false;
+        let veicoliCloudOk = false;
 
         window.saveScadenzaToCloud = async function(scadenza) {
             if (isCloudActive && db && auth.currentUser) {
@@ -248,6 +281,30 @@
                     await deleteDoc(docRef);
                 } catch (err) {
                     console.error("Errore eliminazione Cloud scadenza:", err);
+                    if (window.showToast) window.showToast('⚠️ Eliminata solo su questo dispositivo.');
+                }
+            }
+        };
+
+        window.saveVeicoloToCloud = async function(veicolo) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taxi_veicoli', String(veicolo.id));
+                    await setDoc(docRef, veicolo);
+                } catch (err) {
+                    console.error("Errore scrittura Cloud veicolo:", err);
+                    if (window.showToast) window.showToast('⚠️ Vettura salvata solo su questo dispositivo.');
+                }
+            }
+        };
+
+        window.deleteVeicoloFromCloud = async function(id) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taxi_veicoli', String(id));
+                    await deleteDoc(docRef);
+                } catch (err) {
+                    console.error("Errore eliminazione Cloud veicolo:", err);
                     if (window.showToast) window.showToast('⚠️ Eliminata solo su questo dispositivo.');
                 }
             }
@@ -430,7 +487,7 @@
         window.shifts = leggiLocale('taxi_shifts', defaultShifts);
         // IMPOSTATO 'dashboard' COME TAB PREDEFINITO
         // Schede valide: serve a non ripristinare una scheda che non esiste piu'
-        const SCHEDE = ['dashboard', 'giornata', 'uscite', 'scadenze', 'rendimento', 'categorie', 'report', 'cloud'];
+        const SCHEDE = ['dashboard', 'giornata', 'uscite', 'auto', 'scadenze', 'rendimento', 'categorie', 'report', 'cloud'];
         let schedaSalvata = localStorage.getItem('taxi_tab');
         // Le vecchie schede separate ora sono viste della scheda unificata
         if (schedaSalvata === 'corse' || schedaSalvata === 'turni') schedaSalvata = 'giornata';
@@ -465,6 +522,9 @@
         window.catSpesaAperta = null;
         // Scadenze (revisione, RCA, bollo, tassametro, licenza...): locali e sincronizzate sul Cloud.
         window.scadenze = leggiLocale('taxi_scadenze', []);
+        // Parco auto: le vetture avute, quella in uso e quelle che verranno.
+        window.veicoli = leggiLocale('taxi_veicoli', []);
+        window.veicoloInModifica = null;   // id della vettura aperta nel modulo (o 'nuovo')
         window.filterMonthCorse = 'ALL';
         window.filterMonthUscite = 'ALL';
         window.filterMonthReport = 'ALL';
@@ -536,9 +596,12 @@
             scriviLocale('taxi_shifts', window.shifts);
         };
 
-        // Le scadenze sono gia' scritte in locale da salvaScadenze(): qui non serve altro
+        // Scadenze e veicoli sono gia' scritti in locale dalle rispettive
+        // salvaScadenze() / salvaVeicoli(): qui non serve altro
         window.saveScadenzaToCloud = function() {};
         window.deleteScadenzaFromCloud = function() {};
+        window.saveVeicoloToCloud = function() {};
+        window.deleteVeicoloFromCloud = function() {};
 
         window.bulkSave = async function(newRecords, newShifts) {
             const unisci = (esistenti, nuovi) => {
@@ -891,6 +954,492 @@
             });
         }
 
+
+        // ============================================================
+        //  PARCO AUTO
+        //  Ogni vettura con quello che e' costata e quello che ha reso.
+        //  I km non si riscrivono a mano: quelli percorsi si ricavano dal
+        //  contachilometri dei turni, e le spese del periodo sono quelle
+        //  gia' registrate nel Registro Uscite.
+        // ============================================================
+
+        const ALIMENTAZIONI = ['Diesel', 'Benzina', 'GPL', 'Metano', 'Ibrida', 'Ibrida plug-in', 'Elettrica', 'Altro'];
+
+        const USCITE_VEICOLO = {
+            'in-uso':       'Ancora in uso',
+            'venduta':      'Venduta',
+            'permutata':    'Data in permuta',
+            'rottamata':    'Rottamata',
+            'incidente':    'Distrutta in un incidente',
+            'fine-leasing': 'Restituita a fine leasing'
+        };
+
+        // Categorie di spesa che riguardano la vettura: sono quelle che entrano
+        // nel costo al chilometro. Radio taxi, commercialista e ristoro no:
+        // quelle ci sarebbero con qualsiasi auto.
+        const CATEGORIE_AUTO = ['Carburante', 'Manutenzione', 'Lavaggio', 'Assicurazione',
+                                'Bollo / Tasse auto', 'Parcheggio / Pedaggio', 'Multa'];
+
+        function salvaVeicoli() {
+            try { localStorage.setItem('taxi_veicoli', JSON.stringify(window.veicoli || [])); } catch (err) { /* spazio esaurito: pazienza */ }
+        }
+
+        function numeroOpzionale(v) {
+            const n = parseFloat(String(v === null || v === undefined ? '' : v).replace(',', '.'));
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function inUso(v) { return !v.dataUscita; }
+
+        // Vetture dalla piu' recente alla piu' vecchia, con quella in uso in cima
+        function veicoliOrdinati() {
+            return (window.veicoli || []).slice().sort((a, b) => {
+                if (inUso(a) !== inUso(b)) return inUso(a) ? -1 : 1;
+                return String(b.dataAcquisto || '').localeCompare(String(a.dataAcquisto || ''));
+            });
+        }
+
+        // Contachilometri piu' alto registrato nei turni dentro un periodo:
+        // serve per sapere a che punto e' l'auto ancora in uso, senza doverlo
+        // riscrivere a mano da qualche parte.
+        function kmMassimoNelPeriodo(da, a) {
+            let massimo = null;
+            (window.shifts || []).forEach(t => {
+                if (isRiposo(t) || !t.data) return;
+                if (da && String(t.data) < da) return;
+                if (a && String(t.data) > a) return;
+                [t.kmInizio, t.kmFine].forEach(k => {
+                    const n = numeroOpzionale(k);
+                    if (n !== null && n > 0 && (massimo === null || n > massimo)) massimo = n;
+                });
+            });
+            return massimo;
+        }
+
+        // Tutti i conti di una vettura: km, perdita di valore, spese del periodo
+        // e quanto viene a costare ogni chilometro.
+        function statsVeicolo(v) {
+            const da = v.dataAcquisto || '';
+            const a = v.dataUscita || oggiISO();
+
+            const kmAcq = numeroOpzionale(v.kmAcquisto);
+            const kmUsc = numeroOpzionale(v.kmUscita);
+            const kmOggi = inUso(v) ? kmMassimoNelPeriodo(da, a) : null;
+            const kmFinali = kmUsc !== null ? kmUsc : kmOggi;
+            const kmPercorsi = (kmAcq !== null && kmFinali !== null && kmFinali >= kmAcq) ? kmFinali - kmAcq : null;
+
+            const prezzoAcq = numeroOpzionale(v.prezzoAcquisto);
+            const realizzo = numeroOpzionale(v.valoreUscita);
+            const stimato = numeroOpzionale(v.valoreStimato);
+            // Per un'auto venduta la perdita e' certa; per una ancora in uso si
+            // puo' calcolare solo se hai indicato quanto vale oggi, a occhio.
+            const valoreFinale = inUso(v) ? stimato : realizzo;
+            const perdita = (prezzoAcq !== null && valoreFinale !== null) ? prezzoAcq - valoreFinale : null;
+            const perditaStimata = inUso(v) && perdita !== null;
+
+            // Spese del periodo di possesso, prese dai movimenti gia' registrati
+            const perCategoria = {};
+            let speseTot = 0, incassi = 0;
+            (window.dailyRecords || []).forEach(r => {
+                if (!r.data || String(r.data) < da || String(r.data) > a) return;
+                const imp = parseFloat(r.importo || 0);
+                if (r.tipo === 'ENTRATA') { incassi += imp; return; }
+                if (r.tipo !== 'USCITA') return;
+                const base = categoriaBase(r.categoria);
+                const sotto = sottocategoria(r.categoria).toLowerCase();
+                const eAuto = CATEGORIE_AUTO.includes(base)
+                    || (base === 'Costi fissi' && /finanziam|leasing|noleggio/.test(sotto));
+                if (!eAuto) return;
+                const nome = base === 'Costi fissi' ? 'Finanziamento veicolo' : base;
+                perCategoria[nome] = (perCategoria[nome] || 0) + imp;
+                speseTot += imp;
+            });
+
+            const giorni = da ? Math.max(1, giorniTraDate(da, a)) : null;
+            const anni = giorni ? giorni / 365.25 : null;
+
+            const costoTot = (perdita !== null ? perdita : 0) + speseTot;
+            const perKm = (x) => (kmPercorsi && kmPercorsi > 0 && x !== null) ? x / kmPercorsi : null;
+
+            return {
+                da, a, giorni, anni,
+                kmAcq, kmFinali, kmPercorsi, kmOggi,
+                kmAnno: (kmPercorsi !== null && anni) ? kmPercorsi / anni : null,
+                prezzoAcq, valoreFinale, perdita, perditaStimata,
+                speseTot, incassi,
+                categorie: Object.keys(perCategoria)
+                    .map(k => ({ nome: k, totale: perCategoria[k] }))
+                    .sort((x, y) => y.totale - x.totale),
+                costoTot,
+                perditaKm: perKm(perdita),
+                speseKm: perKm(speseTot),
+                costoKm: perKm(costoTot)
+            };
+        }
+
+        function giorniTraDate(da, a) {
+            const [a1, m1, g1] = String(da).split('-').map(Number);
+            const [a2, m2, g2] = String(a).split('-').map(Number);
+            if (!a1 || !a2) return 0;
+            return Math.round((Date.UTC(a2, m2 - 1, g2) - Date.UTC(a1, m1 - 1, g1)) / 86400000);
+        }
+
+        // Due vetture possedute nello stesso momento: le spese di quei giorni
+        // finirebbero contate su entrambe. Meglio dirlo che far tornare i conti
+        // per finta.
+        function periodiSovrapposti() {
+            const elenco = (window.veicoli || []).filter(v => v.dataAcquisto);
+            const coppie = [];
+            for (let i = 0; i < elenco.length; i++) {
+                for (let j = i + 1; j < elenco.length; j++) {
+                    const x = elenco[i], y = elenco[j];
+                    const fineX = x.dataUscita || '9999-12-31';
+                    const fineY = y.dataUscita || '9999-12-31';
+                    if (x.dataAcquisto <= fineY && y.dataAcquisto <= fineX) {
+                        coppie.push([x, y]);
+                    }
+                }
+            }
+            return coppie;
+        }
+
+        // Campi del modulo, nell'ordine in cui compaiono
+        const CAMPI_VEICOLO = ['modello', 'targa', 'anno', 'alimentazione', 'telaio',
+                               'data-acquisto', 'km-acquisto', 'prezzo-acquisto',
+                               'uscita', 'data-uscita', 'km-uscita', 'valore-uscita',
+                               'valore-stimato', 'note'];
+
+        // Cambiando la situazione della vettura il modulo si ridisegna, perche'
+        // i campi da mostrare sono diversi. Prima si fotografa quello che c'e'
+        // gia' scritto, altrimenti la scelta appena fatta andrebbe persa insieme
+        // a tutto il resto. I campi non presenti in quel momento restano com'erano.
+        function leggiFormVeicolo() {
+            window.bozzaVeicolo = window.bozzaVeicolo || {};
+            CAMPI_VEICOLO.forEach(campo => {
+                const el = document.getElementById('vc-' + campo);
+                if (el) window.bozzaVeicolo[campo] = el.value;
+            });
+            return window.bozzaVeicolo;
+        }
+
+        function cambiaUscitaVeicolo() {
+            leggiFormVeicolo();
+            renderContent();
+        }
+
+        function apriFormVeicolo(id) {
+            window.veicoloInModifica = id || 'nuovo';
+            const v = id && id !== 'nuovo'
+                ? ((window.veicoli || []).find(x => String(x.id) === String(id)) || {})
+                : {};
+            const testo = (x) => x === null || x === undefined ? '' : String(x);
+            window.bozzaVeicolo = {
+                'modello': testo(v.modello), 'targa': testo(v.targa), 'anno': testo(v.anno),
+                'alimentazione': v.alimentazione || ALIMENTAZIONI[0], 'telaio': testo(v.telaio),
+                'data-acquisto': testo(v.dataAcquisto), 'km-acquisto': testo(v.kmAcquisto),
+                'prezzo-acquisto': testo(v.prezzoAcquisto),
+                'uscita': v.uscita || 'in-uso', 'data-uscita': testo(v.dataUscita),
+                'km-uscita': testo(v.kmUscita), 'valore-uscita': testo(v.valoreUscita),
+                'valore-stimato': testo(v.valoreStimato), 'note': testo(v.note)
+            };
+            renderContent();
+            setTimeout(() => {
+                const el = document.getElementById('vc-modello');
+                if (el) el.focus();
+            }, 0);
+        }
+
+        function chiudiFormVeicolo() {
+            window.veicoloInModifica = null;
+            window.bozzaVeicolo = null;
+            renderContent();
+        }
+
+        function salvaVeicolo(e) {
+            e.preventDefault();
+            const bozza = leggiFormVeicolo();
+            const leggi = (id) => String(bozza[String(id).replace(/^vc-/, '')] || '').trim();
+            const modello = leggi('vc-modello');
+            const dataAcquisto = leggi('vc-data-acquisto');
+            if (!modello) { showToast('Indica almeno marca e modello.'); return; }
+            if (!dataAcquisto) { showToast('Indica la data di acquisto.'); return; }
+
+            const uscita = leggi('vc-uscita');
+            const dataUscita = uscita === 'in-uso' ? '' : leggi('vc-data-uscita');
+            if (uscita !== 'in-uso' && !dataUscita) {
+                showToast('Indica la data in cui l\'auto è uscita.');
+                return;
+            }
+            if (dataUscita && dataUscita < dataAcquisto) {
+                showToast('La data di uscita viene prima di quella di acquisto.');
+                return;
+            }
+
+            const kmAcquisto = numeroOpzionale(leggi('vc-km-acquisto'));
+            const kmUscita = uscita === 'in-uso' ? null : numeroOpzionale(leggi('vc-km-uscita'));
+            if (kmAcquisto !== null && kmUscita !== null && kmUscita < kmAcquisto) {
+                showToast('I km all\'uscita non possono essere inferiori a quelli di acquisto.');
+                return;
+            }
+
+            const prezzoAcquisto = numeroOpzionale(leggi('vc-prezzo-acquisto'));
+            const valoreUscita = uscita === 'in-uso' ? null : numeroOpzionale(leggi('vc-valore-uscita'));
+            const valoreStimato = uscita === 'in-uso' ? numeroOpzionale(leggi('vc-valore-stimato')) : null;
+            if ([prezzoAcquisto, valoreUscita, valoreStimato].some(x => x !== null && x < 0)) {
+                showToast('Gli importi non possono essere negativi.');
+                return;
+            }
+
+            const esistente = window.veicoloInModifica !== 'nuovo'
+                ? (window.veicoli || []).find(x => String(x.id) === String(window.veicoloInModifica))
+                : null;
+
+            const veicolo = Object.assign({}, esistente || {}, {
+                id: esistente ? esistente.id : nuovoId(),
+                modello,
+                targa: leggi('vc-targa').toUpperCase(),
+                anno: leggi('vc-anno'),
+                alimentazione: leggi('vc-alimentazione'),
+                telaio: leggi('vc-telaio').toUpperCase(),
+                dataAcquisto, kmAcquisto, prezzoAcquisto,
+                uscita, dataUscita, kmUscita, valoreUscita, valoreStimato,
+                note: leggi('vc-note')
+            });
+
+            window.veicoli = window.veicoli || [];
+            if (esistente) {
+                window.veicoli = window.veicoli.map(x => String(x.id) === String(veicolo.id) ? veicolo : x);
+            } else {
+                window.veicoli.push(veicolo);
+            }
+            salvaVeicoli();
+            if (window.saveVeicoloToCloud) window.saveVeicoloToCloud(veicolo);
+            window.veicoloInModifica = null;
+            window.bozzaVeicolo = null;
+            showToast(esistente ? 'Vettura aggiornata.' : '⚡ Vettura aggiunta al parco auto.');
+            renderNav();
+            renderContent();
+        }
+
+        function deleteVeicolo(id) {
+            const v = (window.veicoli || []).find(x => String(x.id) === String(id));
+            if (!v) return;
+            if (!confirm(`Elimino ${v.modello}${v.targa ? ' (' + v.targa + ')' : ''} dal parco auto?\nI movimenti e i turni restano dove sono.`)) return;
+            window.veicoli = (window.veicoli || []).filter(x => String(x.id) !== String(id));
+            salvaVeicoli();
+            if (window.deleteVeicoloFromCloud) window.deleteVeicoloFromCloud(id);
+            showToast('Vettura eliminata.');
+            renderContent();
+        }
+
+        function pastigliaStatoVeicolo(v) {
+            if (inUso(v)) return '<span class="bg-green-100 text-green-800 border border-green-300 px-2.5 py-1 rounded-md text-xs font-black">In uso</span>';
+            const etichetta = USCITE_VEICOLO[v.uscita] || 'Uscita';
+            const rosse = ['rottamata', 'incidente'];
+            const classe = rosse.includes(v.uscita)
+                ? 'bg-red-100 text-red-800 border-red-300'
+                : 'bg-gray-100 text-gray-700 border-gray-300';
+            return `<span class="${classe} border px-2.5 py-1 rounded-md text-xs font-black">${esc(etichetta)}</span>`;
+        }
+
+        function formVeicolo() {
+            const nuovo = window.veicoloInModifica === 'nuovo';
+            const b = window.bozzaVeicolo || {};
+            const uscita = b['uscita'] || 'in-uso';
+            const ancoraInUso = uscita === 'in-uso';
+            // Il modulo si disegna sempre da quello che c'e' scritto adesso,
+            // non dal dato salvato: cosi' un ridisegno non cancella niente.
+            const val = (campo) => esc(b[campo] === null || b[campo] === undefined ? '' : b[campo]);
+            const v = { alimentazione: b['alimentazione'] };
+
+            return `
+                <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-yellow-400 slide-in no-print">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-900">${nuovo ? 'Aggiungi una vettura' : 'Modifica la vettura'}</h3>
+                        <button onclick="chiudiFormVeicolo()" class="text-gray-500 hover:text-gray-800 text-sm font-bold">Chiudi</button>
+                    </div>
+                    <form onsubmit="salvaVeicolo(event)" class="space-y-5">
+
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">La vettura</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div class="lg:col-span-2">
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Marca e modello</label>
+                                    <input type="text" id="vc-modello" required value="${val('modello')}" placeholder="Es. Skoda Octavia 2.0 TDI" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Targa</label>
+                                    <input type="text" id="vc-targa" value="${val('targa')}" placeholder="AB123CD" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 uppercase" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Anno <span class="text-gray-400 font-normal">immatricolazione</span></label>
+                                    <input type="number" id="vc-anno" value="${val('anno')}" placeholder="2021" min="1950" max="2100" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Alimentazione</label>
+                                    <select id="vc-alimentazione" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium">
+                                        ${ALIMENTAZIONI.map(a => `<option value="${esc(a)}" ${v.alimentazione === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="lg:col-span-3">
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Numero di telaio <span class="text-gray-400 font-normal">facoltativo, comodo per le pratiche</span></label>
+                                    <input type="text" id="vc-telaio" value="${val('telaio')}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 uppercase" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-gray-100">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Acquisto</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Data di acquisto</label>
+                                    <input type="date" id="vc-data-acquisto" required value="${val('data-acquisto')}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Km al momento dell'acquisto</label>
+                                    <input type="number" id="vc-km-acquisto" value="${val('km-acquisto')}" placeholder="0" min="0" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Costo di acquisto (€)</label>
+                                    <input type="number" step="0.01" id="vc-prezzo-acquisto" value="${val('prezzo-acquisto')}" placeholder="0.00" min="0" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-bold" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-4 border-t border-gray-100">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Uscita dal parco</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Situazione</label>
+                                    <select id="vc-uscita" onchange="cambiaUscitaVeicolo()" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium">
+                                        ${Object.keys(USCITE_VEICOLO).map(k => `<option value="${k}" ${uscita === k ? 'selected' : ''}>${esc(USCITE_VEICOLO[k])}</option>`).join('')}
+                                    </select>
+                                </div>
+                                ${ancoraInUso ? `
+                                    <div class="lg:col-span-3">
+                                        <label class="block text-xs font-bold text-gray-700 mb-1">Quanto vale oggi, a occhio (€) <span class="text-gray-400 font-normal">facoltativo</span></label>
+                                        <input type="number" step="0.01" id="vc-valore-stimato" value="${val('valore-stimato')}" placeholder="0.00" min="0" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                        <p class="text-[11px] text-gray-400 mt-1">Serve solo per stimare quanto valore hai già perso: finché non vendi è una stima, non un dato certo.</p>
+                                    </div>
+                                ` : `
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700 mb-1">Data di uscita</label>
+                                        <input type="date" id="vc-data-uscita" value="${val('data-uscita')}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700 mb-1">Km all'uscita</label>
+                                        <input type="number" id="vc-km-uscita" value="${val('km-uscita')}" placeholder="0" min="0" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-bold text-gray-700 mb-1">Quanto hai incassato (€)</label>
+                                        <input type="number" step="0.01" id="vc-valore-uscita" value="${val('valore-uscita')}" placeholder="0.00" min="0" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-bold" />
+                                        <p class="text-[11px] text-gray-400 mt-1">Prezzo di vendita, valore della permuta o incentivo di rottamazione. Zero se non hai preso niente.</p>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-700 mb-1">Note <span class="text-gray-400 font-normal">facoltative</span></label>
+                            <input type="text" id="vc-note" value="${val('note')}" placeholder="Es. acquistata dal concessionario X, gancio traino, tassametro nuovo..." class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                            <button type="submit" class="flex-1 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-3 rounded-xl transition-colors shadow-md">
+                                ${nuovo ? 'Aggiungi la vettura' : 'Salva le modifiche'}
+                            </button>
+                            <button type="button" onclick="chiudiFormVeicolo()" class="sm:px-8 bg-gray-100 hover:bg-gray-200 font-bold py-3 rounded-xl transition-colors text-gray-700">Annulla</button>
+                        </div>
+                    </form>
+                </div>`;
+        }
+
+        // Scheda di una singola vettura, con i conti gia' fatti
+        function schedaVeicolo(v) {
+            const s = statsVeicolo(v);
+            const km = (n) => n === null || n === undefined ? '—' : new Intl.NumberFormat('it-IT').format(Math.round(n)) + ' km';
+            const centesimi = (n) => n === null ? '—' : formatCurrency(n).replace('€', '').trim() + ' €/km';
+
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card print-break">
+                    <div class="p-5 border-b border-gray-100 flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <h3 class="text-lg font-black text-gray-900">${esc(v.modello)}</h3>
+                                ${pastigliaStatoVeicolo(v)}
+                            </div>
+                            <p class="text-xs font-bold text-gray-500 mt-1">
+                                ${v.targa ? esc(v.targa) + ' · ' : ''}${v.alimentazione ? esc(v.alimentazione) + ' · ' : ''}${v.anno ? 'imm. ' + esc(v.anno) : ''}
+                            </p>
+                            <p class="text-xs text-gray-400 mt-0.5">
+                                dal ${esc(v.dataAcquisto)}${v.dataUscita ? ' al ' + esc(v.dataUscita) : ' a oggi'}
+                                ${s.anni ? ` · ${s.anni.toFixed(1)} anni` : ''}
+                            </p>
+                        </div>
+                        <div class="flex gap-2 no-print">
+                            <button onclick="apriFormVeicolo('${escJs(v.id)}')" class="text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1.5 rounded">Modifica</button>
+                            <button onclick="deleteVeicolo('${escJs(v.id)}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1.5 rounded">Elimina</button>
+                        </div>
+                    </div>
+
+                    <div class="p-5 space-y-5">
+                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            ${boxDato('Km percorsi', km(s.kmPercorsi))}
+                            ${boxDato(s.anni !== null && s.anni < 1 ? 'Km all\'anno (stima)' : 'Km all\'anno',
+                                      s.kmAnno !== null ? km(s.kmAnno) : '—')}
+                            ${boxDato('Contachilometri', km(s.kmFinali))}
+                            ${boxDato(inUso(v) ? 'Costo di acquisto' : 'Acquisto → uscita',
+                                      s.prezzoAcq === null ? '—' : (inUso(v)
+                                        ? formatCurrency(s.prezzoAcq)
+                                        : `${formatCurrency(s.prezzoAcq)} → ${formatCurrency(s.valoreFinale || 0)}`))}
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Quanto ti è costata</p>
+                                <div class="space-y-0.5">
+                                    ${rigaFiscale(
+                                        s.perditaStimata ? 'Valore perso (stima)' : 'Valore perso',
+                                        s.perdita === null ? 'da calcolare' : formatCurrency(s.perdita),
+                                        { classe: 'text-red-600' })}
+                                    ${s.categorie.map(c => rigaFiscale(c.nome, formatCurrency(c.totale))).join('')}
+                                    ${!s.categorie.length ? '<p class="text-xs text-gray-400 py-2">Nessuna spesa registrata in questo periodo.</p>' : ''}
+                                    ${rigaFiscale('Totale', formatCurrency(s.costoTot), { forte: true, bordo: true, classe: 'text-red-700' })}
+                                </div>
+                                ${s.perdita === null ? `
+                                    <p class="text-[11px] text-gray-400 mt-2">
+                                        ${inUso(v)
+                                            ? 'Indica il costo di acquisto e quanto vale oggi per vedere anche il valore perso.'
+                                            : 'Indica costo di acquisto e valore di uscita per vedere anche il valore perso.'}
+                                    </p>` : ''}
+                            </div>
+
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Quanto costa ogni chilometro</p>
+                                ${s.kmPercorsi ? `
+                                    <div class="space-y-0.5">
+                                        ${rigaFiscale('Solo la vettura', centesimi(s.perditaKm))}
+                                        ${rigaFiscale('Spese di gestione', centesimi(s.speseKm))}
+                                        ${rigaFiscale('Totale al km', centesimi(s.costoKm), { forte: true, bordo: true, classe: 'text-gray-900' })}
+                                    </div>
+                                    <div class="mt-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                        <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Incassi registrati nel periodo</p>
+                                        <p class="text-base font-black text-green-700">${formatCurrency(s.incassi)}</p>
+                                        <p class="text-[11px] text-gray-400 mt-0.5">Tutti gli incassi di quei giorni, non solo quelli fatti con questa vettura.</p>
+                                    </div>
+                                ` : `
+                                    <p class="text-xs text-gray-400">
+                                        Per il costo al chilometro servono i km: indica quelli di acquisto,
+                                        ${inUso(v) ? 'e registra i turni con il contachilometri.' : 'e quelli all\'uscita.'}
+                                    </p>`}
+                            </div>
+                        </div>
+
+                        ${v.note ? `<p class="text-xs text-gray-500 border-t border-gray-100 pt-3">${esc(v.note)}</p>` : ''}
+                    </div>
+                </div>`;
+        }
+
         function getReportStats(monthFilter) {
             const meseOk = (x) => monthFilter === 'ALL'
                 || (!!x.data && parseInt(String(x.data).slice(5, 7)) === parseInt(monthFilter));
@@ -965,6 +1514,7 @@
                 { id: 'giornata', label: 'Turni & Corse', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' },
                 { id: 'uscite', label: 'Registro Uscite', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>' },
                 { id: 'categorie', label: 'Spese & Fisco', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
+                { id: 'auto', label: 'Parco Auto', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
                 { id: 'scadenze', label: 'Scadenze', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14v3"/><circle cx="12" cy="19.5" r="0.5" fill="currentColor"/></svg>' },
                 { id: 'rendimento', label: 'Rendimento', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>' },
                 { id: 'report', label: 'Report & Stampa PDF', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
@@ -997,6 +1547,7 @@
             window.activeTab = tabId;
             window.editKmId = null;
             window.editRecordId = null;
+            window.veicoloInModifica = null;
             try { localStorage.setItem('taxi_tab', tabId); } catch (e) { /* spazio esaurito: pazienza */ }
             const main = document.getElementById('main-container');
             if (main) main.scrollTop = 0;
@@ -3147,6 +3698,93 @@
                     </div>
                 `;
             }
+            else if (window.activeTab === 'auto') {
+                const elenco = veicoliOrdinati();
+                const sovrapposte = periodiSovrapposti();
+                const attuale = elenco.find(inUso) || null;
+                const chiuse = elenco.filter(v => !inUso(v)).map(v => ({ v, s: statsVeicolo(v) }));
+                const conCostoKm = chiuse.filter(x => x.s.costoKm !== null).sort((a, b) => a.s.costoKm - b.s.costoKm);
+                const kmTotali = elenco.reduce((t, v) => { const k = statsVeicolo(v).kmPercorsi; return t + (k || 0); }, 0);
+                const spesoTotale = elenco.reduce((t, v) => t + statsVeicolo(v).costoTot, 0);
+
+                main.innerHTML = `
+                    <div class="fade-in space-y-6 max-w-7xl mx-auto">
+                        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div>
+                                <h2 class="text-3xl font-bold text-gray-900">Parco Auto</h2>
+                                <p class="text-gray-500">Le vetture che hai avuto, quella che usi e quelle che verranno: quanto sono costate e quanto hanno percorso.</p>
+                            </div>
+                            <button onclick="apriFormVeicolo('nuovo')" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm no-print">
+                                + Aggiungi vettura
+                            </button>
+                        </header>
+
+                        ${window.veicoloInModifica ? formVeicolo() : ''}
+
+                        ${sovrapposte.length ? `
+                            <div class="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 no-print">
+                                <p class="font-black text-yellow-900 text-sm">Attenzione: due vetture risultano possedute negli stessi giorni</p>
+                                <p class="text-xs text-yellow-800 mt-1">
+                                    ${sovrapposte.map(c => esc(c[0].modello) + ' e ' + esc(c[1].modello)).join(' · ')}.
+                                    Le spese di quei giorni vengono contate su entrambe, quindi i costi al chilometro risultano più alti del vero.
+                                    Se una delle due era già uscita, correggi la data di uscita.
+                                </p>
+                            </div>` : ''}
+
+                        ${elenco.length ? `
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                ${boxDato('Vetture registrate', String(elenco.length))}
+                                ${boxDato('In uso adesso', attuale ? esc(attuale.modello) : 'nessuna', attuale ? 'text-green-700' : 'text-gray-400')}
+                                ${boxDato('Km totali percorsi', new Intl.NumberFormat('it-IT').format(Math.round(kmTotali)) + ' km')}
+                                ${boxDato('Speso in vetture', formatCurrency(spesoTotale), 'text-red-600')}
+                            </div>
+
+                            ${conCostoKm.length > 1 ? `
+                                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card">
+                                    <div class="px-5 py-4 border-b border-gray-100">
+                                        <h3 class="text-lg font-black text-gray-900">Quale ti è convenuta di più</h3>
+                                        <p class="text-xs text-gray-500">Solo le vetture già uscite, per cui il conto è chiuso. Dalla più economica al chilometro.</p>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-left text-sm">
+                                            <thead class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
+                                                <tr>
+                                                    <th class="p-3 font-bold">Vettura</th>
+                                                    <th class="p-3 font-bold text-right">Km</th>
+                                                    <th class="p-3 font-bold text-right">Valore perso</th>
+                                                    <th class="p-3 font-bold text-right">Spese</th>
+                                                    <th class="p-3 font-bold text-right">Costo al km</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-100">
+                                                ${conCostoKm.map((x, i) => `
+                                                    <tr class="${i === 0 ? 'bg-green-50' : ''}">
+                                                        <td class="p-3 font-bold text-gray-800">${esc(x.v.modello)}${x.v.targa ? ` <span class="text-gray-400 font-medium">${esc(x.v.targa)}</span>` : ''}</td>
+                                                        <td class="p-3 text-right">${new Intl.NumberFormat('it-IT').format(Math.round(x.s.kmPercorsi))}</td>
+                                                        <td class="p-3 text-right text-red-600">${x.s.perdita === null ? '—' : formatCurrency(x.s.perdita)}</td>
+                                                        <td class="p-3 text-right text-red-600">${formatCurrency(x.s.speseTot)}</td>
+                                                        <td class="p-3 text-right font-black ${i === 0 ? 'text-green-700' : 'text-gray-900'}">${formatCurrency(x.s.costoKm).replace('€', '').trim()} €/km</td>
+                                                    </tr>`).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>` : ''}
+
+                            <div class="space-y-6">
+                                ${elenco.map(schedaVeicolo).join('')}
+                            </div>
+                        ` : `
+                            <div class="bg-white p-10 rounded-2xl shadow-sm border border-gray-100 text-center">
+                                <p class="text-gray-500 font-bold mb-1">Nessuna vettura registrata</p>
+                                <p class="text-sm text-gray-400 max-w-lg mx-auto">
+                                    Aggiungi le auto che hai avuto e quella che usi adesso: con i km dei turni e le spese
+                                    del Registro Uscite, l'app calcola da sola quanto ti costa ogni chilometro.
+                                </p>
+                            </div>
+                        `}
+                    </div>
+                `;
+            }
             else if (window.activeTab === 'scadenze') {
                 const scadenzeList = scadenzeOrdinate();
                 const scadute = scadenzeList.filter(x => x.scaduta).length;
@@ -3886,7 +4524,14 @@
 
         function kmFinePrecedente(dataRif, idEscluso) {
             const t = turnoPrecedenteConKm(dataRif, idEscluso);
-            return t ? t.kmFine : null;
+            if (!t) return null;
+            // Cambiando vettura il contachilometri riparte da capo: fra i due turni
+            // c'e' l'acquisto di un'auto nuova, quindi il confronto non ha senso e
+            // l'avviso "km all'indietro" sarebbe solo un fastidio.
+            const cambioAuto = (window.veicoli || []).some(v =>
+                v.dataAcquisto && String(v.dataAcquisto) > String(t.data) && String(v.dataAcquisto) <= String(dataRif));
+            if (cambioAuto) return null;
+            return t.kmFine;
         }
 
         // Etichetta breve gg/mm per le note sotto i campi km
@@ -4202,10 +4847,11 @@
         // un archivio su un telefono nuovo andavano perse.
         function exportBackup() {
             const payload = {
-                versione: 2,
+                versione: 3,
                 records: window.dailyRecords,
                 shifts: window.shifts,
                 scadenze: window.scadenze || [],
+                veicoli: window.veicoli || [],
                 impostazioniFiscali: window.fiscalSettings,
                 date: new Date().toISOString()
             };
@@ -4249,10 +4895,12 @@
                     const records = (Array.isArray(data.records) ? data.records : []).filter(valida);
                     const shifts = (Array.isArray(data.shifts) ? data.shifts : []).filter(valida);
                     const scadenze = (Array.isArray(data.scadenze) ? data.scadenze : []).filter(valida);
+                    const veicoli = (Array.isArray(data.veicoli) ? data.veicoli : [])
+                        .filter(v => v && v.id !== undefined && v.id !== null && String(v.modello || '').trim());
                     const scartati = (Array.isArray(data.records) ? data.records.length : 0) - records.length
                         + (Array.isArray(data.shifts) ? data.shifts.length : 0) - shifts.length;
 
-                    if (!records.length && !shifts.length && !scadenze.length) {
+                    if (!records.length && !shifts.length && !scadenze.length && !veicoli.length) {
                         showToast('Il file non contiene movimenti, turni o scadenze validi.');
                         return;
                     }
@@ -4278,7 +4926,19 @@
                         if (window.saveScadenzaToCloud) scadenze.forEach(x => window.saveScadenzaToCloud(x));
                     }
 
-                    const coda = scadenze.length ? ` e ${scadenze.length} scadenze` : '';
+                    // Stessa cosa per le vetture del parco auto
+                    if (veicoli.length) {
+                        const mappa = new Map((window.veicoli || []).map(x => [String(x.id), x]));
+                        veicoli.forEach(x => mappa.set(String(x.id), x));
+                        window.veicoli = Array.from(mappa.values());
+                        salvaVeicoli();
+                        if (window.saveVeicoloToCloud) veicoli.forEach(x => window.saveVeicoloToCloud(x));
+                    }
+
+                    const pezzi = [];
+                    if (scadenze.length) pezzi.push(`${scadenze.length} scadenze`);
+                    if (veicoli.length) pezzi.push(`${veicoli.length} vetture`);
+                    const coda = pezzi.length ? ' e ' + pezzi.join(', ') : '';
                     showToast(esito.cloud
                         ? `⚡ Importati ${nRec} movimenti, ${nTur} turni${coda} (locale + Cloud)!`
                         : `✅ Importati ${nRec} movimenti, ${nTur} turni${coda} (memoria locale)`);
