@@ -655,7 +655,7 @@
         // "Costi fissi - Radio taxi (31 gg x 10,50 €)"  -> "Radio taxi"
         // "Carburante - Q8 corso Francia"               -> "Q8 corso Francia"
         // "Carburante / Diesel (233362 Km)"             -> "Carburante / Diesel"
-        // "Finanziamento veicolo (70.000 € x 10 anni) (31 gg x 26,60 €)" -> tiene la prima parentesi
+        // "Finanziamento licenza (70.000 € x 10 anni) (31 gg x 26,60 €)" -> tiene la prima parentesi
         function sottocategoria(testo) {
             let t = String(testo || '').trim();
             if (!t) return 'Senza descrizione';
@@ -975,8 +975,12 @@
         };
 
         // Categorie di spesa che riguardano la vettura: sono quelle che entrano
-        // nel costo al chilometro. Radio taxi, commercialista e ristoro no:
-        // quelle ci sarebbero con qualsiasi auto.
+        // nel costo al chilometro. Restano fuori radio taxi, commercialista e
+        // ristoro, che ci sarebbero con qualsiasi auto, e i costi fissi: li' dentro
+        // c'e' il finanziamento della licenza, che con la vettura non c'entra.
+        // Fuori anche le rate di un eventuale finanziamento dell'auto: quanto e'
+        // costata la vettura sta gia' nella differenza fra prezzo di acquisto e
+        // valore di realizzo, e sommarci le rate sarebbe contarla due volte.
         const CATEGORIE_AUTO = ['Carburante', 'Manutenzione', 'Lavaggio', 'Assicurazione',
                                 'Bollo / Tasse auto', 'Parcheggio / Pedaggio', 'Multa'];
 
@@ -1046,12 +1050,8 @@
                 if (r.tipo === 'ENTRATA') { incassi += imp; return; }
                 if (r.tipo !== 'USCITA') return;
                 const base = categoriaBase(r.categoria);
-                const sotto = sottocategoria(r.categoria).toLowerCase();
-                const eAuto = CATEGORIE_AUTO.includes(base)
-                    || (base === 'Costi fissi' && /finanziam|leasing|noleggio/.test(sotto));
-                if (!eAuto) return;
-                const nome = base === 'Costi fissi' ? 'Finanziamento veicolo' : base;
-                perCategoria[nome] = (perCategoria[nome] || 0) + imp;
+                if (!CATEGORIE_AUTO.includes(base)) return;
+                perCategoria[base] = (perCategoria[base] || 0) + imp;
                 speseTot += imp;
             });
 
@@ -1406,6 +1406,11 @@
                                     ${!s.categorie.length ? '<p class="text-xs text-gray-400 py-2">Nessuna spesa registrata in questo periodo.</p>' : ''}
                                     ${rigaFiscale('Totale', formatCurrency(s.costoTot), { forte: true, bordo: true, classe: 'text-red-700' })}
                                 </div>
+                                <p class="text-[11px] text-gray-400 mt-2">
+                                    Non sono comprese le rate di finanziamento: quanto è costata la vettura
+                                    è già nel valore perso, e sommarci anche le rate la conterebbe due volte.
+                                    Il finanziamento della licenza, che sta nei costi fissi, non è un costo dell'auto.
+                                </p>
                                 ${s.perdita === null ? `
                                     <p class="text-[11px] text-gray-400 mt-2">
                                         ${inUso(v)
@@ -4592,6 +4597,35 @@
         // nome diventano "Festivo". Gira una volta sola, poi lascia un segno in memoria
         // per non ripetersi a ogni avvio. Se il Cloud non e' ancora pronto la conversione
         // resta comunque locale e viene ripubblicata alla prima occasione utile.
+        // La voce di costo fisso si chiamava "Finanziamento veicolo", ma il
+        // finanziamento e' quello per l'acquisto della licenza. Le voci gia'
+        // registrate portano ancora il nome sbagliato: si correggono una volta
+        // sola, lasciando un segno in memoria per non ripetere il giro a ogni avvio.
+        async function correggiNomeFinanziamento() {
+            const daCorreggere = (window.dailyRecords || []).filter(r =>
+                String(r.categoria || '').startsWith('Costi fissi - Finanziamento veicolo'));
+            if (!daCorreggere.length) {
+                try { localStorage.setItem('taxi_finanziamento_corretto', '1'); } catch (err) { /* pazienza */ }
+                return 0;
+            }
+            const corretti = daCorreggere.map(r => Object.assign({}, r, {
+                categoria: r.categoria.replace('Finanziamento veicolo', 'Finanziamento licenza')
+            }));
+            if (typeof window.bulkSave === 'function') await window.bulkSave(corretti, []);
+            try { localStorage.setItem('taxi_finanziamento_corretto', '1'); } catch (err) { /* pazienza */ }
+            return corretti.length;
+        }
+
+        async function controllaNomeFinanziamento() {
+            if (!(window.dailyRecords || []).some(r =>
+                String(r.categoria || '').startsWith('Costi fissi - Finanziamento veicolo'))) return;
+            const quanti = await correggiNomeFinanziamento();
+            if (quanti > 0) {
+                if (window.showToast) window.showToast(`${quanti} voci rinominate: il finanziamento è quello della licenza, non del veicolo.`);
+                renderContent();
+            }
+        }
+
         async function convertiRiposiInFestivi() {
             const daConvertire = (window.shifts || []).filter(t => t.turno === 'Riposo');
             if (!daConvertire.length) {
@@ -4960,7 +4994,7 @@
         // Sono quelle che non compaiono altrove: manutenzione, INPS e IRPEF sono
         // volutamente escluse per non contarle due volte.
         const VOCI_COSTI_FISSI = [
-            { slug: 'finanziamento',  nome: 'Finanziamento veicolo',   quota: 26.60 },
+            { slug: 'finanziamento',  nome: 'Finanziamento licenza',   quota: 26.60 },
             { slug: 'radiotaxi',      nome: 'Radio taxi',              quota: 10.50 },
             { slug: 'commercialista', nome: 'Commercialista',          quota: 4.50 },
             { slug: 'assic-auto',     nome: 'Assicurazione auto',      quota: 3.80 },
@@ -5031,6 +5065,7 @@
         window.onload = function() {
             renderNav();
             renderContent();
+            controllaNomeFinanziamento();
         };
     </script>
 

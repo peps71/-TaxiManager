@@ -42,9 +42,11 @@ Da lì l'app calcola da sola, senza chiedere altri dati:
 - **Valore perso** — costo di acquisto meno valore di realizzo. Per l'auto in uso il conto
   si fa solo se indichi quanto vale oggi, ed è segnalato come stima.
 - **Spese del periodo** — prese dai movimenti già registrati, per data di possesso:
-  carburante, manutenzione, lavaggio, assicurazione, bollo, pedaggi, multe e la quota di
-  finanziamento fra i costi fissi. Radio taxi, commercialista e ristoro restano fuori:
-  quelli ci sarebbero con qualsiasi vettura.
+  carburante, manutenzione, lavaggio, assicurazione, bollo, pedaggi, multe. Restano fuori
+  radio taxi, commercialista e ristoro, che ci sarebbero con qualsiasi vettura, e i costi
+  fissi, dove sta il finanziamento della licenza. Fuori anche le rate di un eventuale
+  finanziamento dell'auto: quanto è costata la vettura è già nel valore perso, e sommarci
+  le rate la conterebbe due volte.
 - **Costo al chilometro**, diviso fra la vettura in sé e le spese di gestione, con il
   confronto fra le auto già uscite, dalla più economica.
 
