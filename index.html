@@ -174,6 +174,7 @@
             const shiftsCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_shifts');
             const scadenzeCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_scadenze');
             const veicoliCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_veicoli');
+            const vociFisseCol = collection(db, 'artifacts', appId, 'public', 'data', 'taxi_voci_fisse');
 
             onSnapshot(recordsCol, (snapshot) => {
                 if (!snapshot.empty || vuotoDaApplicare('records', snapshot)) {
@@ -274,6 +275,31 @@
                 if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
                 window.renderContent();
             }, (error) => console.error("Errore Sync Parco Auto:", error));
+
+            // Voci di costo fisso: stesso trattamento del parco auto
+            onSnapshot(vociFisseCol, async (snapshot) => {
+                const cloudVoci = [];
+                snapshot.forEach(d => cloudVoci.push({ slug: d.id, ...d.data() }));
+
+                if (!snapshot.empty) vociFisseCloudOk = true;
+
+                if (snapshot.empty && (window.vociFisse || []).length && !vociFisseCloudOk) {
+                    try {
+                        for (const v of window.vociFisse) {
+                            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'taxi_voci_fisse', String(v.slug)), v);
+                        }
+                        vociFisseCloudOk = true;
+                    } catch (err) {
+                        console.error("Errore migrazione voci fisse:", err);
+                    }
+                    return;
+                }
+
+                window.vociFisse = cloudVoci;
+                localStorage.setItem('taxi_voci_fisse', JSON.stringify(cloudVoci));
+                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
+                window.renderContent();
+            }, (error) => console.error("Errore Sync Voci Fisse:", error));
         }
 
         // Diventa true quando il Cloud ha dimostrato di funzionare per le scadenze:
@@ -281,6 +307,7 @@
         let scadenzeMigrate = false;
         let scadenzeCloudOk = false;
         let veicoliCloudOk = false;
+        let vociFisseCloudOk = false;
 
         window.saveScadenzaToCloud = async function(scadenza) {
             if (isCloudActive && db && auth.currentUser) {
@@ -302,6 +329,28 @@
                 } catch (err) {
                     console.error("Errore eliminazione Cloud scadenza:", err);
                     if (window.showToast) window.showToast('⚠️ Eliminata solo su questo dispositivo.');
+                }
+            }
+        };
+
+        window.saveVoceFissaToCloud = async function(voce) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taxi_voci_fisse', String(voce.slug));
+                    await setDoc(docRef, voce);
+                } catch (err) {
+                    console.error("Errore scrittura Cloud voce fissa:", err);
+                }
+            }
+        };
+
+        window.deleteVoceFissaFromCloud = async function(slug) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taxi_voci_fisse', String(slug));
+                    await deleteDoc(docRef);
+                } catch (err) {
+                    console.error("Errore eliminazione Cloud voce fissa:", err);
                 }
             }
         };
@@ -569,6 +618,8 @@
         window.scadenze = leggiLocale('taxi_scadenze', []);
         // Parco auto: le vetture avute, quella in uso e quelle che verranno.
         window.veicoli = leggiLocale('taxi_veicoli', []);
+        // Le voci di costo fisso: elenco modificabile, ognuna con il suo periodo.
+        window.vociFisse = leggiLocale('taxi_voci_fisse', []);
         window.veicoloInModifica = null;   // id della vettura aperta nel modulo (o 'nuovo')
         window.filterMonthCorse = 'ALL';
         window.filterMonthUscite = 'ALL';
@@ -653,6 +704,8 @@
         window.deleteScadenzaFromCloud = function() {};
         window.saveVeicoloToCloud = function() {};
         window.deleteVeicoloFromCloud = function() {};
+        window.saveVoceFissaToCloud = function() {};
+        window.deleteVoceFissaFromCloud = function() {};
 
         window.bulkSave = async function(newRecords, newShifts) {
             const unisci = (esistenti, nuovi) => {
@@ -705,6 +758,7 @@
         // Secondo livello di dettaglio: dalla stringa salvata alla tipologia di spesa.
         // "Costi fissi - Radio taxi (31 gg x 10,50 €)"  -> "Radio taxi"
         // "Costi fissi - Finanziamento licenza (rata mensile)" -> "Finanziamento licenza"
+        // "Costi fissi - Rata tassametro (rata mensile dal 10/07)" -> "Rata tassametro"
         // "Carburante - Q8 corso Francia"               -> "Q8 corso Francia"
         // "Carburante / Diesel (233362 Km)"             -> "Carburante / Diesel"
         // "Finanziamento licenza (70.000 € x 10 anni) (31 gg x 26,60 €)" -> tiene la prima parentesi
@@ -715,7 +769,7 @@
             if (i > -1) t = t.slice(i + 3).trim();
             // via solo le code automatiche: conteggio giorni e chilometraggio
             t = t.replace(/\s*\(\s*\d+\s*gg[^()]*\)\s*$/i, '').trim();
-            t = t.replace(/\s*\(\s*rata mensile\s*\)\s*$/i, '').trim();
+            t = t.replace(/\s*\(\s*rata mensile[^()]*\)\s*$/i, '').trim();
             t = t.replace(/\s*\([^()]*\bkm\b[^()]*\)\s*$/i, '').trim();
             return t || 'Senza descrizione';
         }
@@ -4246,34 +4300,32 @@
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                             <h3 class="text-lg font-bold text-gray-900">Costi fissi dell'anno</h3>
                             <p class="text-xs text-gray-500 leading-relaxed">
-                                Genera le spese fisse mensili per un anno intero: per ogni mese crea una voce
-                                per categoria. Scegli tu l'unità: <strong>€/mese</strong> per una rata fissa che
-                                arriva sempre uguale (il finanziamento), <strong>€/gg</strong> per un costo annuo
-                                da spalmare giorno per giorno (le assicurazioni), che viene moltiplicato per i
-                                giorni di ogni mese.
+                                Le tue spese fisse: aggiungile, modificale e togli quelle che non hai.
+                                Per ognuna scegli l'unità — <strong>€/mese</strong> per una rata che arriva
+                                sempre uguale, <strong>€/gg</strong> per un costo annuo da spalmare, che viene
+                                moltiplicato per i giorni del mese — e il periodo in cui vale.
+                                <strong>Dal</strong> e <strong>Al</strong> sono facoltativi: lasciandoli vuoti
+                                la voce vale sempre. Una polizza che parte il 15 marzo non comparirà a gennaio,
+                                e su marzo verrà contata solo per i giorni coperti.
                                 Rilanciarlo sullo stesso anno aggiorna le voci esistenti invece di duplicarle.
                                 Non inserire qui manutenzione, INPS e IRPEF: le prime le registri come spese reali,
                                 le seconde le stima gia' l'app.
                             </p>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-700 mb-1">Anno</label>
-                                    <input type="number" id="cf-anno" value="${parseInt(annoAttivo()) + 1}" class="w-full p-2 border rounded-lg outline-none font-bold" />
-                                </div>
-                                ${VOCI_COSTI_FISSI.map(v => `
-                                    <div>
-                                        <label class="block text-xs font-bold text-gray-700 mb-1">${esc(v.nome)}</label>
-                                        <div class="flex gap-1">
-                                            <input type="number" step="0.01" id="cf-${v.slug}" value="${v.quota}" class="w-full min-w-0 p-2 border rounded-lg outline-none" />
-                                            <select id="cf-unita-${v.slug}" class="p-2 border rounded-lg outline-none text-xs font-bold bg-gray-50 flex-shrink-0">
-                                                <option value="giorno" ${v.unita !== 'mese' ? 'selected' : ''}>€/gg</option>
-                                                <option value="mese" ${v.unita === 'mese' ? 'selected' : ''}>€/mese</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                `).join('')}
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                ${elencoVociFisse().map(rigaVoceFissa).join('')}
                             </div>
-                            <button onclick="generaCostiFissi()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Genera costi fissi</button>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="aggiungiVoceFissa()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">+ Aggiungi una voce</button>
+                                <button onclick="salvaModificheVociFisse()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">Salva l'elenco</button>
+                            </div>
+
+                            <div class="flex flex-wrap items-end gap-3 pt-3 border-t border-gray-100">
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Anno da generare</label>
+                                    <input type="number" id="cf-anno" value="${parseInt(annoAttivo()) + 1}" class="w-32 p-2 border rounded-lg outline-none font-bold" />
+                                </div>
+                                <button onclick="generaCostiFissi()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Genera costi fissi</button>
+                            </div>
                         </div>
 
                         ${sezioneCostiFissiInArchivio()}
@@ -5046,6 +5098,7 @@
                 shifts: window.shifts,
                 scadenze: window.scadenze || [],
                 veicoli: window.veicoli || [],
+                vociFisse: window.vociFisse || [],
                 impostazioniFiscali: window.fiscalSettings,
                 date: new Date().toISOString()
             };
@@ -5091,10 +5144,12 @@
                     const scadenze = (Array.isArray(data.scadenze) ? data.scadenze : []).filter(valida);
                     const veicoli = (Array.isArray(data.veicoli) ? data.veicoli : [])
                         .filter(v => v && v.id !== undefined && v.id !== null && String(v.modello || '').trim());
+                    const vociImportate = (Array.isArray(data.vociFisse) ? data.vociFisse : [])
+                        .filter(v => v && String(v.slug || '').trim() && String(v.nome || '').trim());
                     const scartati = (Array.isArray(data.records) ? data.records.length : 0) - records.length
                         + (Array.isArray(data.shifts) ? data.shifts.length : 0) - shifts.length;
 
-                    if (!records.length && !shifts.length && !scadenze.length && !veicoli.length) {
+                    if (!records.length && !shifts.length && !scadenze.length && !veicoli.length && !vociImportate.length) {
                         showToast('Il file non contiene movimenti, turni o scadenze validi.');
                         return;
                     }
@@ -5118,6 +5173,14 @@
                             .sort((a, b) => String(a.data).localeCompare(String(b.data)));
                         salvaScadenze();
                         if (window.saveScadenzaToCloud) scadenze.forEach(x => window.saveScadenzaToCloud(x));
+                    }
+
+                    if (vociImportate.length) {
+                        const mappa = new Map((window.vociFisse || []).map(x => [String(x.slug), x]));
+                        vociImportate.forEach(x => mappa.set(String(x.slug), x));
+                        window.vociFisse = Array.from(mappa.values());
+                        salvaVociFisse();
+                        if (window.saveVoceFissaToCloud) vociImportate.forEach(x => window.saveVoceFissaToCloud(x));
                     }
 
                     // Stessa cosa per le vetture del parco auto
@@ -5158,13 +5221,171 @@
         // giorno per giorno (le assicurazioni). Con l'unita' sbagliata i conti
         // ballano: una rata mensile spalmata a giornata darebbe 733,60 € a
         // febbraio e 812,20 € a gennaio, quando la banca ne addebita 797 sempre.
-        const VOCI_COSTI_FISSI = [
-            { slug: 'finanziamento',  nome: 'Finanziamento licenza',   quota: 797.00, unita: 'mese' },
-            { slug: 'radiotaxi',      nome: 'Radio taxi',              quota: 10.50,  unita: 'giorno' },
-            { slug: 'commercialista', nome: 'Commercialista',          quota: 4.50,   unita: 'giorno' },
-            { slug: 'assic-auto',     nome: 'Assicurazione auto',      quota: 3.80,   unita: 'giorno' },
-            { slug: 'assic-infort',   nome: 'Assicurazione infortuni', quota: 1.37,   unita: 'giorno' }
+        // ============================================================
+        //  LE TUE VOCI DI COSTO FISSO
+        //  L'elenco non e' piu' fisso nel programma: si aggiungono, si
+        //  modificano e si tolgono, e ognuna vale in un periodo suo. Una
+        //  polizza che parte a marzo non deve comparire a gennaio, e una
+        //  rata che finisce a settembre non deve proseguire a ottobre.
+        // ============================================================
+
+        // Come partiva il programma prima che l'elenco diventasse modificabile.
+        // Gli "slug" sono quelli storici: formano l'identificativo dei movimenti
+        // gia' generati, e cambiandoli rigenerare creerebbe dei doppioni invece
+        // di aggiornare quelli che ci sono.
+        const VOCI_FISSE_INIZIALI = [
+            { slug: 'finanziamento',  nome: 'Finanziamento licenza',   importo: 797.00, unita: 'mese' },
+            { slug: 'radiotaxi',      nome: 'Radio taxi',              importo: 10.50,  unita: 'giorno' },
+            { slug: 'commercialista', nome: 'Commercialista',          importo: 4.50,   unita: 'giorno' },
+            { slug: 'assic-auto',     nome: 'Assicurazione auto',      importo: 3.80,   unita: 'giorno' },
+            { slug: 'assic-infort',   nome: 'Assicurazione infortuni', importo: 1.37,   unita: 'giorno' }
         ];
+
+        function elencoVociFisse() {
+            if (!Array.isArray(window.vociFisse) || !window.vociFisse.length) {
+                window.vociFisse = VOCI_FISSE_INIZIALI.map(v => Object.assign({ dataInizio: '', dataFine: '' }, v));
+                salvaVociFisse();
+            }
+            return window.vociFisse;
+        }
+
+        function salvaVociFisse() {
+            try { localStorage.setItem('taxi_voci_fisse', JSON.stringify(window.vociFisse || [])); } catch (err) { /* spazio esaurito: pazienza */ }
+        }
+
+        // Identificativo breve e stabile, ricavato dal nome: e' quello che
+        // finisce nell'id dei movimenti, quindi non deve scontrarsi con altri.
+        function slugVoce(nome) {
+            const base = normalizzaSlug(nome) || 'voce';
+            const presi = new Set(elencoVociFisse().map(v => v.slug));
+            if (!presi.has(base)) return base;
+            let n = 2;
+            while (presi.has(base + '-' + n)) n++;
+            return base + '-' + n;
+        }
+
+        function normalizzaSlug(t) {
+            return String(t || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .slice(0, 24);
+        }
+
+        // Giorni di un mese davvero coperti dal periodo di validita' della voce.
+        // Una voce senza date vale sempre.
+        function giorniCoperti(voce, anno, mese) {
+            const gg = new Date(anno, mese, 0).getDate();
+            const primo = `${anno}-${String(mese).padStart(2, '0')}-01`;
+            const ultimo = `${anno}-${String(mese).padStart(2, '0')}-${String(gg).padStart(2, '0')}`;
+            const da = (voce.dataInizio && voce.dataInizio > primo) ? voce.dataInizio : primo;
+            const a = (voce.dataFine && voce.dataFine < ultimo) ? voce.dataFine : ultimo;
+            if (da > a) return { giorni: 0, da: null, a: null, interoMese: false };
+            const giorni = Number(a.slice(8, 10)) - Number(da.slice(8, 10)) + 1;
+            return { giorni, da, a, interoMese: giorni === gg };
+        }
+
+        function aggiungiVoceFissa() {
+            const elenco = leggiVociFisse();
+            const nome = 'Nuova voce';
+            elenco.push({
+                slug: slugVoce(nome + '-' + Date.now().toString().slice(-5)),
+                nome: '', importo: 0, unita: 'mese',
+                dataInizio: '', dataFine: ''
+            });
+            salvaVociFisse();
+            renderContent();
+            setTimeout(() => {
+                const campi = document.querySelectorAll('input[id^="cf-nome-"]');
+                const ultimo = campi[campi.length - 1];
+                if (ultimo) { ultimo.focus(); ultimo.scrollIntoView({ block: 'center' }); }
+            }, 0);
+        }
+
+        // Quello che c'e' scritto adesso nei campi, senza aspettare un salvataggio:
+        // cosi' modificando una voce e premendo Genera si usa il valore nuovo.
+        function leggiVociFisse() {
+            const elenco = elencoVociFisse();
+            elenco.forEach(v => {
+                const leggi = (p) => {
+                    const el = document.getElementById(p + v.slug);
+                    return el ? String(el.value || '').trim() : null;
+                };
+                const nome = leggi('cf-nome-');
+                if (nome !== null) v.nome = nome;
+                const importo = leggi('cf-imp-');
+                if (importo !== null) {
+                    const n = parseFloat(importo.replace(',', '.'));
+                    v.importo = Number.isFinite(n) ? n : 0;
+                }
+                const unita = leggi('cf-unita-');
+                if (unita !== null) v.unita = unita;
+                const dal = leggi('cf-dal-');
+                if (dal !== null) v.dataInizio = dal;
+                const al = leggi('cf-al-');
+                if (al !== null) v.dataFine = al;
+            });
+            return elenco;
+        }
+
+        function salvaModificheVociFisse() {
+            const elenco = leggiVociFisse();
+            const senzaNome = elenco.filter(v => !String(v.nome || '').trim()).length;
+            if (senzaNome) { showToast('Ogni voce deve avere un nome.'); return; }
+            const dateStorte = elenco.filter(v => v.dataInizio && v.dataFine && v.dataFine < v.dataInizio).length;
+            if (dateStorte) { showToast('In una voce la data finale viene prima di quella iniziale.'); return; }
+            salvaVociFisse();
+            if (window.saveVoceFissaToCloud) elenco.forEach(v => window.saveVoceFissaToCloud(v));
+            showToast('Voci di costo fisso salvate.');
+            renderContent();
+        }
+
+        function eliminaVoceFissa(slug) {
+            const v = elencoVociFisse().find(x => x.slug === slug);
+            if (!v) return;
+            if (!confirm(`Tolgo «${v.nome || 'questa voce'}» dall'elenco dei costi fissi?\nI movimenti già generati restano dove sono: puoi eliminarli dalla tabella qui sotto.`)) return;
+            window.vociFisse = leggiVociFisse().filter(x => x.slug !== slug);
+            salvaVociFisse();
+            if (window.deleteVoceFissaFromCloud) window.deleteVoceFissaFromCloud(slug);
+            showToast('Voce tolta dall\'elenco.');
+            renderContent();
+        }
+
+        // Riquadro di una voce: nome, importo con la sua unita' e periodo
+        function rigaVoceFissa(v) {
+            const val = (x) => x === null || x === undefined ? '' : esc(x);
+            return `
+                <div class="border border-gray-200 rounded-xl p-3 space-y-2 bg-gray-50/60">
+                    <div class="flex gap-2">
+                        <input type="text" id="cf-nome-${esc(v.slug)}" value="${val(v.nome)}" placeholder="Nome della spesa"
+                               class="flex-1 min-w-0 p-2 border rounded-lg outline-none font-bold text-sm bg-white" />
+                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')"
+                                class="flex-shrink-0 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 rounded-lg text-xs font-bold">Togli</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="flex gap-1">
+                            <input type="number" step="0.01" min="0" id="cf-imp-${esc(v.slug)}" value="${val(v.importo)}"
+                                   class="w-full min-w-0 p-2 border rounded-lg outline-none bg-white" />
+                            <select id="cf-unita-${esc(v.slug)}" class="p-2 border rounded-lg outline-none text-xs font-bold bg-white flex-shrink-0">
+                                <option value="giorno" ${v.unita !== 'mese' ? 'selected' : ''}>€/gg</option>
+                                <option value="mese" ${v.unita === 'mese' ? 'selected' : ''}>€/mese</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-1">
+                            <label class="block">
+                                <span class="block text-[9px] font-black uppercase tracking-wider text-gray-400">Dal</span>
+                                <input type="date" id="cf-dal-${esc(v.slug)}" value="${val(v.dataInizio)}"
+                                       class="w-full min-w-0 p-1.5 border rounded-lg outline-none text-xs bg-white" />
+                            </label>
+                            <label class="block">
+                                <span class="block text-[9px] font-black uppercase tracking-wider text-gray-400">Al</span>
+                                <input type="date" id="cf-al-${esc(v.slug)}" value="${val(v.dataFine)}"
+                                       class="w-full min-w-0 p-1.5 border rounded-lg outline-none text-xs bg-white" />
+                            </label>
+                        </div>
+                    </div>
+                </div>`;
+        }
 
 
         // ============================================================
@@ -5222,8 +5443,8 @@
                     perMese[m].push(g.nome);
                 });
             });
-            // Un mese "doppio" ha piu' voci di quante ne generi l'app
-            const attese = VOCI_COSTI_FISSI.length;
+            // Un mese "doppio" ha piu' voci di quante ne preveda l'elenco
+            const attese = elencoVociFisse().length;
             return Object.keys(perMese)
                 .filter(m => perMese[m].length > attese)
                 .sort();
@@ -5351,48 +5572,70 @@
                 return;
             }
 
-            const voci = VOCI_COSTI_FISSI.map(v => {
-                const campo = document.getElementById('cf-' + v.slug);
-                const scelta = document.getElementById('cf-unita-' + v.slug);
-                const q = parseFloat(campo ? campo.value : v.quota);
-                return {
-                    slug: v.slug, nome: v.nome,
-                    quota: isNaN(q) ? 0 : q,
-                    unita: scelta ? scelta.value : (v.unita || 'giorno')
-                };
-            }).filter(v => v.quota > 0);
+            const voci = leggiVociFisse().filter(v => v.importo > 0 && String(v.nome || '').trim());
+            salvaVociFisse();
 
             if (!voci.length) {
-                showToast('Inserisci almeno un importo.');
+                showToast('Inserisci almeno una voce, con nome e importo.');
                 return;
             }
 
-            // Il totale annuo si calcola con l'unita' di ciascuna voce
-            const giorniAnno = ((anno % 4 === 0 && anno % 100 !== 0) || anno % 400 === 0) ? 366 : 365;
-            const totAnno = voci.reduce((a, v) => a + (v.unita === 'mese' ? v.quota * 12 : v.quota * giorniAnno), 0);
-            if (!confirm(`Genero le spese fisse ${anno}: ${voci.length} voci per 12 mesi, ${formatCurrency(totAnno)} in tutto. Procedo?`)) return;
-
+            // Ogni voce vale solo nel suo periodo. Su un mese coperto a meta'
+            // (una polizza che parte il 15) l'importo a giornata si conta per i
+            // giorni davvero coperti; la rata mensile invece arriva intera,
+            // perche' una rata non si dimezza.
             const nuovi = [];
+            const attesi = new Set();
+            let saltatiPeriodo = 0;
+
             for (let m = 1; m <= 12; m++) {
                 const gg = new Date(anno, m, 0).getDate();
-                const ultimo = `${anno}-${String(m).padStart(2, '0')}-${gg}`;
                 voci.forEach(v => {
-                    // Una rata mensile si registra tale e quale; un importo
-                    // giornaliero si moltiplica per i giorni di quel mese.
+                    const c = giorniCoperti(v, anno, m);
+                    if (!c.giorni) { saltatiPeriodo++; return; }
                     const perMese = v.unita === 'mese';
-                    const importo = perMese ? v.quota : Math.round(v.quota * gg * 100) / 100;
+                    const importo = perMese ? v.importo : Math.round(v.importo * c.giorni * 100) / 100;
                     const dettaglio = perMese
-                        ? 'rata mensile'
-                        : `${gg} gg x ${v.quota.toFixed(2).replace('.', ',')} €`;
+                        ? (c.interoMese ? 'rata mensile' : `rata mensile dal ${ggMm(c.da)}`)
+                        : `${c.giorni} gg x ${v.importo.toFixed(2).replace('.', ',')} €`;
+                    const id = `fissi-${anno}-${String(m).padStart(2, '0')}-${v.slug}`;
+                    attesi.add(id);
                     nuovi.push({
-                        id: `fissi-${anno}-${String(m).padStart(2, '0')}-${v.slug}`,
-                        data: ultimo,
+                        id,
+                        // Se il mese e' coperto solo in parte, la spesa cade
+                        // sull'ultimo giorno davvero coperto.
+                        data: c.a,
                         tipo: 'USCITA',
                         categoria: `Costi fissi - ${v.nome} (${dettaglio})`,
                         metodo: 'Fattura',
                         importo: Math.round(importo * 100) / 100
                     });
                 });
+            }
+
+            if (!nuovi.length) {
+                showToast(`Nessuna voce risulta valida nel ${anno}: controlla le date di inizio e fine.`);
+                return;
+            }
+
+            // Restringendo il periodo di una voce, i mesi generati prima e ora
+            // non piu' coperti resterebbero li' a sporcare i conti: si tolgono.
+            const slugNoti = new Set(voci.map(v => v.slug));
+            const daTogliere = (window.dailyRecords || []).filter(r => {
+                const id = String(r.id || '');
+                if (!id.startsWith(`fissi-${anno}-`)) return false;
+                if (attesi.has(id)) return false;
+                return slugNoti.has(id.slice(`fissi-${anno}-MM-`.length));
+            });
+
+            const totAnno = nuovi.reduce((a, x) => a + x.importo, 0);
+            let avviso = `Genero le spese fisse ${anno}: ${nuovi.length} voci per ${formatCurrency(totAnno)} in tutto.`;
+            if (saltatiPeriodo) avviso += `\n${saltatiPeriodo} mesi saltati perché fuori dal periodo di validità delle voci.`;
+            if (daTogliere.length) avviso += `\n${daTogliere.length} voci generate prima e ora fuori periodo verranno tolte.`;
+            if (!confirm(avviso + '\nProcedo?')) return;
+
+            if (daTogliere.length && typeof window.deleteRecordsFromCloud === 'function') {
+                await window.deleteRecordsFromCloud(daTogliere.map(r => r.id));
             }
 
             showToast(`Genero ${nuovi.length} voci per il ${anno}...`);

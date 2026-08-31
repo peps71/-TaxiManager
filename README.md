@@ -57,10 +57,19 @@ l'acquisto di un'auto nuova, dove ripartire da capo è normale.
 
 ## Costi fissi
 
-Da `Cloud & Sync` si genera un anno intero di spese fisse. Ogni voce ha la sua unità:
-**€/mese** per una rata che arriva sempre uguale (il finanziamento della licenza),
-**€/gg** per un costo annuo da spalmare, moltiplicato per i giorni di ogni mese
-(le assicurazioni).
+Da `Cloud & Sync` si tiene l'elenco delle proprie spese fisse — si aggiungono, si
+modificano, si tolgono — e si genera un anno intero di movimenti.
+
+Ogni voce ha la sua unità: **€/mese** per una rata che arriva sempre uguale (il
+finanziamento della licenza), **€/gg** per un costo annuo da spalmare, moltiplicato per i
+giorni di ogni mese (le assicurazioni).
+
+Ogni voce ha anche un **periodo di validità**, con `Dal` e `Al` facoltativi: vuoti, la
+voce vale sempre. Una polizza che parte il 15 marzo non compare a gennaio, e su marzo
+viene contata solo per i 17 giorni coperti; una rata mensile invece arriva intera dal
+primo mese coperto, perché una rata non si dimezza, e il movimento cade sull'ultimo
+giorno davvero coperto. Restringendo il periodo e rigenerando, i mesi non più coperti
+vengono tolti.
 
 Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voce}`:
 rigenerare lo stesso anno le **aggiorna**, non le duplica.
