@@ -55,6 +55,23 @@ lo segnala, perché le spese di quei giorni verrebbero contate su entrambe; e ne
 l'avviso «contachilometri all'indietro» non compare più quando fra i due turni c'è
 l'acquisto di un'auto nuova, dove ripartire da capo è normale.
 
+## Costi fissi
+
+Da `Cloud & Sync` si genera un anno intero di spese fisse. Ogni voce ha la sua unità:
+**€/mese** per una rata che arriva sempre uguale (il finanziamento della licenza),
+**€/gg** per un costo annuo da spalmare, moltiplicato per i giorni di ogni mese
+(le assicurazioni).
+
+Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voce}`:
+rigenerare lo stesso anno le **aggiorna**, non le duplica.
+
+Sotto, «Costi fissi già registrati» mostra tutto quello che c'è in archivio raggruppato
+per nome e provenienza. Le voci che non ha generato questa app — rimaste da versioni
+precedenti, con altri identificativi — sono segnate «versione precedente» e si tolgono
+tutte insieme con un pulsante: altrimenti si sommano alle nuove e il mese risulta pagato
+due volte. La distinzione è sulla provenienza e non sul nome, perché alcune voci si
+chiamano allo stesso modo in entrambe le serie.
+
 ## Pubblicare un aggiornamento
 
 Il telefono si accorge di una versione nuova dal numero scritto nel service worker:

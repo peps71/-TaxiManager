@@ -185,6 +185,9 @@
                     if (cloudRecords.length) collezioniConDati['records'] = true;
                     window.dailyRecords = cloudRecords;
                     localStorage.setItem('taxi_records', JSON.stringify(cloudRecords));
+                    // Un dispositivo non ancora aggiornato puo' rimandare indietro
+                    // le voci col vecchio nome del finanziamento
+                    if (typeof controllaNomeFinanziamento === 'function') controllaNomeFinanziamento();
                 }
                 window.renderNav();
                 if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
@@ -374,6 +377,31 @@
                 } catch (err) {
                     console.error("Errore eliminazione Cloud record:", err);
                     if (window.showToast) window.showToast('⚠️ Eliminato solo in locale: sync Cloud fallita.');
+                }
+            }
+        };
+
+        // Cancellazione di molti movimenti in un colpo solo: una scrittura sola
+        // in locale e blocchi da 400 sul Cloud, invece di una chiamata per riga.
+        window.deleteRecordsFromCloud = async function(ids) {
+            const insieme = new Set((ids || []).map(String));
+            if (!insieme.size) return;
+            window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
+            localStorage.setItem('taxi_records', JSON.stringify(window.dailyRecords));
+
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    const elenco = Array.from(insieme);
+                    for (let i = 0; i < elenco.length; i += 400) {
+                        const batch = writeBatch(db);
+                        elenco.slice(i, i + 400).forEach(id => {
+                            batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'taxi_records', String(id)));
+                        });
+                        await batch.commit();
+                    }
+                } catch (err) {
+                    console.error("Errore eliminazione multipla Cloud:", err);
+                    if (window.showToast) window.showToast('⚠️ Eliminate solo in locale: sync Cloud fallita.');
                 }
             }
         };
@@ -605,6 +633,12 @@
 
         window.deleteRecordFromCloud = function(id) {
             window.dailyRecords = (window.dailyRecords || []).filter(r => String(r.id) !== String(id));
+            scriviLocale('taxi_records', window.dailyRecords);
+        };
+
+        window.deleteRecordsFromCloud = async function(ids) {
+            const insieme = new Set((ids || []).map(String));
+            window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
             scriviLocale('taxi_records', window.dailyRecords);
         };
 
@@ -4150,6 +4184,8 @@
                             <button onclick="generaCostiFissi()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Genera costi fissi</button>
                         </div>
 
+                        ${sezioneCostiFissiInArchivio()}
+
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                             <h3 class="text-lg font-bold text-gray-900">Confronto fra anni</h3>
                             <div class="overflow-x-auto">
@@ -4631,6 +4667,7 @@
         // sola, lasciando un segno in memoria per non ripetere il giro a ogni avvio.
         async function correggiNomeFinanziamento() {
             const daCorreggere = (window.dailyRecords || []).filter(r =>
+                String(r.id || '').startsWith('fissi-') &&
                 String(r.categoria || '').startsWith('Costi fissi - Finanziamento veicolo'));
             if (!daCorreggere.length) {
                 try { localStorage.setItem('taxi_finanziamento_corretto', '1'); } catch (err) { /* pazienza */ }
@@ -4646,6 +4683,7 @@
 
         async function controllaNomeFinanziamento() {
             if (!(window.dailyRecords || []).some(r =>
+                String(r.id || '').startsWith('fissi-') &&
                 String(r.categoria || '').startsWith('Costi fissi - Finanziamento veicolo'))) return;
             const quanti = await correggiNomeFinanziamento();
             if (quanti > 0) {
@@ -5035,6 +5073,184 @@
             { slug: 'assic-auto',     nome: 'Assicurazione auto',      quota: 3.80,   unita: 'giorno' },
             { slug: 'assic-infort',   nome: 'Assicurazione infortuni', quota: 1.37,   unita: 'giorno' }
         ];
+
+
+        // ============================================================
+        //  COSTI FISSI GIA' IN ARCHIVIO
+        //  Versioni diverse dell'app hanno usato nomi (e identificativi)
+        //  diversi per le stesse voci: rigenerando, la serie nuova si
+        //  affianca alla vecchia invece di sostituirla, e il mese risulta
+        //  pagato due volte. Qui si vede cosa c'e' davvero e si toglie
+        //  la serie di troppo in un colpo solo.
+        // ============================================================
+
+        // Le voci generate dal pulsante "Genera costi fissi" hanno un identificativo
+        // che comincia per "fissi-". Tutte le altre arrivano da una versione
+        // precedente dell'app o sono state scritte a mano: e' questo, e non il
+        // nome, a distinguere le due serie. Alcune voci (Radio taxi, Assicurazione
+        // infortuni) si chiamano infatti uguali in entrambe.
+        function generataDallApp(r) {
+            return String(r.id || '').startsWith('fissi-');
+        }
+
+        // Raggruppa i movimenti "Costi fissi" per nome e provenienza
+        function gruppiCostiFissi() {
+            const gruppi = {};
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                if (categoriaBase(r.categoria) !== 'Costi fissi') return;
+                const nome = sottocategoria(r.categoria);
+                const daApp = generataDallApp(r);
+                const chiave = (daApp ? 'app|' : 'altra|') + nome;
+                if (!gruppi[chiave]) {
+                    gruppi[chiave] = { chiave, nome, daApp, voci: [], totale: 0, dal: r.data, al: r.data, mesi: new Set() };
+                }
+                const g = gruppi[chiave];
+                g.voci.push(r);
+                g.totale += parseFloat(r.importo || 0);
+                if (String(r.data) < String(g.dal)) g.dal = r.data;
+                if (String(r.data) > String(g.al)) g.al = r.data;
+                g.mesi.add(String(r.data).slice(0, 7));
+            });
+            return Object.values(gruppi).sort((a, b) => (a.daApp === b.daApp) ? b.totale - a.totale : (a.daApp ? 1 : -1));
+        }
+
+        function serieVecchia() {
+            return gruppiCostiFissi().filter(g => !g.daApp);
+        }
+
+        // Mesi in cui due voci diverse coprono la stessa spesa: e' il segno
+        // che convivono due serie generate da versioni diverse.
+        function mesiCostiFissiDoppi() {
+            const gruppi = gruppiCostiFissi();
+            const perMese = {};
+            gruppi.forEach(g => {
+                g.mesi.forEach(m => {
+                    if (!perMese[m]) perMese[m] = [];
+                    perMese[m].push(g.nome);
+                });
+            });
+            // Un mese "doppio" ha piu' voci di quante ne generi l'app
+            const attese = VOCI_COSTI_FISSI.length;
+            return Object.keys(perMese)
+                .filter(m => perMese[m].length > attese)
+                .sort();
+        }
+
+        async function eliminaGruppoCostiFissi(chiave) {
+            const g = gruppiCostiFissi().find(x => x.chiave === chiave);
+            if (!g) return;
+            if (!confirm(`Elimino tutte le ${g.voci.length} voci di «${g.nome}»${g.daApp ? '' : ' (versione precedente)'}, per un totale di ${formatCurrency(g.totale)}?\nDal ${g.dal} al ${g.al}. L'operazione non si può annullare.`)) return;
+
+            const ids = g.voci.map(v => v.id);
+            showToast(`Elimino ${ids.length} voci...`);
+            if (typeof window.deleteRecordsFromCloud === 'function') {
+                await window.deleteRecordsFromCloud(ids);
+            } else {
+                const insieme = new Set(ids.map(String));
+                window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
+                scriviLocale('taxi_records', window.dailyRecords);
+            }
+            showToast(`${ids.length} voci di «${g.nome}» eliminate.`);
+            renderNav();
+            renderContent();
+        }
+
+        // Toglie in un colpo solo tutte le voci di costo fisso che non ha
+        // generato questa app: e' la serie rimasta da una versione precedente.
+        async function eliminaSerieVecchia() {
+            const gruppi = serieVecchia();
+            if (!gruppi.length) return;
+            const righe = gruppi.reduce((a, g) => a + g.voci.length, 0);
+            const totale = gruppi.reduce((a, g) => a + g.totale, 0);
+            const elenco = gruppi.map(g => `  · ${g.nome}: ${g.voci.length} righe, ${formatCurrency(g.totale)}`).join('\n');
+            if (!confirm(`Elimino ${righe} voci di costi fissi rimaste da una versione precedente, per ${formatCurrency(totale)} in tutto:\n\n${elenco}\n\nRestano quelle generate da questa app. L'operazione non si può annullare: hai già scaricato un backup?`)) return;
+
+            const ids = [].concat(...gruppi.map(g => g.voci.map(v => v.id)));
+            showToast(`Elimino ${ids.length} voci...`);
+            if (typeof window.deleteRecordsFromCloud === 'function') {
+                await window.deleteRecordsFromCloud(ids);
+            } else {
+                const insieme = new Set(ids.map(String));
+                window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
+                scriviLocale('taxi_records', window.dailyRecords);
+            }
+            showToast(`${ids.length} voci della serie vecchia eliminate.`);
+            renderNav();
+            renderContent();
+        }
+
+        function sezioneCostiFissiInArchivio() {
+            const gruppi = gruppiCostiFissi();
+            if (!gruppi.length) return '';
+            const doppi = mesiCostiFissiDoppi();
+            const vecchie = serieVecchia();
+            const righeVecchie = vecchie.reduce((a, g) => a + g.voci.length, 0);
+            const totaleVecchie = vecchie.reduce((a, g) => a + g.totale, 0);
+
+            return `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Costi fissi già registrati</h3>
+                        <p class="text-xs text-gray-500 leading-relaxed mt-1">
+                            Tutte le voci "Costi fissi" presenti in archivio, raggruppate per nome.
+                            Quelle segnate «versione precedente» non le ha generate questa app: restano da
+                            una versione più vecchia e si sommano alle nuove, facendo risultare il mese
+                            pagato due volte. Alcune si chiamano allo stesso modo in entrambe le serie,
+                            quindi la distinzione è sulla provenienza, non sul nome.
+                        </p>
+                    </div>
+
+                    ${vecchie.length ? `
+                        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                            <p class="font-black text-yellow-900 text-sm">
+                                Ci sono ${righeVecchie} voci rimaste da una versione precedente
+                            </p>
+                            <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
+                                Valgono ${formatCurrency(totaleVecchie)} e si sommano a quelle generate adesso${doppi.length ? `, così ${doppi.length === 1 ? 'un mese risulta pagato' : doppi.length + ' mesi risultano pagati'} due volte` : ''}.
+                                Le riconosci dall'identificativo: non le ha generate questa app.
+                            </p>
+                            <button onclick="eliminaSerieVecchia()" class="mt-3 bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl">
+                                Elimina tutte le ${righeVecchie} voci vecchie
+                            </button>
+                        </div>` : ''}
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-3 font-bold">Voce</th>
+                                    <th class="p-3 font-bold text-right">Righe</th>
+                                    <th class="p-3 font-bold text-right">Totale</th>
+                                    <th class="p-3 font-bold">Periodo</th>
+                                    <th class="p-3 font-bold text-center">Azione</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${gruppi.map(g => `
+                                    <tr class="${g.daApp ? '' : 'bg-yellow-50'}">
+                                        <td class="p-3 font-bold text-gray-800">
+                                            ${esc(g.nome)}
+                                            ${g.daApp
+                                                ? ''
+                                                : '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">versione precedente</span>'}
+                                        </td>
+                                        <td class="p-3 text-right">${g.voci.length}</td>
+                                        <td class="p-3 text-right font-bold text-red-600">${formatCurrency(g.totale)}</td>
+                                        <td class="p-3 text-xs text-gray-500 whitespace-nowrap">${esc(g.dal)} → ${esc(g.al)}</td>
+                                        <td class="p-3 text-center">
+                                            <button onclick="eliminaGruppoCostiFissi('${escJs(g.chiave)}')"
+                                                    class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-1.5 rounded whitespace-nowrap">
+                                                Elimina
+                                            </button>
+                                        </td>
+                                    </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-xs text-gray-400">Scarica un backup prima di eliminare: l'operazione non si può annullare.</p>
+                </div>`;
+        }
 
         async function generaCostiFissi() {
             const anno = parseInt(document.getElementById('cf-anno').value);
