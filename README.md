@@ -65,6 +65,15 @@ Da `Cloud & Sync` si genera un anno intero di spese fisse. Ogni voce ha la sua u
 Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voce}`:
 rigenerare lo stesso anno le **aggiorna**, non le duplica.
 
+I costi fissi restano registrati **una volta al mese**, il giorno in cui escono davvero
+dal conto: è così che li vede la banca ed è così che vanno in contabilità. Per capire
+com'è andata una giornata quel numero però non serve, quindi il riepilogo giornaliero
+della Dashboard mostra anche la **quota del giorno** (costi fissi del mese ÷ giorni del
+mese), il **pareggio** — quanto bisogna incassare per coprire tutto — e il risultato che
+ne deriva. È una lettura, non un movimento: nei totali di mese e anno i costi fissi
+contano una volta sola, e nel giorno in cui sono registrati la quota non viene sommata
+due volte.
+
 Sotto, «Costi fissi già registrati» mostra tutto quello che c'è in archivio raggruppato
 per nome e provenienza. Le voci che non ha generato questa app — rimaste da versioni
 precedenti, con altri identificativi — sono segnate «versione precedente» e si tolgono

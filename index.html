@@ -1978,6 +1978,79 @@
             window.renderContent();
         }
 
+        // ============================================================
+        //  QUOTA GIORNALIERA DEI COSTI FISSI
+        //  I costi fissi restano registrati una volta al mese, il giorno in cui
+        //  escono davvero dal conto: e' cosi' che li vede la banca e cosi' vanno
+        //  in contabilita'. Ma per capire com'e' andata una giornata quel numero
+        //  non serve: serve sapere quanto pesa ogni singolo giorno. Quella quota
+        //  si calcola qui, dividendo il mese per i suoi giorni, e resta una
+        //  lettura: non e' un movimento e non entra in nessun totale.
+        // ============================================================
+
+        function giorniDelMese(ym) {
+            const [a, m] = String(ym).split('-').map(Number);
+            if (!a || !m) return 30;
+            return new Date(a, m, 0).getDate();
+        }
+
+        function costiFissiDelMese(ym) {
+            let totale = 0, voci = 0;
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                if (String(r.data || '').slice(0, 7) !== String(ym)) return;
+                if (categoriaBase(r.categoria) !== 'Costi fissi') return;
+                totale += parseFloat(r.importo || 0);
+                voci++;
+            });
+            return { totale, voci, giorni: giorniDelMese(ym), quota: totale / giorniDelMese(ym) };
+        }
+
+        function quotaFissiGiorno(iso) {
+            return costiFissiDelMese(String(iso).slice(0, 7));
+        }
+
+        // Riquadro che spiega quanto pesa ogni giorno e quanto serve incassare
+        // per coprire le spese: e' il numero che dice se la giornata e' andata
+        // davvero in attivo.
+        function bloccoQuotaFissi(iso, incassiGiorno, usciteGiorno) {
+            const q = quotaFissiGiorno(iso);
+            if (!(q.totale > 0)) return '';
+            const [, mese] = String(iso).split('-');
+            const ultimo = `${String(iso).slice(0, 7)}-${String(q.giorni).padStart(2, '0')}`;
+            // Le spese del giorno comprendono gia' i costi fissi se si sta
+            // guardando proprio il giorno in cui sono registrati: in quel caso
+            // sommare anche la quota li conterebbe due volte.
+            const fissiGiaDentro = String(iso) === ultimo ? q.totale : 0;
+            const spesePulite = Math.max(0, (usciteGiorno || 0) - fissiGiaDentro);
+            const pareggio = spesePulite + q.quota;
+            const risultato = (incassiGiorno || 0) - pareggio;
+
+            return `
+                <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                        <p class="text-[10px] font-black uppercase tracking-wider text-indigo-700">Quota costi fissi del giorno</p>
+                        <p class="text-xs font-bold text-indigo-500">${nomeMese(parseInt(mese, 10))} · ${formatCurrency(q.totale)} su ${q.giorni} giorni</p>
+                    </div>
+                    <p class="text-2xl font-black text-indigo-900 mt-1">${formatCurrency(q.quota)} <span class="text-sm font-bold text-indigo-500">al giorno</span></p>
+                    <div class="grid grid-cols-2 gap-3 mt-3">
+                        <div class="bg-white/70 rounded-lg p-2.5">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Pareggio della giornata</p>
+                            <p class="text-base font-black text-indigo-900">${formatCurrency(pareggio)}</p>
+                        </div>
+                        <div class="bg-white/70 rounded-lg p-2.5">
+                            <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-500">Risultato con la quota</p>
+                            <p class="text-base font-black ${risultato >= 0 ? 'text-green-700' : 'text-red-600'}">${formatCurrency(risultato)}</p>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-indigo-500 mt-2 leading-relaxed">
+                        I costi fissi escono dal conto una volta al mese, il ${ggMm(ultimo)}: qui sono divisi
+                        per i giorni del mese, per far vedere quanto pesano ogni giorno. È solo una lettura,
+                        non un movimento: nei totali del mese e dell'anno contano una volta sola.
+                    </p>
+                </div>`;
+        }
+
         function boxDato(etichetta, valore, classe) {
             return `
                 <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
@@ -2130,6 +2203,8 @@
                                 ${boxDato('Saldo di giornata', formatCurrency(d.saldo), d.saldo >= 0 ? 'text-gray-900' : 'text-red-600')}
                                 ${boxDato('Corse', `${d.nCorse} <span class="text-xs font-bold text-gray-400">${formatCurrency(d.mediaCorsa)}/corsa</span>`)}
                             </div>
+
+                            ${bloccoQuotaFissi(g, d.incassi, d.uscite)}
 
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                 <div class="space-y-3">
@@ -3337,6 +3412,23 @@
                                 <p class="text-[11px] font-bold text-red-700/70">${usciteList.length} voci · ${formatCurrency(mediaUscita)} a voce</p>
                             </div>
                           </div>
+
+                          ${(() => {
+                              const giorno = giornoFiltroUscite();
+                              if (!giorno) return '';
+                              const q = quotaFissiGiorno(giorno);
+                              if (!(q.totale > 0)) return '';
+                              const ultimo = `${String(giorno).slice(0, 7)}-${String(q.giorni).padStart(2, '0')}`;
+                              const eIlGiorno = String(giorno) === ultimo;
+                              return `
+                                <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-800 leading-relaxed">
+                                    ${eIlGiorno
+                                        ? `<strong>Oggi ci sono i costi fissi del mese</strong> (${formatCurrency(q.totale)}): escono dal conto una volta sola, l'ultimo giorno, quindi il totale di questa giornata risulta molto più alto degli altri.`
+                                        : `<strong>I costi fissi del mese</strong> (${formatCurrency(q.totale)}) sono registrati il ${ggMm(ultimo)}, quando escono dal conto: per questo non compaiono in questa giornata.`}
+                                    Divisi per i ${q.giorni} giorni del mese pesano <strong>${formatCurrency(q.quota)} al giorno</strong>.
+                                    Il conto giorno per giorno lo trovi nella Dashboard.
+                                </div>`;
+                          })()}
 
                           <!-- Ripartizione per tipologia: ogni riquadro filtra la voce corrispondente -->
                           ${listaTipiPeriodo.length ? `
