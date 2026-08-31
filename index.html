@@ -25,6 +25,23 @@
         ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 
+        /* Le celle di una griglia, per impostazione del browser, non si stringono
+           sotto la larghezza del loro contenuto. Il campo data su iPhone e iPad ha
+           una larghezza minima sua, tutt'altro che piccola: dentro una colonna
+           stretta sbordava e finiva sopra il campo accanto. */
+        .grid > * { min-width: 0; }
+        input[type="date"], input[type="time"], input[type="month"] {
+            /* Su Safari il campo data e ora nasce con una larghezza minima sua,
+               piuttosto generosa, che non scende nemmeno con width:100%. Togliendo
+               l'aspetto nativo si comporta come gli altri campi e sta nella colonna. */
+            -webkit-appearance: none;
+            appearance: none;
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
+            background-color: #fff;
+        }
+
         /* Stili specifici per la Stampa / Esportazione PDF */
         @media print {
             aside, #toast, .no-print { display: none !important; }
@@ -4621,7 +4638,9 @@
                 String(r.categoria || '').startsWith('Costi fissi - Finanziamento veicolo'))) return;
             const quanti = await correggiNomeFinanziamento();
             if (quanti > 0) {
-                if (window.showToast) window.showToast(`${quanti} voci rinominate: il finanziamento è quello della licenza, non del veicolo.`);
+                if (window.showToast) window.showToast(quanti === 1
+                    ? '1 voce rinominata: il finanziamento è quello della licenza, non del veicolo.'
+                    : `${quanti} voci rinominate: il finanziamento è quello della licenza, non del veicolo.`);
                 renderContent();
             }
         }
