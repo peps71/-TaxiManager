@@ -71,8 +71,21 @@ primo mese coperto, perché una rata non si dimezza, e il movimento cade sull'ul
 giorno davvero coperto. Restringendo il periodo e rigenerando, i mesi non più coperti
 vengono tolti.
 
-Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voce}`:
-rigenerare lo stesso anno le **aggiorna**, non le duplica.
+Si sceglie anche **ogni quanto scrivere il movimento**:
+
+- **Una voce al mese** — cade quando la spesa esce davvero dal conto, così il registro
+  coincide con l'estratto conto. È la scelta di partenza.
+- **Una voce al giorno** — ogni giornata si porta la sua quota, e nel registro giornaliero
+  si vede subito quanto è costata. Sono circa 1.800 righe all'anno: il registro diventa
+  lungo. Dividendo una rata mensile per i giorni resta qualche centesimo di scarto:
+  lo assorbe l'ultimo giorno del mese, così il mese torna esatto alla rata.
+
+Rigenerando si passa da una cadenza all'altra senza lasciare doppioni: le righe della
+cadenza precedente vengono tolte. I due modi danno lo stesso totale annuo al centesimo.
+
+Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voce}` (o
+`fissi-{anno}-{mese}-{giorno}-{voce}`): rigenerare lo stesso anno le **aggiorna**, non le
+duplica.
 
 I costi fissi restano registrati **una volta al mese**, il giorno in cui escono davvero
 dal conto: è così che li vede la banca ed è così che vanno in contabilità. Per capire

@@ -2064,6 +2064,19 @@
             return costiFissiDelMese(String(iso).slice(0, 7));
         }
 
+        // Costi fissi registrati proprio in quel giorno: con la registrazione
+        // mensile ce ne sono solo sull'ultimo giorno, con quella giornaliera
+        // ce ne sono tutti i giorni.
+        function fissiDelGiorno(iso) {
+            let totale = 0;
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA' || String(r.data) !== String(iso)) return;
+                if (categoriaBase(r.categoria) !== 'Costi fissi') return;
+                totale += parseFloat(r.importo || 0);
+            });
+            return totale;
+        }
+
         // Riquadro che spiega quanto pesa ogni giorno e quanto serve incassare
         // per coprire le spese: e' il numero che dice se la giornata e' andata
         // davvero in attivo.
@@ -2072,10 +2085,11 @@
             if (!(q.totale > 0)) return '';
             const [, mese] = String(iso).split('-');
             const ultimo = `${String(iso).slice(0, 7)}-${String(q.giorni).padStart(2, '0')}`;
-            // Le spese del giorno comprendono gia' i costi fissi se si sta
-            // guardando proprio il giorno in cui sono registrati: in quel caso
-            // sommare anche la quota li conterebbe due volte.
-            const fissiGiaDentro = String(iso) === ultimo ? q.totale : 0;
+            // Se in questa giornata ci sono gia' dei costi fissi registrati, le
+            // sue spese li comprendono: sommarci anche la quota li conterebbe
+            // due volte. Vale sia per la registrazione mensile (solo l'ultimo
+            // giorno) sia per quella giornaliera (tutti i giorni).
+            const fissiGiaDentro = fissiDelGiorno(iso);
             const spesePulite = Math.max(0, (usciteGiorno || 0) - fissiGiaDentro);
             const pareggio = spesePulite + q.quota;
             const risultato = (incassiGiorno || 0) - pareggio;
@@ -2098,9 +2112,9 @@
                         </div>
                     </div>
                     <p class="text-[11px] text-indigo-500 mt-2 leading-relaxed">
-                        I costi fissi escono dal conto una volta al mese, il ${ggMm(ultimo)}: qui sono divisi
-                        per i giorni del mese, per far vedere quanto pesano ogni giorno. È solo una lettura,
-                        non un movimento: nei totali del mese e dell'anno contano una volta sola.
+                        ${fissiGiaDentro > 0
+                            ? `In questa giornata i costi fissi sono già registrati fra le spese (${formatCurrency(fissiGiaDentro)}): il pareggio qui sopra li conta una volta sola.`
+                            : `I costi fissi di questo mese sono registrati il ${ggMm(ultimo)}, quando escono dal conto: qui sono divisi per i giorni del mese, per far vedere quanto pesano ogni giorno. È solo una lettura, non un movimento.`}
                     </p>
                 </div>`;
         }
@@ -4324,8 +4338,23 @@
                                     <label class="block text-xs font-bold text-gray-700 mb-1">Anno da generare</label>
                                     <input type="number" id="cf-anno" value="${parseInt(annoAttivo()) + 1}" class="w-32 p-2 border rounded-lg outline-none font-bold" />
                                 </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-gray-700 mb-1">Registra</label>
+                                    <select onchange="impostaCadenzaFissi(this.value)" class="p-2 border rounded-lg outline-none font-bold bg-gray-50">
+                                        <option value="mese" ${cadenzaFissi() === 'mese' ? 'selected' : ''}>una voce al mese</option>
+                                        <option value="giorno" ${cadenzaFissi() === 'giorno' ? 'selected' : ''}>una voce al giorno</option>
+                                    </select>
+                                </div>
                                 <button onclick="generaCostiFissi()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Genera costi fissi</button>
                             </div>
+                            <p class="text-xs text-gray-500 leading-relaxed">
+                                <strong>Una voce al mese</strong>: il movimento cade quando la spesa esce davvero dal
+                                conto, quindi il registro coincide con l'estratto conto. <strong>Una voce al
+                                giorno</strong>: ogni giornata si porta la sua quota, così nel registro giornaliero
+                                vedi subito quanto ti è costata — ma sono circa ${elencoVociFisse().length * 365} righe
+                                all'anno e il registro diventa lungo. Rigenerando si passa da una all'altra senza
+                                lasciare doppioni.
+                            </p>
                         </div>
 
                         ${sezioneCostiFissiInArchivio()}
@@ -5249,6 +5278,19 @@
             return window.vociFisse;
         }
 
+        // Ogni quanto scrivere il movimento: una riga al mese (come esce dal
+        // conto, e come la vede la banca) oppure una riga al giorno, per
+        // ritrovarsi il costo su ogni singola giornata.
+        function cadenzaFissi() {
+            const v = localStorage.getItem('taxi_cadenza_fissi');
+            return v === 'giorno' ? 'giorno' : 'mese';
+        }
+
+        function impostaCadenzaFissi(v) {
+            try { localStorage.setItem('taxi_cadenza_fissi', v === 'giorno' ? 'giorno' : 'mese'); } catch (err) { /* pazienza */ }
+            renderContent();
+        }
+
         function salvaVociFisse() {
             try { localStorage.setItem('taxi_voci_fisse', JSON.stringify(window.vociFisse || [])); } catch (err) { /* spazio esaurito: pazienza */ }
         }
@@ -5584,21 +5626,53 @@
             // (una polizza che parte il 15) l'importo a giornata si conta per i
             // giorni davvero coperti; la rata mensile invece arriva intera,
             // perche' una rata non si dimezza.
+            const cadenza = cadenzaFissi();
             const nuovi = [];
             const attesi = new Set();
             let saltatiPeriodo = 0;
 
             for (let m = 1; m <= 12; m++) {
-                const gg = new Date(anno, m, 0).getDate();
+                const mm = String(m).padStart(2, '0');
                 voci.forEach(v => {
                     const c = giorniCoperti(v, anno, m);
                     if (!c.giorni) { saltatiPeriodo++; return; }
                     const perMese = v.unita === 'mese';
+
+                    if (cadenza === 'giorno') {
+                        // Una riga per ogni giorno coperto. Se l'importo e' una rata
+                        // mensile la si divide per i giorni di quel mese, cosi' il
+                        // mese torna comunque alla rata intera.
+                        const giorniMese = new Date(anno, m, 0).getDate();
+                        const alGiorno = perMese ? v.importo / giorniMese : v.importo;
+                        const arrotondato = Math.round(alGiorno * 100) / 100;
+                        // Dividendo una rata per i giorni resta sempre qualche
+                        // centesimo di scarto: lo assorbe l'ultimo giorno, cosi'
+                        // il mese torna esatto alla rata invece di sballare di poco.
+                        const totaleMese = perMese ? v.importo : null;
+                        const primo = Number(c.da.slice(8, 10));
+                        for (let g = primo; g < primo + c.giorni; g++) {
+                            const ultimoGiorno = g === primo + c.giorni - 1;
+                            const data = `${anno}-${mm}-${String(g).padStart(2, '0')}`;
+                            const id = `fissi-${anno}-${mm}-${String(g).padStart(2, '0')}-${v.slug}`;
+                            const importoGiorno = (perMese && ultimoGiorno)
+                                ? Math.round((totaleMese - arrotondato * (c.giorni - 1)) * 100) / 100
+                                : arrotondato;
+                            attesi.add(id);
+                            nuovi.push({
+                                id, data, tipo: 'USCITA',
+                                categoria: `Costi fissi - ${v.nome} (quota del giorno)`,
+                                metodo: 'Fattura',
+                                importo: importoGiorno
+                            });
+                        }
+                        return;
+                    }
+
                     const importo = perMese ? v.importo : Math.round(v.importo * c.giorni * 100) / 100;
                     const dettaglio = perMese
                         ? (c.interoMese ? 'rata mensile' : `rata mensile dal ${ggMm(c.da)}`)
                         : `${c.giorni} gg x ${v.importo.toFixed(2).replace('.', ',')} €`;
-                    const id = `fissi-${anno}-${String(m).padStart(2, '0')}-${v.slug}`;
+                    const id = `fissi-${anno}-${mm}-${v.slug}`;
                     attesi.add(id);
                     nuovi.push({
                         id,
@@ -5620,18 +5694,22 @@
 
             // Restringendo il periodo di una voce, i mesi generati prima e ora
             // non piu' coperti resterebbero li' a sporcare i conti: si tolgono.
-            const slugNoti = new Set(voci.map(v => v.slug));
+            const slugNoti = voci.map(v => v.slug);
             const daTogliere = (window.dailyRecords || []).filter(r => {
                 const id = String(r.id || '');
                 if (!id.startsWith(`fissi-${anno}-`)) return false;
                 if (attesi.has(id)) return false;
-                return slugNoti.has(id.slice(`fissi-${anno}-MM-`.length));
+                // Vale sia per "fissi-2027-03-slug" sia per "fissi-2027-03-15-slug"
+                return slugNoti.some(sl => id.endsWith('-' + sl));
             });
 
             const totAnno = nuovi.reduce((a, x) => a + x.importo, 0);
-            let avviso = `Genero le spese fisse ${anno}: ${nuovi.length} voci per ${formatCurrency(totAnno)} in tutto.`;
+            let avviso = `Genero le spese fisse ${anno}: ${nuovi.length} ${cadenza === 'giorno' ? 'righe, una per ogni giorno' : 'voci, una al mese'}, per ${formatCurrency(totAnno)} in tutto.`;
             if (saltatiPeriodo) avviso += `\n${saltatiPeriodo} mesi saltati perché fuori dal periodo di validità delle voci.`;
-            if (daTogliere.length) avviso += `\n${daTogliere.length} voci generate prima e ora fuori periodo verranno tolte.`;
+            if (daTogliere.length) avviso += `\n${daTogliere.length} voci generate prima verranno tolte (cambio di periodo o di cadenza).`;
+            if (cadenza === 'giorno' && nuovi.length > 900) {
+                avviso += `\n\nSono tante righe: il registro diventa lungo e la memoria del telefono si riempie più in fretta. Puoi sempre tornare a una voce al mese e rigenerare.`;
+            }
             if (!confirm(avviso + '\nProcedo?')) return;
 
             if (daTogliere.length && typeof window.deleteRecordsFromCloud === 'function') {
