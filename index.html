@@ -647,6 +647,8 @@
         // Con i costi fissi "in sottofondo" gli elenchi li mostrano raccolti in
         // una riga sola: questo interruttore li riapre quando serve controllarli.
         window.mostraFissi = false;
+        // Anno su cui lavora il pannello di pulizia dei costi fissi ('' = tutti)
+        window.annoPuliziaFissi = '';
         window.isCloudSyncing = false;
         // Impostazioni fiscali per Regime Ordinario (configurabili dall'utente in "Cloud & Sync")
         window.fiscalSettings = Object.assign(
@@ -742,12 +744,16 @@
         // scrivere ogni volta a mano (ed evitano che "Carburante"/"carburante" spacchino i report).
         const CATEGORIE_USCITA = ['Carburante', 'Ristoro', 'Lavaggio', 'Manutenzione', 'Assicurazione', 'Radio taxi', 'Bollo / Tasse auto', 'Parcheggio / Pedaggio', 'Multa', 'Commercialista'];
 
-        // Le categorie di sempre, tolte quelle che sono gia' una voce del budget:
-        // altrimenti "Radio taxi" comparirebbe due volte nel menu, una come spesa
-        // qualsiasi e una come costo fisso, e il conguaglio ne vedrebbe solo una.
-        function categorieUscitaCorrenti() {
-            const aBudget = new Set(elencoVociFisse().map(v => normalizzaSlug(v.nome)));
-            return CATEGORIE_USCITA.filter(c => !aBudget.has(normalizzaSlug(c)));
+        // Le voci di budget da aggiungere al menu delle spese. Quelle che hanno
+        // gia' una categoria loro (Carburante, Manutenzione) restano dove sono:
+        // spostarle sotto "Costi fissi" le toglierebbe dal costo al chilometro
+        // delle vetture e dalle caselle fiscali. Il conguaglio le riconosce dal
+        // nome, quindi vanno bene tutte e due le forme.
+        function vociBudgetNelMenu() {
+            const standard = new Set(CATEGORIE_USCITA.map(c => normalizzaSlug(c)));
+            return elencoVociFisse()
+                .filter(v => String(v.nome || '').trim())
+                .filter(v => !standard.has(normalizzaSlug(v.nome)));
         }
 
         // Colore della barretta di ogni categoria di spesa nei riepiloghi
@@ -2093,11 +2099,34 @@
             return giorni.size;
         }
 
-        // Le spese che il budget dei costi fissi gia' prevede. Contarle anche
-        // come spesa reale nella quota del giorno le conterebbe due volte: quando
-        // escono dal conto finiscono nel conguaglio, non nella quota.
+        // A quale voce di budget corrisponde un movimento? Si guarda il nome, non
+        // il prefisso, cosi' funzionano tutte e due le forme:
+        //   "Costi fissi - Radio taxi - fattura di aprile"   (spesa di sola gestione)
+        //   "Carburante - Q8 corso Francia"                  (spesa che ha gia' una
+        //                                                     sua categoria)
+        function nomeSpesaDiRecord(r) {
+            const t = String(r && r.categoria || '').trim();
+            if (!t) return '';
+            let resto = /^costi fissi\b/i.test(t) ? t.replace(/^costi fissi\s*[-–:]?\s*/i, '') : t;
+            const i = resto.indexOf(' - ');
+            if (i > -1) resto = resto.slice(0, i);
+            return resto.replace(/\s*\([^()]*\)\s*$/, '').trim();
+        }
+
+        function voceBudgetDiRecord(r) {
+            if (!r || r.tipo !== 'USCITA') return null;
+            const chiave = normalizzaSlug(nomeSpesaDiRecord(r));
+            if (!chiave) return null;
+            return elencoVociFisse().find(v => normalizzaSlug(v.nome) === chiave) || null;
+        }
+
+        // Le spese che il budget gia' prevede. Contarle anche come spesa reale
+        // nella quota del giorno le conterebbe due volte: quando escono dal conto
+        // finiscono nel conguaglio, non nella quota. Ci finiscono anche le vecchie
+        // righe "Costi fissi" che non corrispondono piu' a nessuna voce: sarebbero
+        // dei picchi mostruosi in un giorno solo.
         function copertaDalBudget(r) {
-            return categoriaBase(r && r.categoria) === 'Costi fissi';
+            return categoriaBase(r && r.categoria) === 'Costi fissi' || !!voceBudgetDiRecord(r);
         }
 
         // Le spese reali che il budget non copre: carburante, manutenzione,
@@ -2182,7 +2211,7 @@
                     </div>
                     <p class="text-2xl font-black text-indigo-900 mt-1">${formatCurrency(q.quota)} <span class="text-sm font-bold text-indigo-500">al giorno</span></p>
                     <p class="text-[11px] font-bold text-indigo-500 mt-0.5">
-                        budget costi fissi ${formatCurrency(q.budget)} + altre spese ${formatCurrency(q.altre)}
+                        a budget ${formatCurrency(q.budget)} + spese fuori budget ${formatCurrency(q.altre)}
                     </p>
                     <div class="grid grid-cols-2 gap-3 mt-3">
                         <div class="bg-white/70 rounded-lg p-2.5">
@@ -2200,10 +2229,10 @@
                             <strong>${formatCurrency(q.quotaLavorati)}</strong>: nei riposi le spese corrono lo stesso, ma non c'è incasso a coprirle.
                         </p>` : ''}
                     <p class="text-[11px] text-indigo-500 mt-2 leading-relaxed">
-                        I costi fissi entrano qui a <strong>budget</strong>, non a fattura: pesano ogni giorno anche quando la spesa esce dal conto una volta l'anno.
-                        Le altre spese sono quelle che hai registrato${speseOggi > 0 ? ` (in questa giornata ${formatCurrency(speseOggi)})` : ''}, divise per i giorni del mese: un pieno o un tagliando servono per tutto il mese, non solo per il giorno in cui li hai pagati.
+                        Le voci a <strong>budget</strong> entrano qui a preventivo, non a fattura: pesano ogni giorno anche quando la spesa esce dal conto una volta l'anno.
+                        Le altre sono le spese che hai registrato${speseOggi > 0 ? ` (in questa giornata ${formatCurrency(speseOggi)})` : ''}, divise per i giorni del mese: un tagliando serve per tutto il mese, non solo per il giorno in cui l'hai pagato.
                         È una lettura, non un movimento: i totali di mese e anno restano quelli veri.
-                        ${q.inCorso ? `${mese} è ancora in corso, quindi le spese diverse dal budget sono la media dei primi ${q.giorniAltre} giorni.` : ''}
+                        ${q.inCorso ? `${mese} è ancora in corso, quindi le spese fuori budget sono la media dei primi ${q.giorniAltre} giorni.` : ''}
                     </p>
                 </div>`;
         }
@@ -3518,11 +3547,11 @@
                                     <div>
                                         <label class="block text-xs font-bold text-gray-700 mb-1">Categoria</label>
                                         <select id="uscita-cat-select" onchange="onUscitaCatChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium">
-                                            ${categorieUscitaCorrenti().map(c => `<option value="${c}" ${(window.ultimaCategoriaUscita || 'Carburante') === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                            ${CATEGORIE_USCITA.map(c => `<option value="${c}" ${(window.ultimaCategoriaUscita || 'Carburante') === c ? 'selected' : ''}>${c}</option>`).join('')}
                                             ${(() => {
-                                                // Le voci del budget: scegliendole da qui il movimento nasce
-                                                // gia' con il nome giusto e il conguaglio lo riconosce.
-                                                const voci = elencoVociFisse().filter(v => String(v.nome || '').trim());
+                                                // Le voci del budget senza una categoria loro: scegliendole da
+                                                // qui il movimento nasce con il nome che il conguaglio riconosce.
+                                                const voci = vociBudgetNelMenu();
                                                 if (!voci.length) return '';
                                                 return `<optgroup label="Costi fissi (vanno nel conguaglio)">
                                                     ${voci.map(v => {
@@ -3624,10 +3653,10 @@
                               if (!(q.quota > 0)) return '';
                               return `
                                 <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-800 leading-relaxed">
-                                    <strong>Questa giornata costa ${formatCurrency(q.quota)}</strong>: ${formatCurrency(q.budget)} di budget dei costi fissi
-                                    più ${formatCurrency(q.altre)} di media delle altre spese del mese.
-                                    I costi fissi non sono movimenti — pesano ogni giorno anche quando non li paghi —
-                                    quindi in questo elenco non li trovi. Il conto giornata per giornata è nella Dashboard,
+                                    <strong>Questa giornata costa ${formatCurrency(q.quota)}</strong>: ${formatCurrency(q.budget)} di budget
+                                    più ${formatCurrency(q.altre)} di media delle spese fuori budget.
+                                    Il budget non è fatto di movimenti — pesa ogni giorno anche quando non paghi niente —
+                                    quindi in questo elenco non lo trovi. Il conto giornata per giornata è nella Dashboard,
                                     il confronto con quello che hai speso davvero in Spese &amp; Fisco.
                                 </div>`;
                           })()}
@@ -5392,17 +5421,23 @@
         //  preventivo si e' discostato dal consuntivo.
         // ============================================================
 
+        function giorniDellAnno(anno) {
+            return new Date(parseInt(anno, 10), 1, 29).getDate() === 29 ? 366 : 365;
+        }
+
         // Quanto pesa una singola voce in una singola giornata. La voce vale solo
         // dentro il suo periodo; una rata mensile si divide per i giorni di quel
-        // mese, cosi' febbraio e marzo tornano tutti e due alla rata intera.
+        // mese, cosi' febbraio e marzo tornano tutti e due alla rata intera, e una
+        // cifra annuale si divide per i giorni dell'anno.
         function quotaVoceGiorno(v, iso, giorniMese) {
             const imp = parseFloat(v && v.importo || 0);
             if (!(imp > 0)) return 0;
             const g = String(iso || '');
             if (v.dataInizio && g < v.dataInizio) return 0;
             if (v.dataFine && g > v.dataFine) return 0;
-            const gg = giorniMese || giorniDelMese(g.slice(0, 7));
-            return v.unita === 'mese' ? imp / gg : imp;
+            if (v.unita === 'anno') return imp / giorniDellAnno(g.slice(0, 4));
+            if (v.unita === 'mese') return imp / (giorniMese || giorniDelMese(g.slice(0, 7)));
+            return imp;
         }
 
         function budgetDelGiorno(iso) {
@@ -5569,8 +5604,9 @@
                         <label class="block">
                             ${etichetta('Ogni')}
                             <select id="cf-unita-${esc(v.slug)}" class="w-full p-2.5 border rounded-lg outline-none font-bold bg-white">
-                                <option value="giorno" ${v.unita !== 'mese' ? 'selected' : ''}>giorno</option>
+                                <option value="giorno" ${(v.unita !== 'mese' && v.unita !== 'anno') ? 'selected' : ''}>giorno</option>
                                 <option value="mese" ${v.unita === 'mese' ? 'selected' : ''}>mese</option>
+                                <option value="anno" ${v.unita === 'anno' ? 'selected' : ''}>anno</option>
                             </select>
                         </label>
                     </div>
@@ -5592,7 +5628,7 @@
                         if (!(imp > 0)) return '<p class="text-[11px] text-gray-400">Dal e Al vuoti = la voce vale sempre, anno dopo anno.</p>';
                         const anno = annoAttivo();
                         const b = budgetVocePeriodo(v, `${anno}-01-01`, `${anno}-12-31`);
-                        const alGiorno = v.unita === 'mese' ? imp * 12 / 365 : imp;
+                        const alGiorno = v.unita === 'anno' ? imp / giorniDellAnno(anno) : (v.unita === 'mese' ? imp * 12 / 365 : imp);
                         return `<p class="text-[11px] text-gray-500">
                                     <strong>${formatCurrency(alGiorno)} al giorno</strong> · ${formatCurrency(b.totale)} nel ${esc(anno)}${b.giorni < 365 ? ` (${b.giorni} giorni coperti)` : ''}.
                                     Dal e Al vuoti = la voce vale sempre, anno dopo anno.
@@ -5641,14 +5677,18 @@
                     </div>
 
                     <p class="text-xs text-gray-500 leading-relaxed">
-                        L'importo si scrive con la virgola o con il punto, e ha la sua unità: <strong>ogni mese</strong>
-                        per una rata che arriva sempre uguale (il finanziamento della licenza), <strong>ogni
-                        giorno</strong> per un costo annuo da spalmare (le polizze). Con <strong>Dal</strong> e
-                        <strong>Al</strong> si dice da quando a quando vale: una polizza che parte il 15 marzo non pesa
-                        a gennaio.<br><br>
-                        Qui dentro non vanno carburante, manutenzione e ristoro: quelle sono spese che cambiano ogni
-                        mese, e l'app le spalma da sola partendo da quelle che hai registrato. E non vanno neanche
-                        INPS e IRPEF, che sono già stimate più sotto.
+                        L'importo si scrive con la virgola o con il punto, e ha la sua unità: <strong>mese</strong> per
+                        una rata che arriva sempre uguale (il finanziamento della licenza), <strong>anno</strong> per
+                        una cifra che ti aspetti in dodici mesi (6.500 € di carburante), <strong>giorno</strong> per un
+                        costo già ridotto a giornata. Con <strong>Dal</strong> e <strong>Al</strong> si dice da quando a
+                        quando vale: una polizza che parte il 15 marzo non pesa a gennaio.<br><br>
+                        Ci puoi mettere anche una spesa che cambia da un mese all'altro, come il carburante: metti a
+                        budget quello che prevedi di spendere in un anno, ogni giornata ne porta la sua quota, e il
+                        conguaglio ti dice a fine anno quanto ci hai preso. Le spese di carburante e manutenzione
+                        continui a registrarle nella loro categoria di sempre — restano nel costo al chilometro delle
+                        vetture — e il conguaglio le riconosce lo stesso, dal nome.<br><br>
+                        Quello che <strong>non</strong> metti a budget, l'app lo spalma da sola facendo la media di
+                        quello che hai registrato nel mese. INPS e IRPEF lasciali fuori: sono già stimate più sotto.
                     </p>
                 </div>`;
         }
@@ -5673,12 +5713,35 @@
         }
 
         // Raggruppa i movimenti "Costi fissi" per nome e provenienza
-        function gruppiCostiFissi() {
-            const gruppi = {};
+        // Anno su cui lavora il pannello di pulizia: '' = tutti
+        function annoPulizia() {
+            return window.annoPuliziaFissi || '';
+        }
+
+        function impostaAnnoPulizia(v) {
+            window.annoPuliziaFissi = v || '';
+            renderContent();
+        }
+
+        // Gli anni in cui ci sono costi fissi scritti come movimenti
+        function anniCostiFissi() {
+            const anni = new Set();
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 if (categoriaBase(r.categoria) !== 'Costi fissi') return;
-                const nome = voceFissaDiRecord(r) || sottocategoria(r.categoria);
+                anni.add(String(r.data || '').slice(0, 4));
+            });
+            return Array.from(anni).filter(Boolean).sort();
+        }
+
+        function gruppiCostiFissi() {
+            const gruppi = {};
+            const anno = annoPulizia();
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                if (categoriaBase(r.categoria) !== 'Costi fissi') return;
+                if (anno && String(r.data || '').slice(0, 4) !== anno) return;
+                const nome = nomeSpesaDiRecord(r) || sottocategoria(r.categoria);
                 const daApp = generataDallApp(r);
                 const chiave = (daApp ? 'app|' : 'altra|') + nome;
                 if (!gruppi[chiave]) {
@@ -5728,7 +5791,9 @@
             const righe = gruppi.reduce((a, g) => a + g.voci.length, 0);
             const totale = gruppi.reduce((a, g) => a + g.totale, 0);
             const elenco = gruppi.map(g => `  · ${g.nome}: ${g.voci.length} righe, ${formatCurrency(g.totale)}`).join('\n');
-            if (!confirm(`Elimino ${righe} righe di costi fissi generate dalle versioni precedenti, per ${formatCurrency(totale)} in tutto:\n\n${elenco}\n\nRestano le spese che hai registrato tu. Attenzione: i totali di quegli anni caleranno di ${formatCurrency(totale)} e la stima delle tasse cambierà.\nL'operazione non si può annullare: hai già scaricato un backup?`)) return;
+            const dove = annoPulizia() ? `del ${annoPulizia()}` : 'di tutti gli anni';
+            const quali = annoPulizia() ? `del ${annoPulizia()}` : 'di quegli anni';
+            if (!confirm(`Elimino ${righe} righe di costi fissi ${dove}, generate dalle versioni precedenti, per ${formatCurrency(totale)} in tutto:\n\n${elenco}\n\nRestano le spese che hai registrato tu. Attenzione: i totali ${quali} caleranno di ${formatCurrency(totale)} e la stima delle tasse cambierà.\nL'operazione non si può annullare: hai già scaricato un backup?`)) return;
 
             const ids = [].concat(...gruppi.map(g => g.voci.map(v => v.id)));
             showToast(`Elimino ${ids.length} voci...`);
@@ -5751,18 +5816,6 @@
         //  rate. Qui si vede voce per voce quanto e' maturato e quanto e' stato
         //  speso davvero, e di quanto il preventivo ha sbagliato.
         // ============================================================
-        // Di quale voce del budget parla un movimento "Costi fissi - Radio taxi -
-        // fattura di marzo"? Del nome che sta subito dopo "Costi fissi", senza la
-        // nota che segue e senza le code fra parentesi delle vecchie versioni.
-        function voceFissaDiRecord(r) {
-            const t = String(r && r.categoria || '').trim();
-            if (!/^costi fissi\b/i.test(t)) return '';
-            let resto = t.replace(/^costi fissi\s*[-–:]?\s*/i, '');
-            const i = resto.indexOf(' - ');
-            if (i > -1) resto = resto.slice(0, i);
-            return resto.replace(/\s*\([^()]*\)\s*$/, '').trim();
-        }
-
         function conguaglioAnno(anno) {
             const oggi = oggiISO();
             const inCorso = String(anno) === oggi.slice(0, 4);
@@ -5785,7 +5838,7 @@
                 const d = String(r.data || '');
                 if (d < da || d > a) return;
                 if (!copertaDalBudget(r)) return;
-                const riga = perNome.get(normalizzaSlug(voceFissaDiRecord(r))) || fuori;
+                const riga = perNome.get(normalizzaSlug(nomeSpesaDiRecord(r))) || fuori;
                 riga.speso += parseFloat(r.importo || 0);
                 riga.movimenti++;
                 if (d > riga.ultima) riga.ultima = d;
@@ -5882,8 +5935,12 @@
         }
 
         function sezioneCostiFissiInArchivio() {
+            const anni = anniCostiFissi();
+            if (!anni.length) return '';
+            // Se l'anno scelto prima non esiste piu' si torna a tutti
+            if (annoPulizia() && !anni.includes(annoPulizia())) window.annoPuliziaFissi = '';
+            const anno = annoPulizia();
             const gruppi = gruppiCostiFissi();
-            if (!gruppi.length) return '';
             const generate = serieGenerata();
             const righeGenerate = generate.reduce((a, g) => a + g.voci.length, 0);
             const totaleGenerate = generate.reduce((a, g) => a + g.totale, 0);
@@ -5900,20 +5957,35 @@
                         </p>
                     </div>
 
+                    <div class="flex flex-wrap items-end gap-3">
+                        <label class="block">
+                            <span class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Anno su cui lavorare</span>
+                            <select onchange="impostaAnnoPulizia(this.value)" class="p-2.5 border rounded-lg outline-none font-bold bg-gray-50">
+                                <option value="" ${!anno ? 'selected' : ''}>tutti gli anni</option>
+                                ${anni.map(a => `<option value="${esc(a)}" ${anno === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}
+                            </select>
+                        </label>
+                        <p class="text-xs text-gray-500 leading-relaxed flex-1 min-w-[240px]">
+                            ${anno
+                                ? `L'elenco e il pulsante qui sotto riguardano <strong>solo il ${esc(anno)}</strong>: gli altri anni non vengono toccati.`
+                                : 'Scegli un anno per fare pulizia solo su quello: per gli anni già chiusi conviene lasciare tutto com\'è.'}
+                        </p>
+                    </div>
+
                     ${generate.length ? `
                         <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
                             <p class="font-black text-yellow-900 text-sm">
-                                ${righeGenerate} righe generate dalle versioni precedenti
+                                ${righeGenerate} righe generate dalle versioni precedenti${anno ? ' nel ' + esc(anno) : ''}
                             </p>
                             <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
                                 Valgono ${formatCurrency(totaleGenerate)}. Con il budget non servono più, ma
-                                <strong>non toglierle alla leggera</strong>: per gli anni già passati sono l'unica
-                                traccia di quelle spese, e togliendole i totali di quegli anni calano di
+                                <strong>non toglierle alla leggera</strong>: sono l'unica traccia di quelle spese, e
+                                togliendole i totali ${anno ? 'del ' + esc(anno) : 'di quegli anni'} calano di
                                 ${formatCurrency(totaleGenerate)} e la stima delle tasse cambia. Ha senso toglierle
                                 solo se registri al loro posto i pagamenti veri.
                             </p>
                             <button onclick="eliminaSerieGenerata()" class="mt-3 bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl">
-                                Elimina le ${righeGenerate} righe generate
+                                Elimina le ${righeGenerate} righe generate${anno ? ' del ' + esc(anno) : ''}
                             </button>
                         </div>` : ''}
 
