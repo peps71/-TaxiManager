@@ -65,7 +65,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
             <div>
                 <h1 class="text-2xl font-black tracking-tight">TaxiManager</h1>
-                <p class="text-xs font-semibold text-gray-800 opacity-80">Edizione Cloud - V28</p>
+                <p class="text-xs font-semibold text-gray-800 opacity-80" id="etichetta-versione">Edizione Cloud</p>
             </div>
         </div>
         <div class="px-4 pt-4" id="anno-container">
@@ -672,6 +672,11 @@
         //  nemmeno l'app. Cosi' invece l'app si apre sempre con i dati salvati sul
         //  telefono, e la sincronizzazione si aggancia dopo, quando puo'.
         // ============================================================
+
+        // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
+        // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
+        // finora c'era scritto "V28" a mano e non voleva dire niente.
+        const VERSIONE_APP = 45;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -1821,6 +1826,8 @@
                     ${t.icon}<span>${t.label}</span>
                 </button>
             `).join('');
+
+            mostraVersione();
         }
 
         function switchTab(tabId) {
@@ -2401,6 +2408,34 @@
         // raccolte in una riga sola, altrimenti le spese vere ci spariscono dentro.
         function fissiDaRaccogliere() {
             return !window.mostraFissi;
+        }
+
+        // Scrive la versione nella barra laterale: se qui non c'e' il numero che
+        // ti aspetti, il telefono sta usando una copia vecchia tenuta in cache.
+        function mostraVersione() {
+            const el = document.getElementById('etichetta-versione');
+            if (el) el.textContent = `Edizione Cloud · v${VERSIONE_APP}`;
+        }
+
+        // Forza il passaggio alla versione nuova senza chiudere l'app: si chiede
+        // al telefono di ricontrollare, e se ce n'e' una in attesa le si dice di
+        // prendere il comando subito.
+        async function aggiornaApp() {
+            showToast('Cerco una versione nuova...');
+            try {
+                const reg = window.registrazioneSW
+                    || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration());
+                if (reg) {
+                    await reg.update();
+                    if (reg.waiting) {
+                        reg.waiting.postMessage({ tipo: 'AGGIORNA_SUBITO' });
+                        return;   // al cambio di comando la pagina si ricarica da sola
+                    }
+                }
+            } catch (err) {
+                console.warn('Controllo aggiornamento non riuscito:', err);
+            }
+            setTimeout(() => window.location.reload(), 400);
         }
 
         function alternaMostraFissi() {
@@ -4724,6 +4759,8 @@
                                 </h3>
                             </div>
 
+                            <p class="text-[11px] font-bold text-gray-400">Versione installata su questo dispositivo: <strong class="text-gray-700">v${VERSIONE_APP}</strong></p>
+
                             ${window.cloudUtente ? `
                                 <p class="text-xs text-gray-600 leading-relaxed">
                                     Sei entrato come <strong>${esc(window.cloudUtente.email || window.cloudUtente.nome || 'il tuo account')}</strong>.
@@ -4748,6 +4785,16 @@
                                     qui viene caricato nella tua cartella.
                                 </p>
                             `}
+
+                            <div class="pt-3 border-t border-gray-100">
+                                <button onclick="aggiornaApp()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
+                                    ⬆️ Aggiorna adesso
+                                </button>
+                                <p class="text-[11px] text-gray-400 mt-2 leading-relaxed">
+                                    Cerca una versione più recente e la mette in uso senza chiudere l'app. I dati registrati
+                                    non si toccano.
+                                </p>
+                            </div>
                         </div>
 
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -6605,6 +6652,8 @@
             window.addEventListener('load', function () {
                 navigator.serviceWorker.register('sw.js')
                     .then(function (reg) {
+                        window.registrazioneSW = reg;
+
                         // Quando esce una versione nuova il telefono la scarica da solo,
                         // ma la schermata aperta resta quella vecchia finche' non si
                         // riapre l'app: senza un avviso non c'e' modo di accorgersene.
@@ -6614,13 +6663,36 @@
                             nuovo.addEventListener('statechange', function () {
                                 if (nuovo.state === 'installed' && navigator.serviceWorker.controller) {
                                     if (window.showToast) {
-                                        window.showToast('⬆️ Nuova versione pronta: chiudi e riapri l\'app per usarla.');
+                                        window.showToast('⬆️ Nuova versione pronta: apri Cloud & Sync e tocca «Aggiorna adesso».');
                                     }
+                                    if (window.renderContent) window.renderContent();
                                 }
                             });
                         });
+
+                        // Il controllo della versione nuova va chiesto: sull'app
+                        // aggiunta alla schermata Home il telefono lo fa di rado, e
+                        // si resta su una copia vecchia senza accorgersene.
+                        try { reg.update(); } catch (e) { /* pazienza */ }
+                        document.addEventListener('visibilitychange', function () {
+                            if (document.visibilityState === 'visible' && window.registrazioneSW) {
+                                try { window.registrazioneSW.update(); } catch (e) { /* pazienza */ }
+                            }
+                        });
                     })
                     .catch(function (e) { console.log('Service worker non registrato:', e); });
+
+                // Il nuovo service worker ha preso il comando: la pagina va ricaricata
+                // una volta sola per usare davvero la copia nuova. Alla primissima
+                // installazione invece non c'era nessun comando prima, quindi non
+                // e' un aggiornamento e ricaricare sarebbe solo un lampeggio.
+                const avevaUnControllore = !!navigator.serviceWorker.controller;
+                let giaRicaricata = false;
+                navigator.serviceWorker.addEventListener('controllerchange', function () {
+                    if (!avevaUnControllore || giaRicaricata) return;
+                    giaRicaricata = true;
+                    window.location.reload();
+                });
             });
         }
     </script>

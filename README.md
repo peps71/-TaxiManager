@@ -234,7 +234,19 @@ stima delle tasse cambia. Ha senso farlo solo registrando al loro posto i pagame
 
 ## Pubblicare un aggiornamento
 
-Il telefono si accorge di una versione nuova dal numero scritto nel service worker:
-dopo ogni modifica ai file va aumentato il valore di `VERSIONE` in `sw.js`
-(`taximanager-v23` → `taximanager-v24`), altrimenti resta in uso la copia salvata.
-Quando la nuova versione è pronta l'app mostra l'avviso «Nuova versione pronta».
+Due numeri da aumentare insieme a ogni modifica:
+
+- `VERSIONE` in `sw.js` (`taximanager-v44` → `taximanager-v45`): è da qui che il telefono
+  capisce che deve riscaricare i file;
+- `VERSIONE_APP` in `index.html`: è il numero mostrato nella barra laterale e in
+  `Cloud & Sync`, e serve a vedere in un colpo d'occhio quale copia sta girando davvero
+  sul dispositivo.
+
+Quando la nuova versione è pronta l'app lo dice, e in `Cloud & Sync` c'è **Aggiorna
+adesso**: chiede al telefono di ricontrollare e mette in uso la copia nuova senza chiudere
+l'app. Il controllo viene chiesto anche a ogni ritorno sull'app, perché sull'icona in
+schermata Home iOS lo farebbe di rado per conto suo.
+
+Se il numero nella barra laterale non è quello che ti aspetti, il telefono sta usando una
+copia vecchia tenuta in cache: quello è il primo posto dove guardare quando «le modifiche
+non si vedono».
