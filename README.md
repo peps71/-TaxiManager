@@ -11,10 +11,47 @@ tramite Firebase/Firestore.
 | --- | --- |
 | `index.html` | L'app completa: interfaccia, calcoli e sincronizzazione Cloud |
 | `sw.js` | Service worker: tiene l'app disponibile anche senza campo |
+| `firestore.rules` | Regole di sicurezza del database: da incollare nella console Firebase |
 | `manifest.json` | Dati di installazione (nome, icone, colori) |
 | `icon-*.png`, `favicon*`, `apple-touch-icon-180.png` | Icone dell'app |
 | `Gestione_Taxi_2026.txt` | Appunti e conteggi di partenza |
 | `TaxiManager_2026_iPhone.html` | Prima versione, tenuta come riferimento |
+
+## Accesso e sicurezza dei dati
+
+Fino alla versione 43 l'app entrava nel Cloud con un accesso anonimo e scriveva tutto in
+una cartella `public`: chiunque conoscesse l'indirizzo del progetto Firebase poteva leggere
+e scrivere i movimenti. Adesso non più.
+
+- Si entra con **Google**, da `Cloud & Sync`. Una volta per dispositivo: l'accesso resta
+  memorizzato.
+- I dati stanno in `artifacts/{app}/users/{tuo-identificativo}/…`, una cartella per
+  account.
+- Le regole in [`firestore.rules`](firestore.rules) lasciano entrare in quella cartella
+  **solo** chi ha quell'identificativo. La vecchia cartella `public` è chiusa
+  esplicitamente, e tutto il resto del database pure.
+- **Senza accesso l'app funziona per intero**, solo su quel dispositivo: niente va sul
+  Cloud. Uscendo dal Cloud non si cancella niente.
+- Al primo accesso, quello che è già registrato sul dispositivo viene caricato nella
+  cartella dell'account: è così che i dati arrivano sul secondo dispositivo.
+
+### Cosa va fatto una volta sola nella console Firebase
+
+Sono tre cose, su [console.firebase.google.com](https://console.firebase.google.com) →
+progetto `taximanager-5ac5b`. Prima di cominciare, scarica un backup `.json` dall'app.
+
+1. **Authentication → Sign-in method → Google → Enable**, scegli l'email di supporto,
+   salva.
+2. **Authentication → Settings → Authorized domains**: verifica che ci sia
+   `peps71.github.io`; se manca, aggiungilo.
+3. **Firestore Database → Rules**: incolla il contenuto di `firestore.rules` al posto di
+   quello che c'è e premi **Publish**.
+
+Finché il punto 3 non è fatto il database resta aperto; finché non sono fatti 1 e 2
+l'accesso non riesce e l'app lo dice con un avviso che nomina il passaggio mancante.
+
+I vecchi dati nella cartella `public` restano lì, non più leggibili dall'app: si possono
+cancellare a mano dalla console quando il nuovo accesso funziona su tutti i dispositivi.
 
 ## Come funziona il salvataggio
 
