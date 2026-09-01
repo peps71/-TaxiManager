@@ -55,88 +55,78 @@ lo segnala, perché le spese di quei giorni verrebbero contate su entrambe; e ne
 l'avviso «contachilometri all'indietro» non compare più quando fra i due turni c'è
 l'acquisto di un'auto nuova, dove ripartire da capo è normale.
 
-## Costi fissi
+## Costi fissi: budget, non movimenti
 
-Da `Cloud & Sync` si tiene l'elenco delle proprie spese fisse — si aggiungono, si
-modificano, si tolgono — e si genera un anno intero di movimenti.
+I costi fissi non sono spese che si registrano: sono **quanto costa lavorare**, prima
+ancora di uscire di casa. La licenza, il radio taxi, il commercialista, le assicurazioni.
+In `Spese & Fisco` se ne tiene l'elenco — nome, importo, unità e periodo di validità — e
+l'app ne ricava una **quota che matura ogni giorno**.
 
-**L'elenco è permanente**: si compila una volta e vale per tutti gli anni. Generare un
-anno non lo tocca, e un elenco vuoto arrivato dal Cloud non lo cancella. Gli importi si
-scrivono con la virgola o con il punto, indifferentemente.
+Il budget non scrive nessun movimento. Serve a una cosa sola: sapere quanto devi incassare
+oggi perché la giornata sia davvero in attivo.
 
-Ogni voce ha la sua unità: **€/mese** per una rata che arriva sempre uguale (il
-finanziamento della licenza), **€/gg** per un costo annuo da spalmare, moltiplicato per i
-giorni di ogni mese (le assicurazioni).
+- **Ogni mese** per una rata che arriva sempre uguale (il finanziamento della licenza): si
+  divide per i giorni di quel mese, così febbraio e marzo tornano tutti e due alla rata
+  intera.
+- **Ogni giorno** per un costo annuo da spalmare (le polizze).
+- **Dal** e **Al** dicono da quando a quando vale: una polizza che parte il 15 marzo non
+  pesa a gennaio, e su marzo conta solo per i 17 giorni coperti. Vuoti, la voce vale
+  sempre, anno dopo anno.
 
-Ogni voce ha anche un **periodo di validità**, con `Dal` e `Al` facoltativi: vuoti, la
-voce vale sempre. Una polizza che parte il 15 marzo non compare a gennaio, e su marzo
-viene contata solo per i 17 giorni coperti; una rata mensile invece arriva intera dal
-primo mese coperto, perché una rata non si dimezza, e il movimento cade sull'ultimo
-giorno davvero coperto. Restringendo il periodo e rigenerando, i mesi non più coperti
-vengono tolti.
+L'elenco è permanente: si compila una volta e non va riscritto ogni gennaio. Un elenco
+vuoto arrivato dal Cloud non lo cancella.
 
-Si sceglie anche **ogni quanto scrivere il movimento**:
+Qui dentro non vanno carburante, manutenzione e ristoro — cambiano ogni mese, e l'app le
+spalma da sola partendo da quelle registrate — né INPS e IRPEF, che sono già stimate.
 
-- **Ogni giorno, in sottofondo** — la spesa viene scritta giorno per giorno, così ogni
-  giornata si porta la sua quota e l'ultimo del mese non arriva più il mucchio di tutte le
-  spese fisse insieme. Nel registro non si vedono voce per voce: compaiono raccolte in una
-  riga sola, che si apre con «Mostrali» quando servono. Nei totali di giorno, mese e anno
-  ci sono per intero, e nell'export per il commercialista escono tutte.
-- **Una voce al mese** — cade quando la spesa esce davvero dal conto, così il registro
-  coincide con l'estratto conto, ma l'ultimo giorno del mese risulta pesantissimo. È la
-  scelta di partenza, e resta quella finché non si sceglie altro.
-- **Una voce al giorno, in elenco** — come il sottofondo, ma le righe restano tutte in
-  vista. Sono circa 1.800 all'anno: il registro diventa lungo.
+## Le spese vere e il conguaglio
 
-Dividendo una rata mensile per i giorni resta qualche centesimo di scarto: lo assorbe
-l'ultimo giorno del mese, così il mese torna esatto alla rata.
+Quando una spesa fissa esce davvero dal conto la si registra come una spesa qualsiasi, nel
+giorno in cui è stata pagata. Nel modulo «Nuova Spesa» le voci del budget compaiono in un
+gruppo a parte: scegliendole da lì il movimento nasce già con la categoria giusta
+(`Costi fissi - Radio taxi`) e il conguaglio lo riconosce.
 
-Rigenerando si passa da una cadenza all'altra senza lasciare doppioni: le righe della
-cadenza precedente vengono tolte. I tre modi danno lo stesso totale annuo al centesimo.
-Cambiare la scelta da sola non riscrive niente — l'app lo dice con un avviso e indica
-quali anni vanno rigenerati. E finché un anno non è rigenerato le sue righe mensili
-restano in vista: nascondere un movimento mensile lascerebbe un totale che non si spiega.
+Il **conguaglio** confronta le due cose, voce per voce: quanto budget è maturato e quanto
+hai speso davvero. Per l'anno in corso il budget è quello maturato dal 1° gennaio a oggi.
 
-Le voci generate portano un identificativo della forma `fissi-{anno}-{mese}-{voce}` (o
-`fissi-{anno}-{mese}-{giorno}-{voce}`): rigenerare lo stesso anno le **aggiorna**, non le
-duplica.
+Una differenza non è per forza un errore: una polizza pagata in un colpo solo a gennaio
+risulta in anticipo sul budget e si riallinea da sé a fine anno. Se invece una voce resta a
+zero mese dopo mese, quella spesa non è mai stata registrata. Il conguaglio confronta i due
+numeri, non li corregge: nei totali dell'anno e nella stima delle tasse conta solo quello
+che è stato speso davvero.
 
-Comunque siano registrati, il riepilogo giornaliero della Dashboard mostra la loro quota
-del giorno insieme a quella di tutte le altre spese: vedi sotto, «Quota spese del
-giorno».
+## Quanto costa una giornata
 
-Sotto, «Costi fissi già registrati» mostra tutto quello che c'è in archivio raggruppato
-per nome e provenienza. Le voci che non ha generato questa app — rimaste da versioni
-precedenti, con altri identificativi — sono segnate «versione precedente» e si tolgono
-tutte insieme con un pulsante: altrimenti si sommano alle nuove e il mese risulta pagato
-due volte. La distinzione è sulla provenienza e non sul nome, perché alcune voci si
-chiamano allo stesso modo in entrambe le serie.
+Il riepilogo giornaliero della Dashboard mette insieme le due cose:
 
-## Quota spese del giorno
+- il **budget dei costi fissi** di quella giornata;
+- la **media delle altre spese** del mese — carburante, manutenzione, lavaggio, ristoro,
+  contributi — perché un pieno o un tagliando servono per tutto il mese, non solo per il
+  giorno in cui li hai pagati.
 
-Ogni spesa resta registrata nel giorno in cui è stata fatta — è così che se ne tiene
-traccia ed è così che va in contabilità. Ma un pieno di gasolio, un tagliando, il
-commercialista o i contributi servono per **tutto il mese**, non per il giorno in cui li
-hai pagati: la giornata in cui capitano risulta disastrosa e tutte le altre sembrano più
-ricche del vero.
-
-Per questo il riepilogo giornaliero della Dashboard mostra la **quota spese del giorno**:
-tutte le spese del mese divise per i suoi giorni, con accanto il **pareggio** — quanto
-bisogna incassare per coprire tutto — e l'**incasso reale della giornata**, cioè quello
-che resta davvero in tasca una volta tolta la quota. Sotto, la stessa quota calcolata sui
+Da lì escono il **pareggio della giornata** — quanto bisogna incassare per coprire tutto —
+e l'**incasso reale**, cioè quello che resta davvero. Sotto, la stessa quota calcolata sui
 soli **giorni lavorati**: nei riposi le spese corrono lo stesso, ma non c'è nessun incasso
 a coprirle.
 
-Il calcolo distingue due cose:
-
-- i **costi fissi** si conoscono per l'intero mese comunque siano registrati, quindi si
-  dividono per i giorni del mese;
-- le **altre spese** si conoscono solo fino a oggi, quindi in un mese ancora in corso si
-  fa la media sui giorni già passati: dividerle per trentuno le farebbe sembrare la metà
-  di quello che sono.
+Le altre spese si conoscono solo fino a oggi, quindi in un mese ancora in corso se ne fa la
+media sui giorni già passati: dividerle per trentuno le farebbe sembrare la metà di quello
+che sono.
 
 È una lettura, non un movimento: nei totali di giorno, mese e anno ogni spesa conta una
 volta sola, e nel registro resta dov'era.
+
+## Costi fissi scritti come movimenti (versioni precedenti)
+
+Fino alla versione 36 l'app scriveva i costi fissi come movimenti veri, uno al mese o
+addirittura uno al giorno. Quelle righe restano in archivio — per gli anni già passati sono
+l'unica traccia di quelle spese — e nel registro compaiono raccolte in una riga sola, che
+si apre con «Mostrali».
+
+In `Cloud & Sync`, «Costi fissi scritti come movimenti» le elenca separando quelle generate
+dall'app da quelle registrate a mano, e permette di togliere le prime. Attenzione:
+togliendole i totali di quegli anni calano e la stima delle tasse cambia. Ha senso farlo
+solo registrando al loro posto i pagamenti veri.
 
 ## Pubblicare un aggiornamento
 

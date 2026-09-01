@@ -742,6 +742,14 @@
         // scrivere ogni volta a mano (ed evitano che "Carburante"/"carburante" spacchino i report).
         const CATEGORIE_USCITA = ['Carburante', 'Ristoro', 'Lavaggio', 'Manutenzione', 'Assicurazione', 'Radio taxi', 'Bollo / Tasse auto', 'Parcheggio / Pedaggio', 'Multa', 'Commercialista'];
 
+        // Le categorie di sempre, tolte quelle che sono gia' una voce del budget:
+        // altrimenti "Radio taxi" comparirebbe due volte nel menu, una come spesa
+        // qualsiasi e una come costo fisso, e il conguaglio ne vedrebbe solo una.
+        function categorieUscitaCorrenti() {
+            const aBudget = new Set(elencoVociFisse().map(v => normalizzaSlug(v.nome)));
+            return CATEGORIE_USCITA.filter(c => !aBudget.has(normalizzaSlug(c)));
+        }
+
         // Colore della barretta di ogni categoria di spesa nei riepiloghi
         const COLORI_CATEGORIA = {
             'Carburante': 'bg-orange-500',
@@ -1978,8 +1986,8 @@
             // ognuno: elencarle tutte coprirebbe le spese vere, che sono quelle
             // che interessa vedere. Si raccolgono in una riga sola.
             const raccogli = fissiDaRaccogliere();
-            const fissi = raccogli ? elenco.filter(fissoGiornaliero) : [];
-            const altre = raccogli ? elenco.filter(u => !fissoGiornaliero(u)) : elenco;
+            const fissi = raccogli ? elenco.filter(fissoGenerato) : [];
+            const altre = raccogli ? elenco.filter(u => !fissoGenerato(u)) : elenco;
 
             const righe = altre.map(u => `
                 <div class="px-3 py-2 flex justify-between items-center gap-3">
@@ -2085,109 +2093,65 @@
             return giorni.size;
         }
 
-        // Tutte le spese del mese divise per i giorni.
-        //  - i costi fissi si conoscono per l'intero mese comunque siano
-        //    registrati, quindi si dividono per i giorni del mese;
-        //  - le altre spese si conoscono solo fino a oggi: a meta' mese
-        //    dividerle per trentuno le farebbe sembrare la meta' di quello che
-        //    sono, quindi si fa la media sui giorni gia' passati.
-        function quotaSpeseMese(ym) {
+        // Le spese che il budget dei costi fissi gia' prevede. Contarle anche
+        // come spesa reale nella quota del giorno le conterebbe due volte: quando
+        // escono dal conto finiscono nel conguaglio, non nella quota.
+        function copertaDalBudget(r) {
+            return categoriaBase(r && r.categoria) === 'Costi fissi';
+        }
+
+        // Le spese reali che il budget non copre: carburante, manutenzione,
+        // lavaggio, ristoro, contributi. Si conoscono solo fino a oggi, quindi in
+        // un mese ancora in corso si fa la media sui giorni gia' passati: dividerle
+        // per trentuno le farebbe sembrare la meta' di quello che sono.
+        function mediaAltreSpese(ym) {
             const gg = giorniDelMese(ym);
-            let fissi = 0, altre = 0, voci = 0;
+            let altre = 0, voci = 0;
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 if (String(r.data || '').slice(0, 7) !== String(ym)) return;
-                const imp = parseFloat(r.importo || 0);
+                if (copertaDalBudget(r)) return;
+                altre += parseFloat(r.importo || 0);
                 voci++;
-                if (categoriaBase(r.categoria) === 'Costi fissi') fissi += imp;
-                else altre += imp;
             });
             const oggi = oggiISO();
             const inCorso = String(ym) === oggi.slice(0, 7);
-            const giorniAltre = inCorso
-                ? Math.min(gg, Math.max(1, Number(oggi.slice(8, 10))))
-                : gg;
-            const quotaFissi = gg ? fissi / gg : 0;
-            const quotaAltre = giorniAltre ? altre / giorniAltre : 0;
-            const quota = quotaFissi + quotaAltre;
+            const giorni = inCorso ? Math.min(gg, Math.max(1, Number(oggi.slice(8, 10)))) : gg;
+            return { altre, voci, giorni, inCorso, quota: giorni ? altre / giorni : 0 };
+        }
+
+        // Quanto pesa davvero una giornata: il budget dei costi fissi di quel
+        // giorno piu' la media delle altre spese del mese.
+        function quotaDelGiorno(iso) {
+            const ym = String(iso).slice(0, 7);
+            const gg = giorniDelMese(ym);
+            const budget = budgetDelGiorno(iso);
+            const m = mediaAltreSpese(ym);
+            const lavorati = giorniLavoratiDelMese(ym);
             // Spese della finestra considerata: il mese intero se e' finito,
             // i giorni gia' passati se e' ancora in corso.
-            const speseFinestra = quotaFissi * giorniAltre + altre;
-            const lavorati = giorniLavoratiDelMese(ym);
+            const speseFinestra = budgetPeriodo(`${ym}-01`, `${ym}-${String(m.giorni).padStart(2, '0')}`) + m.altre;
             return {
-                fissi, altre, voci, totale: fissi + altre,
-                giorni: gg, giorniAltre, inCorso, lavorati,
-                quotaFissi, quotaAltre, quota,
+                ym, giorni: gg, giorniAltre: m.giorni, inCorso: m.inCorso, lavorati,
+                budget, altre: m.quota, quota: budget + m.quota,
+                totaleAltre: m.altre, budgetMese: budgetMese(ym),
                 quotaLavorati: lavorati ? speseFinestra / lavorati : 0
             };
         }
 
-        function costiFissiDelMese(ym) {
-            let totale = 0, voci = 0;
-            (window.dailyRecords || []).forEach(r => {
-                if (r.tipo !== 'USCITA') return;
-                if (String(r.data || '').slice(0, 7) !== String(ym)) return;
-                if (categoriaBase(r.categoria) !== 'Costi fissi') return;
-                totale += parseFloat(r.importo || 0);
-                voci++;
-            });
-            return { totale, voci, giorni: giorniDelMese(ym), quota: totale / giorniDelMese(ym) };
-        }
-
-        function quotaFissiGiorno(iso) {
-            return costiFissiDelMese(String(iso).slice(0, 7));
-        }
-
-        // Costi fissi registrati proprio in quel giorno: con la registrazione
-        // mensile ce ne sono solo sull'ultimo giorno, con quella giornaliera
-        // ce ne sono tutti i giorni.
-        function fissiDelGiorno(iso) {
-            let totale = 0;
-            (window.dailyRecords || []).forEach(r => {
-                if (r.tipo !== 'USCITA' || String(r.data) !== String(iso)) return;
-                if (categoriaBase(r.categoria) !== 'Costi fissi') return;
-                totale += parseFloat(r.importo || 0);
-            });
-            return totale;
-        }
-
-        // Un costo fisso scritto dal pulsante "Genera costi fissi": e' quello
-        // che si puo' raccogliere in una riga sola, perche' l'app sa rifarlo.
-        // Una spesa scritta a mano non si tocca mai.
+        // Un costo fisso scritto come movimento dalle versioni precedenti
+        // dell'app: ha un identificativo che comincia per "fissi-". E' quello che
+        // si puo' raccogliere in una riga sola; una spesa scritta a mano no.
         function fissoGenerato(r) {
             return !!r && r.tipo === 'USCITA' && generataDallApp(r) && categoriaBase(r.categoria) === 'Costi fissi';
         }
 
-        // Una riga scritta giorno per giorno ha anche il giorno nell'identificativo
-        // ("fissi-2027-03-15-radiotaxi"); quella mensile no ("fissi-2027-03-radiotaxi").
-        // Solo le prime si raccolgono: un movimento mensile e' un mucchio vero, e
-        // nasconderlo lascerebbe un totale che non si spiega.
-        function fissoGiornaliero(r) {
-            return fissoGenerato(r) && /^fissi-\d{4}-\d{2}-\d{2}-/.test(String(r.id));
-        }
-
-        // Vero quando i costi fissi vanno mostrati raccolti invece che uno per uno
+        // Le vecchie versioni dell'app scrivevano i costi fissi come movimenti,
+        // uno al mese o addirittura uno al giorno. Quelle righe restano dove sono
+        // — sono la traccia di quello che hai pagato — ma nel registro si mostrano
+        // raccolte in una riga sola, altrimenti le spese vere ci spariscono dentro.
         function fissiDaRaccogliere() {
-            return fissiInSfondo() && !window.mostraFissi;
-        }
-
-        // Anni gia' generati che non corrispondono alla cadenza scelta adesso:
-        // finche' non si rigenerano, cambiare la scelta non sposta niente.
-        function anniDaRigenerare() {
-            const perAnno = {};
-            (window.dailyRecords || []).forEach(r => {
-                if (!fissoGenerato(r)) return;
-                const m = String(r.id).match(/^fissi-(\d{4})-/);
-                if (!m) return;
-                if (!perAnno[m[1]]) perAnno[m[1]] = { tutte: 0, alGiorno: 0 };
-                perAnno[m[1]].tutte++;
-                if (fissoGiornaliero(r)) perAnno[m[1]].alGiorno++;
-            });
-            const vuoleIlGiorno = fissiOgniGiorno();
-            return Object.keys(perAnno).sort().filter(a => {
-                const c = perAnno[a];
-                return vuoleIlGiorno ? c.alGiorno < c.tutte : c.alGiorno > 0;
-            });
+            return !window.mostraFissi;
         }
 
         function alternaMostraFissi() {
@@ -2204,22 +2168,21 @@
         // davvero in attivo. Le spese ci sono tutte, non solo quelle fisse:
         // il pieno di gasolio e il tagliando servono per tutto il mese.
         function bloccoQuotaSpese(iso, incassiGiorno, usciteGiorno) {
-            const ym = String(iso).slice(0, 7);
-            const q = quotaSpeseMese(ym);
-            if (!(q.totale > 0)) return '';
-            const mese = nomeMese(parseInt(ym.slice(5, 7), 10));
+            const q = quotaDelGiorno(iso);
+            if (!(q.quota > 0)) return '';
+            const mese = nomeMese(parseInt(q.ym.slice(5, 7), 10));
             const risultato = (incassiGiorno || 0) - q.quota;
             const speseOggi = usciteGiorno || 0;
 
             return `
                 <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
-                        <p class="text-[10px] font-black uppercase tracking-wider text-indigo-700">Quota spese del giorno</p>
-                        <p class="text-xs font-bold text-indigo-500">${mese} · ${formatCurrency(q.totale)} di spese${q.inCorso ? ' finora' : ''}</p>
+                        <p class="text-[10px] font-black uppercase tracking-wider text-indigo-700">Quanto costa questa giornata</p>
+                        <p class="text-xs font-bold text-indigo-500">${mese} · budget ${formatCurrency(q.budgetMese)} + spese ${formatCurrency(q.totaleAltre)}${q.inCorso ? ' finora' : ''}</p>
                     </div>
                     <p class="text-2xl font-black text-indigo-900 mt-1">${formatCurrency(q.quota)} <span class="text-sm font-bold text-indigo-500">al giorno</span></p>
                     <p class="text-[11px] font-bold text-indigo-500 mt-0.5">
-                        costi fissi ${formatCurrency(q.quotaFissi)} + altre spese ${formatCurrency(q.quotaAltre)}
+                        budget costi fissi ${formatCurrency(q.budget)} + altre spese ${formatCurrency(q.altre)}
                     </p>
                     <div class="grid grid-cols-2 gap-3 mt-3">
                         <div class="bg-white/70 rounded-lg p-2.5">
@@ -2237,10 +2200,10 @@
                             <strong>${formatCurrency(q.quotaLavorati)}</strong>: nei riposi le spese corrono lo stesso, ma non c'è incasso a coprirle.
                         </p>` : ''}
                     <p class="text-[11px] text-indigo-500 mt-2 leading-relaxed">
-                        Le spese restano registrate nel giorno in cui le hai fatte${speseOggi > 0 ? ` (in questa giornata ${formatCurrency(speseOggi)})` : ''}, così ne resta traccia.
-                        Qui sono divise per i giorni del mese: un pieno o un tagliando servono per tutto il mese, non solo per il giorno in cui li hai pagati.
-                        È una lettura, non un movimento: nei totali di mese e anno le spese contano una volta sola.
-                        ${q.inCorso ? `${mese} è ancora in corso, quindi le spese diverse da quelle fisse sono la media dei primi ${q.giorniAltre} giorni.` : ''}
+                        I costi fissi entrano qui a <strong>budget</strong>, non a fattura: pesano ogni giorno anche quando la spesa esce dal conto una volta l'anno.
+                        Le altre spese sono quelle che hai registrato${speseOggi > 0 ? ` (in questa giornata ${formatCurrency(speseOggi)})` : ''}, divise per i giorni del mese: un pieno o un tagliando servono per tutto il mese, non solo per il giorno in cui li hai pagati.
+                        È una lettura, non un movimento: i totali di mese e anno restano quelli veri.
+                        ${q.inCorso ? `${mese} è ancora in corso, quindi le spese diverse dal budget sono la media dei primi ${q.giorniAltre} giorni.` : ''}
                     </p>
                 </div>`;
         }
@@ -3503,8 +3466,8 @@
                 // Se il filtro tipologia e' proprio "Costi fissi" non si raccoglie
                 // niente: e' stato chiesto espressamente di vederli.
                 const raccogliFissi = fissiDaRaccogliere() && window.filterTipoUscite !== 'Costi fissi';
-                const fissiRaccolti = raccogliFissi ? usciteList.filter(fissoGiornaliero) : [];
-                const usciteVisibili = raccogliFissi ? usciteList.filter(r => !fissoGiornaliero(r)) : usciteList;
+                const fissiRaccolti = raccogliFissi ? usciteList.filter(fissoGenerato) : [];
+                const usciteVisibili = raccogliFissi ? usciteList.filter(r => !fissoGenerato(r)) : usciteList;
                 const totFissiRaccolti = totaleImporti(fissiRaccolti);
 
                 const totUscite = totaleImporti(usciteList);
@@ -3555,7 +3518,19 @@
                                     <div>
                                         <label class="block text-xs font-bold text-gray-700 mb-1">Categoria</label>
                                         <select id="uscita-cat-select" onchange="onUscitaCatChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium">
-                                            ${CATEGORIE_USCITA.map(c => `<option value="${c}" ${(window.ultimaCategoriaUscita || 'Carburante') === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                            ${categorieUscitaCorrenti().map(c => `<option value="${c}" ${(window.ultimaCategoriaUscita || 'Carburante') === c ? 'selected' : ''}>${c}</option>`).join('')}
+                                            ${(() => {
+                                                // Le voci del budget: scegliendole da qui il movimento nasce
+                                                // gia' con il nome giusto e il conguaglio lo riconosce.
+                                                const voci = elencoVociFisse().filter(v => String(v.nome || '').trim());
+                                                if (!voci.length) return '';
+                                                return `<optgroup label="Costi fissi (vanno nel conguaglio)">
+                                                    ${voci.map(v => {
+                                                        const val = `Costi fissi - ${String(v.nome).trim()}`;
+                                                        return `<option value="${esc(val)}" ${window.ultimaCategoriaUscita === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
+                                                    }).join('')}
+                                                </optgroup>`;
+                                            })()}
                                             <option value="__altro__">✏️ Altro (scrivi tu)</option>
                                         </select>
                                     </div>
@@ -3626,18 +3601,17 @@
                           </div>
 
                           ${(() => {
-                              // In sottofondo la nota vale per qualsiasi periodo, perche' i
-                              // costi fissi sono raccolti anche sul mese e sull'anno.
-                              if (fissiInSfondo()) {
-                                  const fissi = usciteList.filter(fissoGiornaliero);
-                                  if (!fissi.length) return '';
-                                  const quante = fissi.length;
+                              // Le righe di costo fisso scritte dalle vecchie versioni si
+                              // mostrano raccolte: qui si spiega perche' e si aprono.
+                              const fissi = usciteList.filter(fissoGenerato);
+                              if (fissi.length) {
                                   return `
                                     <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-800 leading-relaxed flex flex-wrap items-center justify-between gap-3">
                                         <span>
-                                            <strong>I costi fissi sono spalmati su tutte le giornate.</strong>
-                                            In ${esc(etichettaPeriodoUscite.charAt(0).toLowerCase() + etichettaPeriodoUscite.slice(1))} ${quante === 1 ? 'è una riga' : 'sono ' + quante + ' righe'} per ${formatCurrency(totaleImporti(fissi))},
-                                            ${window.mostraFissi ? 'ora aperte qui sotto' : 'contate nel totale ma raccolte in una riga sola'}: nessun mucchio l'ultimo giorno del mese.
+                                            <strong>Costi fissi scritti come movimenti.</strong>
+                                            In ${esc(etichettaPeriodoUscite.charAt(0).toLowerCase() + etichettaPeriodoUscite.slice(1))} ${fissi.length === 1 ? 'è una riga' : 'sono ' + fissi.length + ' righe'} per ${formatCurrency(totaleImporti(fissi))},
+                                            ${window.mostraFissi ? 'ora aperte qui sotto' : 'contate nel totale ma raccolte in una riga sola'}.
+                                            Le hanno generate le versioni precedenti dell'app: da «Cloud & Sync» puoi toglierle.
                                         </span>
                                         <button onclick="alternaMostraFissi()" class="flex-shrink-0 bg-white border border-indigo-300 hover:bg-indigo-100 text-indigo-800 text-xs font-black px-3 py-1.5 rounded-lg">
                                             ${window.mostraFissi ? 'Raccogli di nuovo' : 'Mostrali'}
@@ -3646,19 +3620,15 @@
                               }
                               const giorno = giornoFiltroUscite();
                               if (!giorno) return '';
-                              const q = quotaFissiGiorno(giorno);
-                              if (!(q.totale > 0)) return '';
-                              const ultimo = `${String(giorno).slice(0, 7)}-${String(q.giorni).padStart(2, '0')}`;
-                              const eIlGiorno = String(giorno) === ultimo;
-                              if (fissiOgniGiorno()) return '';
+                              const q = quotaDelGiorno(giorno);
+                              if (!(q.quota > 0)) return '';
                               return `
                                 <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-800 leading-relaxed">
-                                    ${eIlGiorno
-                                        ? `<strong>Oggi ci sono i costi fissi del mese</strong> (${formatCurrency(q.totale)}): escono dal conto una volta sola, l'ultimo giorno, quindi il totale di questa giornata risulta molto più alto degli altri. Da «Cloud & Sync» puoi spalmarli su tutte le giornate e toglierli dal registro.`
-                                        : `<strong>I costi fissi del mese</strong> (${formatCurrency(q.totale)}) sono registrati il ${ggMm(ultimo)}, quando escono dal conto: per questo non compaiono in questa giornata.`}
-                                    Tutte le spese del mese, divise per i suoi giorni, pesano
-                                    <strong>${formatCurrency(quotaSpeseMese(String(giorno).slice(0, 7)).quota)} al giorno</strong>:
-                                    il conto giornata per giornata lo trovi nella Dashboard.
+                                    <strong>Questa giornata costa ${formatCurrency(q.quota)}</strong>: ${formatCurrency(q.budget)} di budget dei costi fissi
+                                    più ${formatCurrency(q.altre)} di media delle altre spese del mese.
+                                    I costi fissi non sono movimenti — pesano ogni giorno anche quando non li paghi —
+                                    quindi in questo elenco non li trovi. Il conto giornata per giornata è nella Dashboard,
+                                    il confronto con quello che hai speso davvero in Spese &amp; Fisco.
                                 </div>`;
                           })()}
 
@@ -3697,9 +3667,9 @@
                                                 <td class="p-4 text-sm font-medium text-indigo-700 whitespace-nowrap capitalize">${esc(periodoBreve)}</td>
                                                 <td class="p-4 text-sm font-bold text-indigo-900">
                                                     Costi fissi
-                                                    <span class="font-medium text-indigo-500">· ${fissiRaccolti.length} ${fissiRaccolti.length === 1 ? 'riga' : 'righe'} spalmate sui giorni</span>
+                                                    <span class="font-medium text-indigo-500">· ${fissiRaccolti.length} ${fissiRaccolti.length === 1 ? 'riga scritta' : 'righe scritte'} dalle versioni precedenti</span>
                                                 </td>
-                                                <td class="p-4 text-sm"><span class="bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-md text-xs font-bold">in sottofondo</span></td>
+                                                <td class="p-4 text-sm"><span class="bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-md text-xs font-bold">raccolte</span></td>
                                                 <td class="p-4 text-right text-base font-black text-indigo-700">-${formatCurrency(totFissiRaccolti)}</td>
                                                 <td class="p-4 text-center whitespace-nowrap">
                                                     <button onclick="alternaMostraFissi()" class="text-indigo-700 bg-indigo-100 hover:bg-indigo-200 text-xs font-bold px-3 py-1 rounded">Mostrali</button>
@@ -3870,8 +3840,11 @@
                     <div class="fade-in space-y-6 max-w-7xl mx-auto">
                         <header class="mb-6">
                             <h2 class="text-3xl font-bold text-gray-900">Spese & Deducibilità Fiscale</h2>
-                            <p class="text-gray-500">Ripartizione delle uscite operative per categoria.</p>
+                            <p class="text-gray-500">Il budget dei costi fissi, le uscite per categoria e la stima delle tasse.</p>
                         </header>
+
+                        ${sezioneBudgetFissi()}
+                        ${sezioneConguaglio()}
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -4486,76 +4459,6 @@
                                 </label>
                                 <p class="text-xs text-gray-400 leading-relaxed">L'import unisce i dati esistenti con quelli del file: i movimenti con lo stesso identificativo vengono aggiornati, non duplicati.</p>
                             </div>
-                        </div>
-
-                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                            <h3 class="text-lg font-bold text-gray-900">Costi fissi dell'anno</h3>
-                            <p class="text-xs text-gray-500 leading-relaxed">
-                                <strong>L'elenco resta.</strong> Lo compili una volta e vale per tutti gli anni:
-                                generare un anno non lo tocca, quindi non devi riscrivere niente ogni gennaio.
-                                Le voci si modificano quando vuoi, e la modifica vale dalla prossima generazione
-                                in poi.<br><br>
-                                Per ognuna scegli l'importo con la sua unità — <strong>ogni mese</strong> per una
-                                rata che arriva sempre uguale, <strong>ogni giorno</strong> per un costo da
-                                spalmare, che viene moltiplicato per i giorni del mese — e il periodo in cui vale.
-                                Una polizza che parte il 15 marzo non compare a gennaio, e su marzo viene contata
-                                solo per i giorni coperti.<br><br>
-                                Non mettere qui manutenzione, INPS e IRPEF: le prime le registri come spese reali,
-                                le seconde le stima già l'app.
-                            </p>
-                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                                ${elencoVociFisse().map(rigaVoceFissa).join('')}
-                            </div>
-                            <div class="flex flex-wrap gap-2">
-                                <button onclick="aggiungiVoceFissa()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">+ Aggiungi una voce</button>
-                                <button onclick="salvaModificheVociFisse()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">Salva l'elenco</button>
-                            </div>
-
-                            <div class="flex flex-wrap items-end gap-3 pt-3 border-t border-gray-100">
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-700 mb-1">Anno da generare</label>
-                                    <input type="number" id="cf-anno" value="${parseInt(annoAttivo()) + 1}" class="w-32 p-2 border rounded-lg outline-none font-bold" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-gray-700 mb-1">Registra</label>
-                                    <select onchange="impostaCadenzaFissi(this.value)" class="p-2 border rounded-lg outline-none font-bold bg-gray-50">
-                                        <option value="sfondo" ${cadenzaFissi() === 'sfondo' ? 'selected' : ''}>ogni giorno, in sottofondo</option>
-                                        <option value="mese" ${cadenzaFissi() === 'mese' ? 'selected' : ''}>una voce al mese</option>
-                                        <option value="giorno" ${cadenzaFissi() === 'giorno' ? 'selected' : ''}>una voce al giorno, in elenco</option>
-                                    </select>
-                                </div>
-                                <button onclick="generaCostiFissi()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Genera costi fissi</button>
-                            </div>
-
-                            ${(() => {
-                                // Cambiare la scelta non riscrive l'archivio: finche' non si
-                                // rigenera l'anno, in registro restano le righe di prima.
-                                const daRifare = anniDaRigenerare();
-                                if (!daRifare.length) return '';
-                                return `
-                                    <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
-                                        <p class="font-black text-yellow-900 text-sm">Manca la rigenerazione ${daRifare.length === 1 ? 'del ' + esc(daRifare[0]) : 'di: ' + esc(daRifare.join(', '))}</p>
-                                        <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
-                                            In archivio i costi fissi ${daRifare.length === 1 ? 'di quell\'anno sono' : 'di quegli anni sono'} ancora scritti
-                                            ${fissiOgniGiorno() ? 'una volta al mese, quindi il mucchio dell\'ultimo giorno c\'è ancora' : 'giorno per giorno'}.
-                                            Scrivi l'anno qui sopra e premi <strong>Genera costi fissi</strong>: le righe vecchie vengono tolte e rifatte, senza doppioni.
-                                        </p>
-                                    </div>`;
-                            })()}
-                            <p class="text-xs text-gray-500 leading-relaxed">
-                                <strong>Ogni giorno, in sottofondo</strong>: la spesa viene scritta giorno per giorno,
-                                così ogni giornata si porta la sua quota e l'ultimo del mese non arriva più il mucchio
-                                di tutte le spese fisse insieme — ma nel registro non le vedi voce per voce: compaiono
-                                raccolte in una riga sola, che si apre con «Mostrali» quando le vuoi controllare. Nei
-                                totali di giorno, mese e anno ci sono per intero.<br><br>
-                                <strong>Una voce al mese</strong>: il movimento cade quando la spesa esce davvero dal
-                                conto, quindi il registro coincide con l'estratto conto, ma l'ultimo giorno del mese
-                                risulta pesantissimo. <strong>Una voce al giorno, in elenco</strong>: come il
-                                sottofondo, ma le righe restano tutte in vista — sono circa
-                                ${elencoVociFisse().length * 365} all'anno e il registro diventa lungo.<br><br>
-                                Rigenerando si passa da una all'altra senza lasciare doppioni, e il totale dell'anno
-                                è lo stesso al centesimo.
-                            </p>
                         </div>
 
                         ${sezioneCostiFissiInArchivio()}
@@ -5479,30 +5382,74 @@
             return window.vociFisse;
         }
 
-        // Ogni quanto scrivere il movimento:
-        //  'mese'   una riga al mese, il giorno in cui la spesa esce dal conto;
-        //  'giorno' una riga al giorno, visibile nel registro;
-        //  'sfondo' una riga al giorno come sopra, ma raccolta in una riga sola
-        //           negli elenchi: il costo pesa su ogni giornata senza riempire
-        //           il registro e senza il mucchio dell'ultimo del mese.
-        function cadenzaFissi() {
-            const v = localStorage.getItem('taxi_cadenza_fissi');
-            return (v === 'giorno' || v === 'sfondo') ? v : 'mese';
+        // ============================================================
+        //  IL BUDGET DEI COSTI FISSI
+        //  Queste voci non sono movimenti: sono una previsione. Servono a sapere
+        //  quanto pesa una giornata prima ancora che la spesa esca dal conto,
+        //  cosi' l'incasso reale del giorno e' un numero vero anche a meta' mese.
+        //  Quando la spesa esce davvero la si registra come qualsiasi altra, nel
+        //  giorno in cui e' stata pagata, e il conguaglio dice di quanto il
+        //  preventivo si e' discostato dal consuntivo.
+        // ============================================================
+
+        // Quanto pesa una singola voce in una singola giornata. La voce vale solo
+        // dentro il suo periodo; una rata mensile si divide per i giorni di quel
+        // mese, cosi' febbraio e marzo tornano tutti e due alla rata intera.
+        function quotaVoceGiorno(v, iso, giorniMese) {
+            const imp = parseFloat(v && v.importo || 0);
+            if (!(imp > 0)) return 0;
+            const g = String(iso || '');
+            if (v.dataInizio && g < v.dataInizio) return 0;
+            if (v.dataFine && g > v.dataFine) return 0;
+            const gg = giorniMese || giorniDelMese(g.slice(0, 7));
+            return v.unita === 'mese' ? imp / gg : imp;
         }
 
-        function impostaCadenzaFissi(v) {
-            const valida = (v === 'giorno' || v === 'sfondo') ? v : 'mese';
-            try { localStorage.setItem('taxi_cadenza_fissi', valida); } catch (err) { /* pazienza */ }
-            renderContent();
-            // La scelta da sola non riscrive niente: senza rigenerare, in archivio
-            // restano le righe di prima ed e' come non aver cambiato nulla.
-            const daRifare = anniDaRigenerare();
-            if (daRifare.length) showToast(`Ora premi «Genera costi fissi» per ${daRifare.length === 1 ? 'l\'anno' : 'gli anni'} ${daRifare.join(', ')}.`);
+        function budgetDelGiorno(iso) {
+            const g = String(iso || '');
+            if (g.length < 10) return 0;
+            const gg = giorniDelMese(g.slice(0, 7));
+            let tot = 0;
+            elencoVociFisse().forEach(v => { tot += quotaVoceGiorno(v, g, gg); });
+            return tot;
         }
 
-        // Le due cadenze che scrivono un movimento per ogni giornata
-        function fissiOgniGiorno() { return cadenzaFissi() !== 'mese'; }
-        function fissiInSfondo() { return cadenzaFissi() === 'sfondo'; }
+        // Scorre le giornate fra due date comprese
+        function perOgniGiorno(da, a, fn) {
+            const [y, m, d] = String(da).split('-').map(Number);
+            if (!y || !m || !d) return;
+            const fine = String(a);
+            const cur = new Date(y, m - 1, d);
+            for (let giri = 0; giri < 4000; giri++) {
+                const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                if (iso > fine) return;
+                fn(iso);
+                cur.setDate(cur.getDate() + 1);
+            }
+        }
+
+        // Budget maturato da una voce fra due date comprese
+        function budgetVocePeriodo(v, da, a) {
+            let tot = 0, giorni = 0;
+            perOgniGiorno(da, a, (iso) => {
+                const q = quotaVoceGiorno(v, iso);
+                if (q > 0) giorni++;
+                tot += q;
+            });
+            return { totale: Math.round(tot * 100) / 100, giorni };
+        }
+
+        function budgetPeriodo(da, a) {
+            let tot = 0;
+            perOgniGiorno(da, a, (iso) => { tot += budgetDelGiorno(iso); });
+            return Math.round(tot * 100) / 100;
+        }
+
+        function budgetAnno(anno) { return budgetPeriodo(`${anno}-01-01`, `${anno}-12-31`); }
+        function budgetMese(ym) {
+            const gg = giorniDelMese(ym);
+            return budgetPeriodo(`${ym}-01`, `${ym}-${String(gg).padStart(2, '0')}`);
+        }
 
         function salvaVociFisse() {
             try { localStorage.setItem('taxi_voci_fisse', JSON.stringify(window.vociFisse || [])); } catch (err) { /* spazio esaurito: pazienza */ }
@@ -5525,19 +5472,6 @@
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '')
                 .slice(0, 24);
-        }
-
-        // Giorni di un mese davvero coperti dal periodo di validita' della voce.
-        // Una voce senza date vale sempre.
-        function giorniCoperti(voce, anno, mese) {
-            const gg = new Date(anno, mese, 0).getDate();
-            const primo = `${anno}-${String(mese).padStart(2, '0')}-01`;
-            const ultimo = `${anno}-${String(mese).padStart(2, '0')}-${String(gg).padStart(2, '0')}`;
-            const da = (voce.dataInizio && voce.dataInizio > primo) ? voce.dataInizio : primo;
-            const a = (voce.dataFine && voce.dataFine < ultimo) ? voce.dataFine : ultimo;
-            if (da > a) return { giorni: 0, da: null, a: null, interoMese: false };
-            const giorni = Number(a.slice(8, 10)) - Number(da.slice(8, 10)) + 1;
-            return { giorni, da, a, interoMese: giorni === gg };
         }
 
         function aggiungiVoceFissa() {
@@ -5653,7 +5587,69 @@
                                    class="w-full p-2.5 border rounded-lg outline-none text-sm bg-white" />
                         </label>
                     </div>
-                    <p class="text-[11px] text-gray-400">Dal e Al vuoti = la voce vale sempre, anno dopo anno.</p>
+                    ${(() => {
+                        const imp = parseFloat(v.importo || 0);
+                        if (!(imp > 0)) return '<p class="text-[11px] text-gray-400">Dal e Al vuoti = la voce vale sempre, anno dopo anno.</p>';
+                        const anno = annoAttivo();
+                        const b = budgetVocePeriodo(v, `${anno}-01-01`, `${anno}-12-31`);
+                        const alGiorno = v.unita === 'mese' ? imp * 12 / 365 : imp;
+                        return `<p class="text-[11px] text-gray-500">
+                                    <strong>${formatCurrency(alGiorno)} al giorno</strong> · ${formatCurrency(b.totale)} nel ${esc(anno)}${b.giorni < 365 ? ` (${b.giorni} giorni coperti)` : ''}.
+                                    Dal e Al vuoti = la voce vale sempre, anno dopo anno.
+                                </p>`;
+                    })()}
+                </div>`;
+        }
+
+        // Il riquadro del budget: l'elenco delle voci e quanto pesano in tutto
+        function sezioneBudgetFissi() {
+            const anno = annoAttivo();
+            const voci = elencoVociFisse();
+            const nellAnno = budgetAnno(anno);
+            // Media sull'anno: i mesi non hanno tutti lo stesso numero di giorni,
+            // quindi una rata mensile pesa un filo di piu' a febbraio.
+            const giorniAnno = new Date(parseInt(anno, 10), 1, 29).getDate() === 29 ? 366 : 365;
+            const alGiorno = nellAnno / giorniAnno;
+
+            return `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900">Budget dei costi fissi</h3>
+                            <p class="text-xs text-gray-500 leading-relaxed mt-1 max-w-2xl">
+                                Quanto ti costa lavorare, prima ancora di uscire di casa: la licenza, il radio taxi, il
+                                commercialista, le assicurazioni. <strong>Non sono movimenti</strong>: sono una
+                                previsione che matura ogni giorno, e serve a sapere quanto devi incassare oggi.
+                                Le spese vere le registri quando escono dal conto, e il conguaglio qui sotto confronta
+                                le due cose.
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Pesa in media ogni giorno</p>
+                            <p class="text-2xl font-black text-indigo-900">${formatCurrency(alGiorno)}</p>
+                            <p class="text-[11px] font-bold text-gray-400">${formatCurrency(nellAnno)} nel ${esc(anno)}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        ${voci.map(rigaVoceFissa).join('') || '<p class="text-sm text-gray-400">Nessuna voce: aggiungine una qui sotto.</p>'}
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="aggiungiVoceFissa()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">+ Aggiungi una voce</button>
+                        <button onclick="salvaModificheVociFisse()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Salva il budget</button>
+                    </div>
+
+                    <p class="text-xs text-gray-500 leading-relaxed">
+                        L'importo si scrive con la virgola o con il punto, e ha la sua unità: <strong>ogni mese</strong>
+                        per una rata che arriva sempre uguale (il finanziamento della licenza), <strong>ogni
+                        giorno</strong> per un costo annuo da spalmare (le polizze). Con <strong>Dal</strong> e
+                        <strong>Al</strong> si dice da quando a quando vale: una polizza che parte il 15 marzo non pesa
+                        a gennaio.<br><br>
+                        Qui dentro non vanno carburante, manutenzione e ristoro: quelle sono spese che cambiano ogni
+                        mese, e l'app le spalma da sola partendo da quelle che hai registrato. E non vanno neanche
+                        INPS e IRPEF, che sono già stimate più sotto.
+                    </p>
                 </div>`;
         }
 
@@ -5682,7 +5678,7 @@
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 if (categoriaBase(r.categoria) !== 'Costi fissi') return;
-                const nome = sottocategoria(r.categoria);
+                const nome = voceFissaDiRecord(r) || sottocategoria(r.categoria);
                 const daApp = generataDallApp(r);
                 const chiave = (daApp ? 'app|' : 'altra|') + nome;
                 if (!gruppi[chiave]) {
@@ -5698,26 +5694,11 @@
             return Object.values(gruppi).sort((a, b) => (a.daApp === b.daApp) ? b.totale - a.totale : (a.daApp ? 1 : -1));
         }
 
-        function serieVecchia() {
-            return gruppiCostiFissi().filter(g => !g.daApp);
-        }
-
-        // Mesi in cui due voci diverse coprono la stessa spesa: e' il segno
-        // che convivono due serie generate da versioni diverse.
-        function mesiCostiFissiDoppi() {
-            const gruppi = gruppiCostiFissi();
-            const perMese = {};
-            gruppi.forEach(g => {
-                g.mesi.forEach(m => {
-                    if (!perMese[m]) perMese[m] = [];
-                    perMese[m].push(g.nome);
-                });
-            });
-            // Un mese "doppio" ha piu' voci di quante ne preveda l'elenco
-            const attese = elencoVociFisse().length;
-            return Object.keys(perMese)
-                .filter(m => perMese[m].length > attese)
-                .sort();
+        // Le righe scritte dall'app quando i costi fissi erano movimenti: sono
+        // quelle che il budget rende inutili. Le spese scritte a mano restano,
+        // perche' sono i pagamenti veri e il conguaglio li conta.
+        function serieGenerata() {
+            return gruppiCostiFissi().filter(g => g.daApp);
         }
 
         async function eliminaGruppoCostiFissi(chiave) {
@@ -5741,13 +5722,13 @@
 
         // Toglie in un colpo solo tutte le voci di costo fisso che non ha
         // generato questa app: e' la serie rimasta da una versione precedente.
-        async function eliminaSerieVecchia() {
-            const gruppi = serieVecchia();
+        async function eliminaSerieGenerata() {
+            const gruppi = serieGenerata();
             if (!gruppi.length) return;
             const righe = gruppi.reduce((a, g) => a + g.voci.length, 0);
             const totale = gruppi.reduce((a, g) => a + g.totale, 0);
             const elenco = gruppi.map(g => `  · ${g.nome}: ${g.voci.length} righe, ${formatCurrency(g.totale)}`).join('\n');
-            if (!confirm(`Elimino ${righe} voci di costi fissi rimaste da una versione precedente, per ${formatCurrency(totale)} in tutto:\n\n${elenco}\n\nRestano quelle generate da questa app. L'operazione non si può annullare: hai già scaricato un backup?`)) return;
+            if (!confirm(`Elimino ${righe} righe di costi fissi generate dalle versioni precedenti, per ${formatCurrency(totale)} in tutto:\n\n${elenco}\n\nRestano le spese che hai registrato tu. Attenzione: i totali di quegli anni caleranno di ${formatCurrency(totale)} e la stima delle tasse cambierà.\nL'operazione non si può annullare: hai già scaricato un backup?`)) return;
 
             const ids = [].concat(...gruppi.map(g => g.voci.map(v => v.id)));
             showToast(`Elimino ${ids.length} voci...`);
@@ -5758,43 +5739,181 @@
                 window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
                 scriviLocale('taxi_records', window.dailyRecords);
             }
-            showToast(`${ids.length} voci della serie vecchia eliminate.`);
+            showToast(`${ids.length} righe generate eliminate.`);
             renderNav();
             renderContent();
+        }
+
+        // ============================================================
+        //  CONGUAGLIO: PREVENTIVO CONTRO CONSUNTIVO
+        //  Il budget e' una previsione che matura giorno per giorno; le spese
+        //  fisse vere si registrano quando escono dal conto, tutte insieme o a
+        //  rate. Qui si vede voce per voce quanto e' maturato e quanto e' stato
+        //  speso davvero, e di quanto il preventivo ha sbagliato.
+        // ============================================================
+        // Di quale voce del budget parla un movimento "Costi fissi - Radio taxi -
+        // fattura di marzo"? Del nome che sta subito dopo "Costi fissi", senza la
+        // nota che segue e senza le code fra parentesi delle vecchie versioni.
+        function voceFissaDiRecord(r) {
+            const t = String(r && r.categoria || '').trim();
+            if (!/^costi fissi\b/i.test(t)) return '';
+            let resto = t.replace(/^costi fissi\s*[-–:]?\s*/i, '');
+            const i = resto.indexOf(' - ');
+            if (i > -1) resto = resto.slice(0, i);
+            return resto.replace(/\s*\([^()]*\)\s*$/, '').trim();
+        }
+
+        function conguaglioAnno(anno) {
+            const oggi = oggiISO();
+            const inCorso = String(anno) === oggi.slice(0, 4);
+            const da = `${anno}-01-01`;
+            const a = inCorso ? oggi : `${anno}-12-31`;
+
+            const righe = elencoVociFisse().map(v => {
+                const b = budgetVocePeriodo(v, da, a);
+                return {
+                    nome: String(v.nome || '').trim() || 'Voce senza nome',
+                    budget: b.totale, giorniCoperti: b.giorni,
+                    speso: 0, movimenti: 0, ultima: ''
+                };
+            });
+            const perNome = new Map(righe.map(r => [normalizzaSlug(r.nome), r]));
+            const fuori = { nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0, speso: 0, movimenti: 0, ultima: '', extra: true };
+
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                const d = String(r.data || '');
+                if (d < da || d > a) return;
+                if (!copertaDalBudget(r)) return;
+                const riga = perNome.get(normalizzaSlug(voceFissaDiRecord(r))) || fuori;
+                riga.speso += parseFloat(r.importo || 0);
+                riga.movimenti++;
+                if (d > riga.ultima) riga.ultima = d;
+            });
+
+            const tutte = righe.concat(fuori.movimenti ? [fuori] : []);
+            const budget = tutte.reduce((t, r) => t + r.budget, 0);
+            const speso = tutte.reduce((t, r) => t + r.speso, 0);
+            return { anno: String(anno), da, a, inCorso, righe: tutte, budget, speso, differenza: budget - speso };
+        }
+
+        function sezioneConguaglio() {
+            const c = conguaglioAnno(annoAttivo());
+            if (!c.righe.length) return '';
+            const nessunaSpesa = c.speso === 0;
+            const avanzo = c.differenza;
+
+            return `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h3 class="text-lg font-bold text-gray-900">Conguaglio ${esc(c.anno)}</h3>
+                            <p class="text-xs text-gray-500 leading-relaxed mt-1">
+                                Il budget matura giorno per giorno; le spese fisse vere si registrano quando escono
+                                dal conto. Qui si vede di quanto il preventivo si è discostato dal consuntivo.
+                                ${c.inCorso ? `Budget maturato dal 1° gennaio al ${ggMm(c.a)}.` : 'Anno chiuso: budget di tutti e dodici i mesi.'}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Differenza</p>
+                            <p class="text-2xl font-black ${avanzo >= 0 ? 'text-green-700' : 'text-red-600'}">${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)}</p>
+                            <p class="text-[11px] font-bold text-gray-400">${avanzo >= 0 ? 'speso meno del budget' : 'speso più del budget'}</p>
+                        </div>
+                    </div>
+
+                    ${nessunaSpesa ? `
+                        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                            <p class="font-black text-yellow-900 text-sm">Nel ${esc(c.anno)} non hai ancora registrato nessuna spesa fissa</p>
+                            <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
+                                Il budget di ${formatCurrency(c.budget)} è maturato, ma nel registro non c'è ancora
+                                niente: finché non registri le spese vere questi soldi non entrano nei totali dell'anno
+                                né nella stima delle tasse. Registrale come una spesa qualsiasi, con la categoria
+                                <strong>Costi fissi - Nome della voce</strong>, il giorno in cui le paghi.
+                            </p>
+                        </div>` : ''}
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
+                                <tr>
+                                    <th class="p-3 font-bold">Voce</th>
+                                    <th class="p-3 font-bold text-right">Budget maturato</th>
+                                    <th class="p-3 font-bold text-right">Speso davvero</th>
+                                    <th class="p-3 font-bold text-right">Differenza</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100">
+                                ${c.righe.map(r => {
+                                    const d = r.budget - r.speso;
+                                    return `
+                                    <tr class="${r.extra ? 'bg-yellow-50' : ''}">
+                                        <td class="p-3 font-bold text-gray-800">
+                                            ${esc(r.nome)}
+                                            ${r.extra ? '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-[10px] font-black uppercase">fuori budget</span>' : ''}
+                                            <span class="block text-[11px] font-medium text-gray-400">
+                                                ${r.movimenti ? `${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}, l'ultimo il ${ggMm(r.ultima)}` : 'nessun movimento registrato'}
+                                            </span>
+                                        </td>
+                                        <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">${formatCurrency(r.budget)}</td>
+                                        <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">${formatCurrency(r.speso)}</td>
+                                        <td class="p-3 text-right font-black whitespace-nowrap ${Math.abs(d) < 0.005 ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')}">${d > 0 ? '+' : ''}${formatCurrency(d)}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-gray-900 text-white">
+                                    <td class="p-3 font-black">Totale</td>
+                                    <td class="p-3 text-right font-black">${formatCurrency(c.budget)}</td>
+                                    <td class="p-3 text-right font-black">${formatCurrency(c.speso)}</td>
+                                    <td class="p-3 text-right font-black ${avanzo >= 0 ? 'text-green-400' : 'text-red-400'}">${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <p class="text-xs text-gray-500 leading-relaxed">
+                        Una differenza non è per forza un errore: una polizza pagata in un colpo solo a gennaio
+                        risulta in anticipo sul budget e si riallinea da sé a fine anno. Se invece una voce resta a
+                        zero mese dopo mese, quella spesa non è mai stata registrata.
+                        Il conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e nella stima
+                        delle tasse conta solo il <strong>speso davvero</strong>.
+                    </p>
+                </div>`;
         }
 
         function sezioneCostiFissiInArchivio() {
             const gruppi = gruppiCostiFissi();
             if (!gruppi.length) return '';
-            const doppi = mesiCostiFissiDoppi();
-            const vecchie = serieVecchia();
-            const righeVecchie = vecchie.reduce((a, g) => a + g.voci.length, 0);
-            const totaleVecchie = vecchie.reduce((a, g) => a + g.totale, 0);
+            const generate = serieGenerata();
+            const righeGenerate = generate.reduce((a, g) => a + g.voci.length, 0);
+            const totaleGenerate = generate.reduce((a, g) => a + g.totale, 0);
 
             return `
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                     <div>
-                        <h3 class="text-lg font-bold text-gray-900">Costi fissi già registrati</h3>
-                        <p class="text-xs text-gray-500 leading-relaxed mt-1">
-                            Tutte le voci "Costi fissi" presenti in archivio, raggruppate per nome.
-                            Quelle segnate «versione precedente» non le ha generate questa app: restano da
-                            una versione più vecchia e si sommano alle nuove, facendo risultare il mese
-                            pagato due volte. Alcune si chiamano allo stesso modo in entrambe le serie,
-                            quindi la distinzione è sulla provenienza, non sul nome.
+                        <h3 class="text-lg font-bold text-gray-900">Costi fissi scritti come movimenti</h3>
+                        <p class="text-xs text-gray-500 leading-relaxed mt-1 max-w-3xl">
+                            Adesso i costi fissi sono un <strong>budget</strong>, non dei movimenti: pesano ogni
+                            giorno senza essere scritti da nessuna parte, e quello che paghi davvero lo registri
+                            come una spesa qualsiasi. Qui sotto c'è tutto quello che nel registro porta ancora la
+                            categoria "Costi fissi", diviso per provenienza.
                         </p>
                     </div>
 
-                    ${vecchie.length ? `
+                    ${generate.length ? `
                         <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
                             <p class="font-black text-yellow-900 text-sm">
-                                Ci sono ${righeVecchie} voci rimaste da una versione precedente
+                                ${righeGenerate} righe generate dalle versioni precedenti
                             </p>
                             <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
-                                Valgono ${formatCurrency(totaleVecchie)} e si sommano a quelle generate adesso${doppi.length ? `, così ${doppi.length === 1 ? 'un mese risulta pagato' : doppi.length + ' mesi risultano pagati'} due volte` : ''}.
-                                Le riconosci dall'identificativo: non le ha generate questa app.
+                                Valgono ${formatCurrency(totaleGenerate)}. Con il budget non servono più, ma
+                                <strong>non toglierle alla leggera</strong>: per gli anni già passati sono l'unica
+                                traccia di quelle spese, e togliendole i totali di quegli anni calano di
+                                ${formatCurrency(totaleGenerate)} e la stima delle tasse cambia. Ha senso toglierle
+                                solo se registri al loro posto i pagamenti veri.
                             </p>
-                            <button onclick="eliminaSerieVecchia()" class="mt-3 bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl">
-                                Elimina tutte le ${righeVecchie} voci vecchie
+                            <button onclick="eliminaSerieGenerata()" class="mt-3 bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl">
+                                Elimina le ${righeGenerate} righe generate
                             </button>
                         </div>` : ''}
 
@@ -5811,12 +5930,12 @@
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                                 ${gruppi.map(g => `
-                                    <tr class="${g.daApp ? '' : 'bg-yellow-50'}">
+                                    <tr class="${g.daApp ? 'bg-yellow-50' : ''}">
                                         <td class="p-3 font-bold text-gray-800">
                                             ${esc(g.nome)}
                                             ${g.daApp
-                                                ? ''
-                                                : '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">versione precedente</span>'}
+                                                ? '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">generata dall\'app</span>'
+                                                : '<span class="ml-2 bg-green-100 text-green-800 px-2 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">registrata da te</span>'}
                                         </td>
                                         <td class="p-3 text-right">${g.voci.length}</td>
                                         <td class="p-3 text-right font-bold text-red-600">${formatCurrency(g.totale)}</td>
@@ -5831,137 +5950,11 @@
                             </tbody>
                         </table>
                     </div>
-                    <p class="text-xs text-gray-400">Scarica un backup prima di eliminare: l'operazione non si può annullare.</p>
+                    <p class="text-xs text-gray-400">
+                        Le righe «registrata da te» sono i pagamenti veri: sono quelle che il conguaglio confronta
+                        con il budget. Scarica un backup prima di eliminare: l'operazione non si può annullare.
+                    </p>
                 </div>`;
-        }
-
-        async function generaCostiFissi() {
-            const anno = parseInt(document.getElementById('cf-anno').value);
-            if (isNaN(anno) || anno < 2000 || anno > 2100) {
-                showToast('Anno non valido.');
-                return;
-            }
-
-            const voci = leggiVociFisse().filter(v => v.importo > 0 && String(v.nome || '').trim());
-            salvaVociFisse();
-
-            if (!voci.length) {
-                showToast('Inserisci almeno una voce, con nome e importo.');
-                return;
-            }
-
-            // Ogni voce vale solo nel suo periodo. Su un mese coperto a meta'
-            // (una polizza che parte il 15) l'importo a giornata si conta per i
-            // giorni davvero coperti; la rata mensile invece arriva intera,
-            // perche' una rata non si dimezza.
-            const cadenza = cadenzaFissi();
-            const nuovi = [];
-            const attesi = new Set();
-            let saltatiPeriodo = 0;
-
-            for (let m = 1; m <= 12; m++) {
-                const mm = String(m).padStart(2, '0');
-                voci.forEach(v => {
-                    const c = giorniCoperti(v, anno, m);
-                    if (!c.giorni) { saltatiPeriodo++; return; }
-                    const perMese = v.unita === 'mese';
-
-                    if (cadenza !== 'mese') {
-                        // Una riga per ogni giorno coperto. Se l'importo e' una rata
-                        // mensile la si divide per i giorni di quel mese, cosi' il
-                        // mese torna comunque alla rata intera.
-                        const giorniMese = new Date(anno, m, 0).getDate();
-                        const alGiorno = perMese ? v.importo / giorniMese : v.importo;
-                        const arrotondato = Math.round(alGiorno * 100) / 100;
-                        // Dividendo una rata per i giorni resta sempre qualche
-                        // centesimo di scarto: lo assorbe l'ultimo giorno, cosi'
-                        // il mese torna esatto alla rata invece di sballare di poco.
-                        const totaleMese = perMese ? v.importo : null;
-                        const primo = Number(c.da.slice(8, 10));
-                        for (let g = primo; g < primo + c.giorni; g++) {
-                            const ultimoGiorno = g === primo + c.giorni - 1;
-                            const data = `${anno}-${mm}-${String(g).padStart(2, '0')}`;
-                            const id = `fissi-${anno}-${mm}-${String(g).padStart(2, '0')}-${v.slug}`;
-                            const importoGiorno = (perMese && ultimoGiorno)
-                                ? Math.round((totaleMese - arrotondato * (c.giorni - 1)) * 100) / 100
-                                : arrotondato;
-                            attesi.add(id);
-                            nuovi.push({
-                                id, data, tipo: 'USCITA',
-                                categoria: `Costi fissi - ${v.nome} (quota del giorno)`,
-                                metodo: 'Fattura',
-                                importo: importoGiorno
-                            });
-                        }
-                        return;
-                    }
-
-                    const importo = perMese ? v.importo : Math.round(v.importo * c.giorni * 100) / 100;
-                    const dettaglio = perMese
-                        ? (c.interoMese ? 'rata mensile' : `rata mensile dal ${ggMm(c.da)}`)
-                        : `${c.giorni} gg x ${v.importo.toFixed(2).replace('.', ',')} €`;
-                    const id = `fissi-${anno}-${mm}-${v.slug}`;
-                    attesi.add(id);
-                    nuovi.push({
-                        id,
-                        // Se il mese e' coperto solo in parte, la spesa cade
-                        // sull'ultimo giorno davvero coperto.
-                        data: c.a,
-                        tipo: 'USCITA',
-                        categoria: `Costi fissi - ${v.nome} (${dettaglio})`,
-                        metodo: 'Fattura',
-                        importo: Math.round(importo * 100) / 100
-                    });
-                });
-            }
-
-            if (!nuovi.length) {
-                showToast(`Nessuna voce risulta valida nel ${anno}: controlla le date di inizio e fine.`);
-                return;
-            }
-
-            // Restringendo il periodo di una voce, i mesi generati prima e ora
-            // non piu' coperti resterebbero li' a sporcare i conti: si tolgono.
-            const slugNoti = voci.map(v => v.slug);
-            const daTogliere = (window.dailyRecords || []).filter(r => {
-                const id = String(r.id || '');
-                if (!id.startsWith(`fissi-${anno}-`)) return false;
-                if (attesi.has(id)) return false;
-                // Vale sia per "fissi-2027-03-slug" sia per "fissi-2027-03-15-slug"
-                return slugNoti.some(sl => id.endsWith('-' + sl));
-            });
-
-            const totAnno = nuovi.reduce((a, x) => a + x.importo, 0);
-            const comeScritte = cadenza === 'mese'
-                ? 'voci, una al mese'
-                : (cadenza === 'sfondo'
-                    ? 'righe, una per ogni giorno, raccolte in una riga sola negli elenchi'
-                    : 'righe, una per ogni giorno');
-            let avviso = `Genero le spese fisse ${anno}: ${nuovi.length} ${comeScritte}, per ${formatCurrency(totAnno)} in tutto.`;
-            if (saltatiPeriodo) avviso += `\n${saltatiPeriodo} mesi saltati perché fuori dal periodo di validità delle voci.`;
-            if (daTogliere.length) avviso += `\n${daTogliere.length} voci generate prima verranno tolte (cambio di periodo o di cadenza).`;
-            if (cadenza === 'giorno' && nuovi.length > 900) {  // in sottofondo la lunghezza del registro non cambia
-                avviso += `\n\nSono tante righe: il registro diventa lungo e la memoria del telefono si riempie più in fretta. Puoi sempre tornare a una voce al mese e rigenerare.`;
-            }
-            if (!confirm(avviso + '\nProcedo?')) return;
-
-            if (daTogliere.length && typeof window.deleteRecordsFromCloud === 'function') {
-                await window.deleteRecordsFromCloud(daTogliere.map(r => r.id));
-            }
-
-            showToast(`Genero ${nuovi.length} voci per il ${anno}...`);
-            if (typeof window.bulkSave === 'function') {
-                await window.bulkSave(nuovi, []);
-            } else {
-                const mappa = new Map((window.dailyRecords || []).map(x => [String(x.id), x]));
-                nuovi.forEach(x => mappa.set(String(x.id), x));
-                window.dailyRecords = Array.from(mappa.values()).sort((a, b) => new Date(b.data) - new Date(a.data));
-                localStorage.setItem('taxi_records', JSON.stringify(window.dailyRecords));
-            }
-            const totale = nuovi.reduce((a, x) => a + x.importo, 0);
-            showToast(`Costi fissi ${anno} generati: ${formatCurrency(totale)}.`);
-            renderNav();
-            renderContent();
         }
 
         async function resetAllData() {
