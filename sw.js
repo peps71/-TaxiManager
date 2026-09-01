@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v45';
+const VERSIONE = 'taximanager-v46';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -15,13 +15,6 @@ const FILE_APP = [
   './favicon-32.png',
   './favicon-16.png',
   './favicon.ico'
-];
-
-// Tailwind arriva da un altro sito e disegna tutta la grafica dell'app: senza,
-// offline si vedrebbe una pagina bianca di testo senza colori ne' colonne.
-// Va preso a parte perche' la risposta e' "opaca" e cache.add() la rifiuterebbe.
-const FILE_ESTERNI = [
-  'https://cdn.tailwindcss.com'
 ];
 
 // Secondi di attesa massimi per la rete quando si apre l'app: oltre questi
@@ -47,14 +40,11 @@ div{padding:2rem}h1{font-size:1.5rem;margin:0 0 .5rem}p{margin:0;opacity:.75}</s
 self.addEventListener('install', (evento) => {
   evento.waitUntil(
     caches.open(VERSIONE)
-      .then((cache) => Promise.all([].concat(
+      .then((cache) => Promise.all(
         FILE_APP.map((file) => cache.add(file).catch((err) => {
           console.warn('[SW] file non messo in cache:', file, err);
-        })),
-        FILE_ESTERNI.map((url) => fetch(url, { mode: 'no-cors' })
-          .then((risposta) => cache.put(url, risposta))
-          .catch((err) => console.warn('[SW] risorsa esterna non messa in cache:', url, err)))
-      )))
+        }))
+      ))
       .then(() => self.skipWaiting())
   );
 });
@@ -91,9 +81,9 @@ function daNonIntercettare(url) {
 
 // Vale la pena salvarla?
 // - le risposte normali (status 200) sì;
-// - le risposte "opache" (status 0) sono quelle di Tailwind e degli altri file
-//   presi da un altro sito: il browser non ci fa leggere dentro, ma le sa
-//   riusare. Senza salvarle l'app offline si apriva completamente senza grafica.
+// - le risposte "opache" (status 0) arrivano da un altro sito e il browser non
+//   ci fa leggere dentro, ma le sa riusare: e' il caso del codice di Firebase.
+//   La grafica non passa piu' di qui, ora sta dentro index.html.
 function daSalvare(risposta) {
   if (!risposta) return false;
   if (risposta.status === 200) return true;

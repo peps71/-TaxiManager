@@ -12,6 +12,7 @@ tramite Firebase/Firestore.
 | `index.html` | L'app completa: interfaccia, calcoli e sincronizzazione Cloud |
 | `sw.js` | Service worker: tiene l'app disponibile anche senza campo |
 | `firestore.rules` | Regole di sicurezza del database: da incollare nella console Firebase |
+| `tailwind.config.js`, `tailwind.in.css` | Servono a rifare il foglio di stile incorporato in `index.html` |
 | `manifest.json` | Dati di installazione (nome, icone, colori) |
 | `icon-*.png`, `favicon*`, `apple-touch-icon-180.png` | Icone dell'app |
 | `Gestione_Taxi_2026.txt` | Appunti e conteggi di partenza |
@@ -231,6 +232,26 @@ dall'app da quelle registrate a mano, e permette di togliere le prime. Con **Ann
 lavorare** si fa pulizia su un anno solo, senza toccare gli altri: per gli anni già chiusi
 conviene lasciare tutto com'è. Attenzione: togliendole i totali di quell'anno calano e la
 stima delle tasse cambia. Ha senso farlo solo registrando al loro posto i pagamenti veri.
+
+## Rifare il foglio di stile
+
+La grafica sta **dentro `index.html`**, in un `<style>` in cima. Prima arrivava da
+`cdn.tailwindcss.com`: su un telefono nuovo, o con la cache svuotata, se quel sito non
+rispondeva l'app si apriva senza colori e senza colonne. Adesso non dipende da nessuno.
+
+Il rovescio della medaglia: **una classe Tailwind nuova non funziona finché il foglio non
+viene rifatto.** Se aggiungi una classe che prima non c'era — poniamo `bg-teal-200` — devi
+rigenerare, altrimenti quella riga di CSS non esiste e non si vede niente.
+
+```
+npm install tailwindcss@3
+npx tailwindcss -c tailwind.config.js -i tailwind.in.css -o /tmp/tw.css --minify
+```
+
+Poi si sostituisce il contenuto del `<style>` in cima a `index.html` con quello di
+`/tmp/tw.css`. Tailwind legge `index.html`, trova le classi anche dentro le stringhe del
+JavaScript e tiene solo quelle: ne esce una trentina di kilobyte invece dei due megabyte
+del pacchetto intero.
 
 ## Pubblicare un aggiornamento
 
