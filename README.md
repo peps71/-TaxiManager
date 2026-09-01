@@ -15,6 +15,8 @@ tramite Firebase/Firestore.
 | `tailwind.config.js`, `tailwind.in.css` | Servono a rifare il foglio di stile incorporato in `index.html` |
 | `manifest.json` | Dati di installazione (nome, icone, colori) |
 | `icon-*.png`, `favicon*`, `apple-touch-icon-180.png` | Icone dell'app |
+| `icona-sorgente.jpg` | L'immagine da cui nascono tutte le icone |
+| `strumenti/icone.mjs` | Ritaglia `icona-sorgente.jpg` e rigenera le icone |
 | `Gestione_Taxi_2026.txt` | Appunti e conteggi di partenza |
 | `TaxiManager_2026_iPhone.html` | Prima versione, tenuta come riferimento |
 
@@ -232,6 +234,39 @@ dall'app da quelle registrate a mano, e permette di togliere le prime. Con **Ann
 lavorare** si fa pulizia su un anno solo, senza toccare gli altri: per gli anni già chiusi
 conviene lasciare tutto com'è. Attenzione: togliendole i totali di quell'anno calano e la
 stima delle tasse cambia. Ha senso farlo solo registrando al loro posto i pagamenti veri.
+
+## L'icona dell'app
+
+Tutte le icone nascono da una sola immagine, `icona-sorgente.jpg`: il taxi bianco di tre
+quarti davanti alla Mole, con la Mole e le montagne sullo sfondo.
+
+L'immagine originale ha il quadrato con il bordo dorato e gli angoli arrotondati dentro una
+cornice chiara. Le icone vere non li vogliono: iPhone e Android arrotondano da soli, e un
+bordo disegnato dentro l'icona finisce tagliato male. Perciò lo strumento ritaglia il
+quadrato (angolo 157,157, lato 709 pixel) e **stringe di un altro 5,5%** per buttare via
+bordo e angoli: quello che resta riempie il quadrato da parte a parte.
+
+Da questo ritaglio escono sei file:
+
+| File | Dove si vede |
+| --- | --- |
+| `icon-512.png`, `icon-192.png` | Android e schermata Home |
+| `icon-512-maskable.png` | Android quando ritaglia l'icona a cerchio: l'auto sta nel 78% centrale, il contorno è la stessa immagine sfocata, così non si vede nessun bordo |
+| `apple-touch-icon-180.png` | Schermata Home di iPhone e iPad |
+| `favicon-32.png`, `favicon-16.png`, `favicon.ico` | Linguetta del browser |
+
+Le due favicon sono **più strette sull'auto**: a 16 e 32 pixel l'inquadratura larga
+diventerebbe una macchia verde, mentre così si riconosce almeno la sagoma bianca.
+
+Per rifarle (serve `node` e Playwright installato):
+
+```
+node strumenti/icone.mjs
+```
+
+Per cambiare icona basta sostituire `icona-sorgente.jpg` con un'altra immagine quadrata e
+ricontrollare in cima allo strumento le due righe `bordoX / bordoY / bordoLato` e `rientro`:
+se la nuova immagine non ha cornice attorno, si mettono `0, 0, <lato>` e rientro `0`.
 
 ## Rifare il foglio di stile
 
