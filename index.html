@@ -750,10 +750,10 @@
         // delle vetture e dalle caselle fiscali. Il conguaglio le riconosce dal
         // nome, quindi vanno bene tutte e due le forme.
         function vociBudgetNelMenu() {
-            const standard = new Set(CATEGORIE_USCITA.map(c => normalizzaSlug(c)));
+            const standard = new Set(CATEGORIE_USCITA.map(c => chiaveNome(c)));
             return elencoVociFisse()
                 .filter(v => String(v.nome || '').trim())
-                .filter(v => !standard.has(normalizzaSlug(v.nome)));
+                .filter(v => !standard.has(chiaveNome(v.nome)));
         }
 
         // Colore della barretta di ogni categoria di spesa nei riepiloghi
@@ -1116,8 +1116,27 @@
             try { localStorage.setItem('taxi_veicoli', JSON.stringify(window.veicoli || [])); } catch (err) { /* spazio esaurito: pazienza */ }
         }
 
+        // Converte in cifra un numero scritto a mano. Accetta l'euro, gli spazi,
+        // la virgola decimale e il punto delle migliaia: "6.500" e' seimilacinque-
+        // cento, "10.50" e' dieci e cinquanta. Si distinguono dai gruppi di tre
+        // cifre, che sono migliaia solo se sono esattamente tre fino in fondo.
+        // Senza questo, scrivere 6.500 € di carburante dava sei euro e mezzo.
+        function numeroScritto(v) {
+            let t = String(v === null || v === undefined ? '' : v)
+                .trim()
+                .replace(/[€\s\u00a0']/g, '');
+            if (!t) return NaN;
+            if (t.includes(',')) {
+                // virgola decimale: i punti sono per forza separatori di migliaia
+                t = t.replace(/\./g, '').replace(',', '.');
+            } else if (/^-?\d{1,3}(\.\d{3})+$/.test(t)) {
+                t = t.replace(/\./g, '');
+            }
+            return parseFloat(t);
+        }
+
         function numeroOpzionale(v) {
-            const n = parseFloat(String(v === null || v === undefined ? '' : v).replace(',', '.'));
+            const n = numeroScritto(v);
             return Number.isFinite(n) ? n : null;
         }
 
@@ -2113,11 +2132,22 @@
             return resto.replace(/\s*\([^()]*\)\s*$/, '').trim();
         }
 
+        // Chiave di confronto fra due nomi: senza accenti, senza maiuscole e senza
+        // punteggiatura. Diversa dallo slug, che invece taglia a 24 caratteri per
+        // stare in un identificativo: qui il taglio farebbe combaciare due voci
+        // dal nome lungo e simile.
+        function chiaveNome(t) {
+            return String(t || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]+/g, ' ')
+                .trim();
+        }
+
         function voceBudgetDiRecord(r) {
             if (!r || r.tipo !== 'USCITA') return null;
-            const chiave = normalizzaSlug(nomeSpesaDiRecord(r));
+            const chiave = chiaveNome(nomeSpesaDiRecord(r));
             if (!chiave) return null;
-            return elencoVociFisse().find(v => normalizzaSlug(v.nome) === chiave) || null;
+            return elencoVociFisse().find(v => chiaveNome(v.nome) === chiave) || null;
         }
 
         // Le spese che il budget gia' prevede. Contarle anche come spesa reale
@@ -2126,7 +2156,12 @@
         // righe "Costi fissi" che non corrispondono piu' a nessuna voce: sarebbero
         // dei picchi mostruosi in un giorno solo.
         function copertaDalBudget(r) {
-            return categoriaBase(r && r.categoria) === 'Costi fissi' || !!voceBudgetDiRecord(r);
+            if (categoriaBase(r && r.categoria) === 'Costi fissi') return true;
+            const v = voceBudgetDiRecord(r);
+            // La voce deve pesare davvero in quella data: se e' a zero, o se il suo
+            // periodo non copre il giorno della spesa, il budget non la sta gia'
+            // contando e la spesa va nella media come tutte le altre.
+            return !!v && quotaVoceGiorno(v, String(r.data || '')) > 0;
         }
 
         // Le spese reali che il budget non copre: carburante, manutenzione,
@@ -3106,7 +3141,6 @@
             window.giornoCalendarioAperto = null;
             window.spostaTurnoId = null;
             window.editRecordId = null;
-            window.editTurnoId = null;
             renderContent();
         }
 
@@ -4364,7 +4398,7 @@
                                             const aperta = window.catSpesaAperta === chiave;
                                             return `
                                             <div class="${i < rep.speseCategorie.length - 1 ? 'border-b border-gray-200/60' : ''}">
-                                                <div onclick="toggleCatSpesa('${String(chiave).replace(/'/g, "\\'")}')" class="flex justify-between py-1 cursor-pointer select-none">
+                                                <div onclick="toggleCatSpesa('${escJs(chiave)}')" class="flex justify-between py-1 cursor-pointer select-none">
                                                     <span class="text-gray-600 font-medium">
                                                         <span class="text-gray-400">${aperta ? '&#9662;' : '&#9656;'}</span>
                                                         ${esc(c.nome)} <span class="text-gray-400">(${c.n})</span>
@@ -5403,8 +5437,12 @@
             { slug: 'assic-infort',   nome: 'Assicurazione infortuni', importo: 1.37,   unita: 'giorno' }
         ];
 
+        // Le voci di partenza si mettono una volta sola, al primo avvio. Se poi le
+        // togli tutte l'elenco resta vuoto: senza questo segno tornavano da sole,
+        // e cancellare l'ultima voce ne faceva ricomparire cinque.
         function elencoVociFisse() {
-            if (!Array.isArray(window.vociFisse) || !window.vociFisse.length) {
+            if (!Array.isArray(window.vociFisse)) window.vociFisse = [];
+            if (!window.vociFisse.length && !localStorage.getItem('taxi_voci_fisse_avviato')) {
                 window.vociFisse = VOCI_FISSE_INIZIALI.map(v => Object.assign({ dataInizio: '', dataFine: '' }, v));
                 salvaVociFisse();
             }
@@ -5487,7 +5525,10 @@
         }
 
         function salvaVociFisse() {
-            try { localStorage.setItem('taxi_voci_fisse', JSON.stringify(window.vociFisse || [])); } catch (err) { /* spazio esaurito: pazienza */ }
+            try {
+                localStorage.setItem('taxi_voci_fisse', JSON.stringify(window.vociFisse || []));
+                localStorage.setItem('taxi_voci_fisse_avviato', '1');
+            } catch (err) { /* spazio esaurito: pazienza */ }
         }
 
         // Identificativo breve e stabile, ricavato dal nome: e' quello che
@@ -5539,9 +5580,16 @@
                 if (nome !== null) v.nome = nome;
                 const importo = leggi('cf-imp-');
                 if (importo !== null) {
-                    const pulito = importo.replace(/[€\s]/g, '').replace(',', '.');
-                    const n = parseFloat(pulito);
-                    v.importo = Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
+                    if (!importo) {
+                        v.importo = 0;
+                    } else {
+                        const n = numeroScritto(importo);
+                        // Se quello che c'e' scritto non si capisce si tiene l'importo
+                        // di prima invece di azzerarlo: azzerarlo in silenzio avrebbe
+                        // tolto la voce dal budget senza dire niente. A dirlo ci pensa
+                        // salvaModificheVociFisse().
+                        if (Number.isFinite(n) && n >= 0) v.importo = Math.round(n * 100) / 100;
+                    }
                 }
                 const unita = leggi('cf-unita-');
                 if (unita !== null) v.unita = unita;
@@ -5553,12 +5601,37 @@
             return elenco;
         }
 
+        // Si guardano i campi e non le voci: sulla voce l'importo illeggibile e'
+        // gia' diventato zero, e uno zero scritto per sbaglio non si distingue
+        // piu' da uno zero voluto.
+        function voceConImportoIlleggibile() {
+            const trovata = elencoVociFisse().find(v => {
+                const el = document.getElementById('cf-imp-' + v.slug);
+                if (!el) return false;
+                const t = String(el.value || '').trim();
+                return t && !Number.isFinite(numeroScritto(t));
+            });
+            return trovata || null;
+        }
+
         function salvaModificheVociFisse() {
+            const storto = voceConImportoIlleggibile();
+            if (storto) { showToast(`L'importo di «${storto.nome}» non si capisce: scrivi solo cifre, per esempio 6.500 oppure 12,80.`); return; }
             const elenco = leggiVociFisse();
             const senzaNome = elenco.filter(v => !String(v.nome || '').trim()).length;
             if (senzaNome) { showToast('Ogni voce deve avere un nome.'); return; }
             const dateStorte = elenco.filter(v => v.dataInizio && v.dataFine && v.dataFine < v.dataInizio).length;
             if (dateStorte) { showToast('In una voce la data finale viene prima di quella iniziale.'); return; }
+            // Due voci con lo stesso nome raddoppierebbero il budget e nel
+            // conguaglio le spese finirebbero tutte su una sola delle due.
+            const viste = new Set();
+            const doppia = elenco.find(v => {
+                const k = chiaveNome(v.nome);
+                if (viste.has(k)) return true;
+                viste.add(k);
+                return false;
+            });
+            if (doppia) { showToast(`Ci sono due voci che si chiamano «${doppia.nome}»: cambiane una.`); return; }
             salvaVociFisse();
             if (window.saveVoceFissaToCloud) elenco.forEach(v => window.saveVoceFissaToCloud(v));
             showToast('Voci di costo fisso salvate.');
@@ -5830,7 +5903,7 @@
                     speso: 0, movimenti: 0, ultima: ''
                 };
             });
-            const perNome = new Map(righe.map(r => [normalizzaSlug(r.nome), r]));
+            const perNome = new Map(righe.map(r => [chiaveNome(r.nome), r]));
             const fuori = { nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0, speso: 0, movimenti: 0, ultima: '', extra: true };
 
             (window.dailyRecords || []).forEach(r => {
@@ -5838,7 +5911,7 @@
                 const d = String(r.data || '');
                 if (d < da || d > a) return;
                 if (!copertaDalBudget(r)) return;
-                const riga = perNome.get(normalizzaSlug(nomeSpesaDiRecord(r))) || fuori;
+                const riga = perNome.get(chiaveNome(nomeSpesaDiRecord(r))) || fuori;
                 riga.speso += parseFloat(r.importo || 0);
                 riga.movimenti++;
                 if (d > riga.ultima) riga.ultima = d;
@@ -5853,7 +5926,9 @@
         function sezioneConguaglio() {
             const c = conguaglioAnno(annoAttivo());
             if (!c.righe.length) return '';
-            const nessunaSpesa = c.speso === 0;
+            // L'avviso ha senso solo se c'e' davvero un budget che e' maturato:
+            // con l'elenco vuoto direbbe "il budget di 0,00 € e' maturato".
+            const nessunaSpesa = c.speso === 0 && c.budget > 0;
             const avanzo = c.differenza;
 
             return `
