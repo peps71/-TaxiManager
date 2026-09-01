@@ -96,14 +96,24 @@ prefisso, quindi vanno bene tutte e due le forme:
   non ce l'hanno. Nel modulo «Nuova Spesa» compaiono in un gruppo a parte, così il
   movimento nasce già con il nome giusto.
 
-Il **conguaglio** confronta le due cose, voce per voce: quanto budget è maturato e quanto
-hai speso davvero. Per l'anno in corso il budget è quello maturato dal 1° gennaio a oggi.
+Il **conguaglio** confronta le due cose voce per voce. La colonna del budget è quella
+dell'**anno intero**, quello che hai ipotizzato: 6.500 € di carburante restano 6.500 € anche
+a marzo. Sotto, in piccolo, quanto ne è maturato a oggi.
 
-Una differenza non è per forza un errore: una polizza pagata in un colpo solo a gennaio
-risulta in anticipo sul budget e si riallinea da sé a fine anno. Se invece una voce resta a
-zero mese dopo mese, quella spesa non è mai stata registrata. Il conguaglio confronta i due
-numeri, non li corregge: nei totali dell'anno e nella stima delle tasse conta solo quello
-che è stato speso davvero.
+In cima, «a che punto sei»: una barra con quello che hai speso e una riga nera che segna a
+che punto è l'anno. Barra più corta della riga vuol dire che sei sotto le previsioni, più
+lunga che stai spendendo più in fretta di quanto avevi messo a budget. Nella tabella, una
+voce che ha già speso più di quanto sia maturato ha il numero in rosso.
+
+L'abbinamento fra movimento e voce si fa sul **nome**, e passa anche dalla categoria a cui
+l'app riconduce la spesa: una voce di budget «Carburante» ritrova i movimenti scritti
+«Carburante / Diesel - Q8» come quelli scritti «Carburante - Eni».
+
+Una differenza non è per forza un errore: a metà anno è normale aver speso meno del budget
+di tutto l'anno, e una polizza pagata in un colpo solo a gennaio risulta in anticipo. Se
+invece una voce resta a zero mese dopo mese, quella spesa non è mai stata registrata. Il
+conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e nella stima delle
+tasse conta solo quello che è stato speso davvero.
 
 ## Quanto costa una giornata
 

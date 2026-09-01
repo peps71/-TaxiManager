@@ -2145,9 +2145,21 @@
 
         function voceBudgetDiRecord(r) {
             if (!r || r.tipo !== 'USCITA') return null;
-            const chiave = chiaveNome(nomeSpesaDiRecord(r));
-            if (!chiave) return null;
-            return elencoVociFisse().find(v => chiaveNome(v.nome) === chiave) || null;
+            const voci = elencoVociFisse();
+            const cerca = (k) => k ? (voci.find(v => chiaveNome(v.nome) === k) || null) : null;
+
+            // 1. il nome scritto nel movimento, cosi' com'e'
+            const diretta = cerca(chiaveNome(nomeSpesaDiRecord(r)));
+            if (diretta) return diretta;
+
+            // 2. la categoria a cui l'app riconduce la spesa. "Carburante /
+            //    Diesel - Q8" e "Carburante - Eni" sono la stessa cosa, e il
+            //    budget parla di carburante: senza questo passaggio una voce di
+            //    budget non trovava i suoi movimenti solo perche' la categoria
+            //    si chiama in un modo un po' diverso.
+            const base = categoriaBase(r.categoria);
+            if (base === 'Altro' || base === 'Costi fissi') return null;
+            return cerca(chiaveNome(base));
         }
 
         // Le spese che il budget gia' prevede. Contarle anche come spesa reale
@@ -5893,25 +5905,34 @@
             const oggi = oggiISO();
             const inCorso = String(anno) === oggi.slice(0, 4);
             const da = `${anno}-01-01`;
-            const a = inCorso ? oggi : `${anno}-12-31`;
+            const fine = `${anno}-12-31`;
+            // Il conto si fa sul budget di tutto l'anno: e' quello che hai
+            // ipotizzato ed e' quello che vuoi vedere. Quanto ne sia maturato
+            // finora resta accanto, in piccolo, per capire se sei in linea.
+            const aOggi = inCorso ? oggi : fine;
 
             const righe = elencoVociFisse().map(v => {
-                const b = budgetVocePeriodo(v, da, a);
+                const b = budgetVocePeriodo(v, da, fine);
                 return {
                     nome: String(v.nome || '').trim() || 'Voce senza nome',
                     budget: b.totale, giorniCoperti: b.giorni,
+                    maturato: inCorso ? budgetVocePeriodo(v, da, aOggi).totale : b.totale,
                     speso: 0, movimenti: 0, ultima: ''
                 };
             });
             const perNome = new Map(righe.map(r => [chiaveNome(r.nome), r]));
-            const fuori = { nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0, speso: 0, movimenti: 0, ultima: '', extra: true };
+            const fuori = { nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0, maturato: 0, speso: 0, movimenti: 0, ultima: '', extra: true };
 
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 const d = String(r.data || '');
-                if (d < da || d > a) return;
+                if (d < da || d > fine) return;
                 if (!copertaDalBudget(r)) return;
-                const riga = perNome.get(chiaveNome(nomeSpesaDiRecord(r))) || fuori;
+                // Stesso abbinamento che usa la quota del giorno: cosi' una spesa
+                // tolta dalla media perche' coperta dal budget finisce per forza
+                // nella riga di quella voce, e non fra le "altre".
+                const voce = voceBudgetDiRecord(r);
+                const riga = (voce && perNome.get(chiaveNome(voce.nome))) || fuori;
                 riga.speso += parseFloat(r.importo || 0);
                 riga.movimenti++;
                 if (d > riga.ultima) riga.ultima = d;
@@ -5919,44 +5940,77 @@
 
             const tutte = righe.concat(fuori.movimenti ? [fuori] : []);
             const budget = tutte.reduce((t, r) => t + r.budget, 0);
+            const maturato = tutte.reduce((t, r) => t + (r.maturato || 0), 0);
             const speso = tutte.reduce((t, r) => t + r.speso, 0);
-            return { anno: String(anno), da, a, inCorso, righe: tutte, budget, speso, differenza: budget - speso };
+            // A che punto e' l'anno, e a che punto e' la spesa: due percentuali
+            // che dicono in un colpo d'occhio se si sta dentro o si sta sforando.
+            const pctAnno = budget > 0 ? (maturato / budget) * 100 : 0;
+            const pctSpeso = budget > 0 ? (speso / budget) * 100 : 0;
+            return {
+                anno: String(anno), da, a: aOggi, fine, inCorso, righe: tutte,
+                budget, maturato, speso, differenza: budget - speso, pctAnno, pctSpeso
+            };
         }
 
         function sezioneConguaglio() {
             const c = conguaglioAnno(annoAttivo());
             if (!c.righe.length) return '';
-            // L'avviso ha senso solo se c'e' davvero un budget che e' maturato:
-            // con l'elenco vuoto direbbe "il budget di 0,00 € e' maturato".
             const nessunaSpesa = c.speso === 0 && c.budget > 0;
             const avanzo = c.differenza;
+            // A meta' anno "speso meno del budget" suonerebbe come un risparmio:
+            // finche' l'anno non e' finito la differenza e' solo quello che deve
+            // ancora uscire.
+            const etichetta = avanzo < 0
+                ? 'speso più del budget'
+                : (c.inCorso ? 'ancora da spendere' : 'speso meno del budget');
 
             return `
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                     <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
+                        <div class="max-w-2xl">
                             <h3 class="text-lg font-bold text-gray-900">Conguaglio ${esc(c.anno)}</h3>
                             <p class="text-xs text-gray-500 leading-relaxed mt-1">
-                                Il budget matura giorno per giorno; le spese fisse vere si registrano quando escono
-                                dal conto. Qui si vede di quanto il preventivo si è discostato dal consuntivo.
-                                ${c.inCorso ? `Budget maturato dal 1° gennaio al ${ggMm(c.a)}.` : 'Anno chiuso: budget di tutti e dodici i mesi.'}
+                                Il budget che hai ipotizzato per il ${esc(c.anno)} è di <strong>${formatCurrency(c.budget)}</strong>;
+                                finora ne hai speso <strong>${formatCurrency(c.speso)}</strong>.
+                                ${c.inCorso
+                                    ? `Le spese sono quelle registrate fino al ${ggMm(c.a)}.`
+                                    : 'Anno chiuso: il conto è definitivo.'}
                             </p>
                         </div>
                         <div class="text-right">
                             <p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Differenza</p>
                             <p class="text-2xl font-black ${avanzo >= 0 ? 'text-green-700' : 'text-red-600'}">${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)}</p>
-                            <p class="text-[11px] font-bold text-gray-400">${avanzo >= 0 ? 'speso meno del budget' : 'speso più del budget'}</p>
+                            <p class="text-[11px] font-bold text-gray-400">${etichetta}</p>
                         </div>
                     </div>
 
+                    ${c.inCorso && c.budget > 0 ? `
+                        <div class="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                                <p class="text-xs font-black uppercase tracking-wider text-gray-500">A che punto sei</p>
+                                <p class="text-[11px] font-bold text-gray-500">
+                                    l'anno è al <strong class="text-gray-800">${c.pctAnno.toFixed(0)}%</strong> ·
+                                    del budget ne hai speso il <strong class="${c.pctSpeso > c.pctAnno + 5 ? 'text-red-600' : 'text-gray-800'}">${c.pctSpeso.toFixed(0)}%</strong>
+                                </p>
+                            </div>
+                            <div class="relative h-3 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="absolute inset-y-0 left-0 ${c.pctSpeso > c.pctAnno + 5 ? 'bg-red-500' : 'bg-green-600'} rounded-full" style="width:${Math.min(100, c.pctSpeso)}%"></div>
+                                <div class="absolute inset-y-0 w-0.5 bg-gray-900" style="left:${Math.min(100, c.pctAnno)}%" title="a che punto è l'anno"></div>
+                            </div>
+                            <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                                La barra è quello che hai speso, la riga nera è a che punto è l'anno. Barra più corta
+                                della riga: sei sotto le previsioni. Più lunga: stai spendendo più in fretta di quanto
+                                avevi messo a budget. A oggi ne è maturato ${formatCurrency(c.maturato)}.
+                            </p>
+                        </div>` : ''}
+
                     ${nessunaSpesa ? `
                         <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
-                            <p class="font-black text-yellow-900 text-sm">Nel ${esc(c.anno)} non hai ancora registrato nessuna spesa fissa</p>
+                            <p class="font-black text-yellow-900 text-sm">Nel ${esc(c.anno)} non hai ancora registrato nessuna spesa a budget</p>
                             <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
-                                Il budget di ${formatCurrency(c.budget)} è maturato, ma nel registro non c'è ancora
-                                niente: finché non registri le spese vere questi soldi non entrano nei totali dell'anno
-                                né nella stima delle tasse. Registrale come una spesa qualsiasi, con la categoria
-                                <strong>Costi fissi - Nome della voce</strong>, il giorno in cui le paghi.
+                                Nel registro non c'è niente che corrisponda alle voci del budget: finché non registri
+                                le spese vere questi soldi non entrano nei totali dell'anno né nella stima delle tasse.
+                                Registrale come una spesa qualsiasi, il giorno in cui le paghi.
                             </p>
                         </div>` : ''}
 
@@ -5965,7 +6019,7 @@
                             <thead class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
                                 <tr>
                                     <th class="p-3 font-bold">Voce</th>
-                                    <th class="p-3 font-bold text-right">Budget maturato</th>
+                                    <th class="p-3 font-bold text-right">Budget ${esc(c.anno)}</th>
                                     <th class="p-3 font-bold text-right">Speso davvero</th>
                                     <th class="p-3 font-bold text-right">Differenza</th>
                                 </tr>
@@ -5973,6 +6027,7 @@
                             <tbody class="divide-y divide-gray-100">
                                 ${c.righe.map(r => {
                                     const d = r.budget - r.speso;
+                                    const mat = r.maturato || 0;
                                     return `
                                     <tr class="${r.extra ? 'bg-yellow-50' : ''}">
                                         <td class="p-3 font-bold text-gray-800">
@@ -5982,8 +6037,11 @@
                                                 ${r.movimenti ? `${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}, l'ultimo il ${ggMm(r.ultima)}` : 'nessun movimento registrato'}
                                             </span>
                                         </td>
-                                        <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">${formatCurrency(r.budget)}</td>
-                                        <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">${formatCurrency(r.speso)}</td>
+                                        <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">
+                                            ${formatCurrency(r.budget)}
+                                            ${c.inCorso && r.budget > 0 ? `<span class="block text-[11px] font-medium text-gray-400">a oggi ${formatCurrency(mat)}</span>` : ''}
+                                        </td>
+                                        <td class="p-3 text-right font-bold whitespace-nowrap ${(c.inCorso && r.speso > mat + 0.005) ? 'text-red-600' : 'text-gray-700'}">${formatCurrency(r.speso)}</td>
                                         <td class="p-3 text-right font-black whitespace-nowrap ${Math.abs(d) < 0.005 ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')}">${d > 0 ? '+' : ''}${formatCurrency(d)}</td>
                                     </tr>`;
                                 }).join('')}
@@ -5991,7 +6049,10 @@
                             <tfoot>
                                 <tr class="bg-gray-900 text-white">
                                     <td class="p-3 font-black">Totale</td>
-                                    <td class="p-3 text-right font-black">${formatCurrency(c.budget)}</td>
+                                    <td class="p-3 text-right font-black">
+                                        ${formatCurrency(c.budget)}
+                                        ${c.inCorso ? `<span class="block text-[11px] font-medium text-gray-400">a oggi ${formatCurrency(c.maturato)}</span>` : ''}
+                                    </td>
                                     <td class="p-3 text-right font-black">${formatCurrency(c.speso)}</td>
                                     <td class="p-3 text-right font-black ${avanzo >= 0 ? 'text-green-400' : 'text-red-400'}">${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)}</td>
                                 </tr>
@@ -6000,11 +6061,13 @@
                     </div>
 
                     <p class="text-xs text-gray-500 leading-relaxed">
-                        Una differenza non è per forza un errore: una polizza pagata in un colpo solo a gennaio
-                        risulta in anticipo sul budget e si riallinea da sé a fine anno. Se invece una voce resta a
-                        zero mese dopo mese, quella spesa non è mai stata registrata.
-                        Il conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e nella stima
-                        delle tasse conta solo il <strong>speso davvero</strong>.
+                        Una differenza non è per forza un errore: a metà anno è normale aver speso meno del budget di
+                        tutto l'anno, e una polizza pagata in un colpo solo a gennaio risulta in anticipo. Quello che
+                        conta è il confronto con la colonnina «a oggi»: se una voce ha speso più di quanto sia maturato
+                        il numero diventa rosso. Se invece resta a zero mese dopo mese, quella spesa non è mai stata
+                        registrata.<br>
+                        Il conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e nella stima delle
+                        tasse conta solo il <strong>speso davvero</strong>.
                     </p>
                 </div>`;
         }
