@@ -595,8 +595,11 @@
         window.meseCalendario = null;
         window.giornoCalendarioAperto = null;
         window.spostaTurnoId = null;
-        // Vista attiva dentro Turni & Corse: 'corse' | 'turni' | 'calendario'
-        window.vistaGiornata = 'corse';
+        // Vista attiva dentro Turni & Corse: 'corse' | 'turni' | 'calendario'.
+        // Resta quella scelta l'ultima volta, come la scheda.
+        const VISTE_GIORNATA = ['corse', 'turni', 'calendario'];
+        const vistaSalvata = localStorage.getItem('taxi_vista_giornata');
+        window.vistaGiornata = VISTE_GIORNATA.includes(vistaSalvata) ? vistaSalvata : 'corse';
         window.showCorsaForm = false;
         window.showUscitaForm = false;
         window.showShiftForm = false;
@@ -611,6 +614,9 @@
         window.ultimoMetodoUscita = localStorage.getItem('taxi_ultimo_metodo_uscita') || 'Contanti';
         window.ultimaCategoriaUscita = localStorage.getItem('taxi_ultima_categoria_uscita') || '';
         window.filterMonthTurni = 'ALL';
+        // Filtro giorno dell'elenco turni: '' = spento. A differenza delle corse
+        // parte spento, cosi' aprendo l'elenco si continua a vedere tutto l'anno.
+        window.filterGiornoTurni = '';
         // Bozze dei km digitati a mano nel form "+ Registra Turno" (null = usa il suggerimento
         // automatico dal turno precedente). Si azzerano ogni volta che il form si riapre, cosi'
         // il valore digitato non va perso se il form si ridisegna (es. cambio tipo di turno).
@@ -953,6 +959,7 @@
             window.dashMese = null;
             window.filterGiornoCorse = null;   // si riposiziona sull'anno scelto
             window.filterGiornoUscite = null;
+            window.filterGiornoTurni = '';     // il giorno di un altro anno non c'entra piu'
             renderContent();
         }
 
@@ -2918,15 +2925,21 @@
                 // Il promemoria "turni senza km" resta sempre su tutto l'anno, cosi' non si perde
                 // di vista un turno da completare solo perche' si sta guardando un altro mese.
                 const daCompletare = turniDellAnno.filter(kmMancanti);
-                // Il filtro mese invece restringe solo la tabella qui sotto.
-                const turniMese = window.filterMonthTurni === 'ALL'
-                    ? turniDellAnno
-                    : turniDellAnno.filter(t => parseInt(String(t.data).slice(5, 7)) === parseInt(window.filterMonthTurni));
+                // I filtri restringono solo la tabella qui sotto. Il giorno, quando
+                // e' impostato, ha la precedenza sul mese.
+                const turniMese = turniDellAnno.filter(t => {
+                    if (giornoFiltroTurni()) return String(t.data) === giornoFiltroTurni();
+                    if (window.filterMonthTurni === 'ALL') return true;
+                    return parseInt(String(t.data).slice(5, 7)) === parseInt(window.filterMonthTurni);
+                });
                 const listaTurni = window.soloSenzaKm ? turniMese.filter(kmMancanti) : turniMese;
                 const turniLavoratiMese = turniMese.filter(t => !isRiposo(t));
                 const oreMeseTot = turniLavoratiMese.reduce((a, t) => a + parseFloat(t.ore || 0), 0);
                 const kmMeseTot = turniLavoratiMese.reduce((a, t) => a + parseFloat(t.kmTot || 0), 0);
-                const etichettaPeriodoTurni = window.filterMonthTurni === 'ALL' ? 'anno ' + annoAttivo() : nomeMese(window.filterMonthTurni) + ' ' + annoAttivo();
+                const etichettaPeriodoTurni = giornoFiltroTurni()
+                    ? dataEstesa(giornoFiltroTurni())
+                    : (window.filterMonthTurni === 'ALL' ? 'anno ' + annoAttivo() : nomeMese(window.filterMonthTurni) + ' ' + annoAttivo());
+                const filtriTurniAttivi = giornoFiltroTurni() || window.filterMonthTurni !== 'ALL' || window.soloSenzaKm;
                 return `
                     <div class="fade-in space-y-6 max-w-7xl mx-auto">
                         <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -3007,23 +3020,33 @@
                             </div>
                         ` : ''}
 
-                        <!-- Filtro Mese e Totali del periodo -->
+                        <!-- Filtri e Totali del periodo -->
                         <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                           <div class="flex flex-wrap items-end gap-x-6 gap-y-3">
                             <div>
-                                <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Mese</label>
+                                <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Giorno</label>
+                                <div class="flex items-center gap-1">
+                                    <button onclick="scorriGiornoTurni(-1)" title="Giorno precedente" class="w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
+                                    <input type="date" value="${giornoFiltroTurni()}" onchange="applyFilterGiornoTurni(this.value)" class="p-2 border rounded-lg text-sm bg-gray-50 font-bold" />
+                                    <button onclick="scorriGiornoTurni(1)" title="Giorno successivo" class="w-9 h-9 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
+                                    ${giornoFiltroTurni() ? `<button onclick="pulisciGiornoTurni()" title="Togli il filtro giorno" class="w-9 h-9 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-black">×</button>` : ''}
+                                </div>
+                            </div>
+
+                            <div class="${giornoFiltroTurni() ? 'opacity-40' : ''}">
+                                <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Mese${giornoFiltroTurni() ? ' (ignorato)' : ''}</label>
                                 <select onchange="applyFilterTurni(this.value)" class="p-2 border rounded-lg text-sm bg-gray-50 font-bold h-9">
                                     ${opzioniMese(window.filterMonthTurni, "Tutti i Mesi")}
                                 </select>
                             </div>
 
-                            ${window.filterMonthTurni !== 'ALL' ? `
-                                <button onclick="applyFilterTurni('ALL')" class="h-9 px-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-black text-gray-700">Azzera filtro</button>
+                            ${filtriTurniAttivi ? `
+                                <button onclick="azzeraFiltriTurni()" class="h-9 px-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs font-black text-gray-700">Azzera filtri</button>
                             ` : ''}
 
                             <div class="ml-auto bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-xl text-right">
                                 <p class="text-[10px] font-black uppercase tracking-wider text-yellow-700 capitalize">${etichettaPeriodoTurni}</p>
-                                <p class="text-xl font-black text-yellow-700 leading-tight">${turniLavoratiMese.length} turni</p>
+                                <p class="text-xl font-black text-yellow-700 leading-tight">${turniLavoratiMese.length} ${turniLavoratiMese.length === 1 ? 'turno' : 'turni'}</p>
                                 <p class="text-[11px] font-bold text-yellow-700/70">${oreMeseTot.toFixed(1)} h · ${kmMeseTot} km</p>
                             </div>
                           </div>
@@ -3133,7 +3156,9 @@
                                             </tr>
                                             ` : ''}
                                             `;
-                                        }).join('') || `<tr><td colspan="7" class="p-8 text-center text-gray-400">${window.soloSenzaKm ? 'Tutti i turni hanno i km compilati.' : 'Nessun turno registrato.'}</td></tr>`}
+                                        }).join('') || `<tr><td colspan="7" class="p-8 text-center text-gray-400">${window.soloSenzaKm
+                                            ? 'Tutti i turni hanno i km compilati.'
+                                            : (filtriTurniAttivi ? 'Nessun turno in questa selezione. Usa le frecce per cambiare giorno, oppure × per togliere il filtro.' : 'Nessun turno registrato.')}</td></tr>`}
                                     </tbody>
                                 </table>
                             </div>
@@ -3150,8 +3175,13 @@
 
         // Il form turno vive nella vista Elenco turni: ci porto l'utente con la
         // data gia' impostata, invece di duplicare un form complesso.
-        function setVistaGiornata(v) {
+        function ricordaVista(v) {
             window.vistaGiornata = v;
+            try { localStorage.setItem('taxi_vista_giornata', v); } catch (err) { /* spazio esaurito: pazienza */ }
+        }
+
+        function setVistaGiornata(v) {
+            ricordaVista(v);
             window.giornoCalendarioAperto = null;
             window.spostaTurnoId = null;
             window.editRecordId = null;
@@ -3302,8 +3332,9 @@
 
         // Dal calendario all'elenco turni, posizionato sul mese giusto
         function apriNellElenco(iso) {
-            window.vistaGiornata = 'turni';
-            window.filterMonthTurni = String(parseInt(iso.slice(5, 7), 10));
+            ricordaVista('turni');
+            window.filterGiornoTurni = iso;
+            window.filterMonthTurni = 'ALL';
             window.giornoCalendarioAperto = null;
             renderContent();
         }
@@ -5016,6 +5047,34 @@
 
         function applyFilterTurni(val) {
             window.filterMonthTurni = val;
+            window.filterGiornoTurni = '';   // il mese e il giorno si escludono a vicenda
+            renderContent();
+        }
+
+        function giornoFiltroTurni() {
+            return window.filterGiornoTurni || '';
+        }
+
+        function applyFilterGiornoTurni(val) {
+            window.filterGiornoTurni = val || '';
+            renderContent();
+        }
+
+        function scorriGiornoTurni(delta) {
+            const base = giornoFiltroTurni() || ultimoGiornoConDati() || oggiISO();
+            window.filterGiornoTurni = spostaGiorno(base, delta);
+            renderContent();
+        }
+
+        function pulisciGiornoTurni() {
+            window.filterGiornoTurni = '';
+            renderContent();
+        }
+
+        function azzeraFiltriTurni() {
+            window.filterGiornoTurni = '';
+            window.filterMonthTurni = 'ALL';
+            window.soloSenzaKm = false;
             renderContent();
         }
 

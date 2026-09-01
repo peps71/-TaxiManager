@@ -28,6 +28,17 @@ tramite Firebase/Firestore.
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Turni & Corse
+
+Tre viste: **Elenco corse**, **Elenco turni** e **Calendario**. Quella scelta resta:
+riaprendo l'app si torna dov'eri, come per la scheda.
+
+Elenco corse ed elenco turni hanno gli stessi filtri — giorno con le frecce ‹ › e il × per
+toglierlo, mese, e «Azzera filtri» — e il giorno, quando è impostato, ha la precedenza sul
+mese. Nell'elenco corse il giorno parte su oggi; in quello dei turni parte spento, così
+all'apertura si continua a vedere tutto l'anno. Toccando un giorno del calendario e poi
+«Apri nell'elenco turni» il filtro si posiziona su quella data.
+
 ## Parco auto
 
 Nella scheda **Parco Auto** si registrano le vetture avute, quella in uso e quelle future:
