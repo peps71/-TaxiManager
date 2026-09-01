@@ -84,6 +84,23 @@ e il conguaglio dice a fine anno quanto ci si è presi. Quello che non è a budg
 spalma da sola, facendo la media di quello che è stato registrato nel mese. INPS e IRPEF
 restano fuori: sono già stimate.
 
+## Le note sulle spese
+
+Ogni spesa ha una **categoria** e, a parte, delle **note**. La categoria è quella che
+decide tutto: la tipologia nei riepiloghi, il costo al chilometro delle vetture e
+l'abbinamento con il budget. Le note sono testo libero — targa, fornitore, numero di
+fattura, quello che serve — e non entrano in nessun conto: ci si può scrivere dentro
+trattini, barre e punteggiatura senza che nulla cambi.
+
+Nel registro compaiono sotto la categoria, in piccolo, e finiscono in una colonna a parte
+del CSV per il commercialista. Scegliendo «Altro (scrivi tu)» compare un campo apposta per
+il nome della spesa, che diventa la categoria.
+
+I movimenti registrati con le versioni precedenti, dove la nota era attaccata alla
+categoria (`Carburante - Q8 corso Francia`), restano come sono e continuano a funzionare:
+l'abbinamento con il budget guarda la parte prima del trattino. Volendo si separano a mano,
+riga per riga, con «Modifica».
+
 ## Le spese vere e il conguaglio
 
 Quando una spesa a budget esce davvero dal conto la si registra come una spesa qualsiasi,
