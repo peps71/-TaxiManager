@@ -112,6 +112,25 @@ categoria (`Carburante - Q8 corso Francia`), restano come sono e continuano a fu
 l'abbinamento con il budget guarda la parte prima del trattino. Volendo si separano a mano,
 riga per riga, con «Modifica».
 
+## Spese ricorrenti
+
+Nel modulo «Nuova Spesa» c'è **Spesa ricorrente**: si scrive la spesa una volta, si sceglie
+ogni quanto torna — settimana, due settimane, mese, due, tre o sei mesi, anno — e fino a
+quando, e l'app crea la serie. Prima di scrivere niente mostra quanti movimenti nascono,
+da che data a che data e quanto fanno in tutto, e chiede conferma.
+
+Sono movimenti veri, uno per ogni scadenza: si modificano e si eliminano come tutti gli
+altri, e contano nei totali uno per uno. Nel registro portano il segno «ricorrente» e un
+pulsante **Serie** che li toglie tutti insieme.
+
+Le date si calcolano dalla prima, non a catena: una rata del 31 diventa il 28 (o il 29) a
+febbraio e torna al 31 il mese dopo. Il limite è di 400 movimenti per serie.
+
+Una serie creata in anticipo mette in archivio dei movimenti con data futura. Nei totali
+dell'anno e nella stima delle tasse ci sono da subito; nel conguaglio invece no, perché
+quei soldi dal conto non sono ancora usciti — il pannello lo dice, con quanti sono e quanto
+valgono.
+
 ## Le spese vere e il conguaglio
 
 Quando una spesa a budget esce davvero dal conto la si registra come una spesa qualsiasi,

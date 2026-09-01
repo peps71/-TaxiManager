@@ -1826,6 +1826,49 @@
             return `<div class="${evidenziato ? colore + ' font-bold' : ''}">${iso}</div><div class="text-[10px] ${colore} font-bold uppercase tracking-wide">${dettaglio}</div>`;
         }
 
+        // ============================================================
+        //  SPESE RICORRENTI
+        //  La rata della licenza, il radio taxi, il commercialista: spese che
+        //  tornano sempre uguali a distanza regolare. Si scrivono una volta e
+        //  l'app ne genera la serie. Restano movimenti come tutti gli altri:
+        //  si modificano, si eliminano e contano nei totali uno per uno.
+        // ============================================================
+
+        const CADENZE_SPESA = [
+            { id: 'settimana',  etichetta: 'ogni settimana',   giorni: 7 },
+            { id: '2settimane', etichetta: 'ogni 2 settimane', giorni: 14 },
+            { id: 'mese',       etichetta: 'ogni mese',        mesi: 1 },
+            { id: '2mesi',      etichetta: 'ogni 2 mesi',      mesi: 2 },
+            { id: '3mesi',      etichetta: 'ogni 3 mesi',      mesi: 3 },
+            { id: '6mesi',      etichetta: 'ogni 6 mesi',      mesi: 6 },
+            { id: 'anno',       etichetta: 'ogni anno',        mesi: 12 }
+        ];
+
+        // Aggiunge dei mesi restando dentro il mese di arrivo: una rata del 31
+        // diventa il 28 (o il 29) a febbraio, e torna al 31 il mese dopo, perche'
+        // il conto si fa sempre a partire dalla data di partenza.
+        function aggiungiMesi(iso, n) {
+            const [a, m, g] = String(iso).split('-').map(Number);
+            const arrivo = new Date(a, m - 1 + n, 1);
+            const ultimo = new Date(arrivo.getFullYear(), arrivo.getMonth() + 1, 0).getDate();
+            return `${arrivo.getFullYear()}-${String(arrivo.getMonth() + 1).padStart(2, '0')}-${String(Math.min(g, ultimo)).padStart(2, '0')}`;
+        }
+
+        const MAX_RICORRENZE = 400;
+
+        // Le date di una serie, dalla prima compresa fino a "finoAl" compreso
+        function datePeriodiche(inizio, cadenzaId, finoAl) {
+            const c = CADENZE_SPESA.find(x => x.id === cadenzaId);
+            if (!c || !inizio || !finoAl || finoAl < inizio) return [];
+            const date = [];
+            for (let k = 0; k < MAX_RICORRENZE; k++) {
+                const d = c.mesi ? aggiungiMesi(inizio, c.mesi * k) : spostaGiorno(inizio, c.giorni * k);
+                if (d > finoAl) break;
+                date.push(d);
+            }
+            return date;
+        }
+
         function spostaGiorno(iso, delta) {
             const [a, m, g] = iso.split('-').map(Number);
             const d = new Date(a, m - 1, g + delta);
@@ -3660,6 +3703,34 @@
                                             ${opzioniMetodo(window.ultimoMetodoUscita || 'Contanti', 'USCITA')}
                                         </select>
                                     </div>
+                                    <div class="lg:col-span-4 border-t border-gray-100 pt-4">
+                                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                                            <input type="checkbox" id="uscita-ripeti" onchange="onRipetiChange()" class="w-4 h-4 accent-red-600" />
+                                            <span class="text-sm font-bold text-gray-800">Spesa ricorrente</span>
+                                            <span class="text-xs text-gray-400">— la rata della licenza, il radio taxi, l'assicurazione…</span>
+                                        </label>
+
+                                        <div id="uscita-ripeti-box" class="hidden mt-3 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                                            <div class="flex flex-wrap items-end gap-3">
+                                                <div>
+                                                    <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Si ripete</label>
+                                                    <select id="uscita-cadenza" onchange="aggiornaAnteprimaRipeti()" class="p-2.5 border rounded-lg outline-none font-bold bg-white">
+                                                        ${CADENZE_SPESA.map(c => `<option value="${c.id}" ${c.id === 'mese' ? 'selected' : ''}>${c.etichetta}</option>`).join('')}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Fino al</label>
+                                                    <input type="date" id="uscita-fino" onchange="aggiornaAnteprimaRipeti()" class="p-2.5 border rounded-lg outline-none font-bold bg-white" />
+                                                </div>
+                                                <p id="uscita-anteprima" class="text-xs font-bold text-gray-500 flex-1 min-w-[200px] leading-relaxed"></p>
+                                            </div>
+                                            <p class="text-[11px] text-gray-400 mt-2 leading-relaxed">
+                                                Vengono creati movimenti veri, uno per ogni scadenza: si modificano e si eliminano
+                                                come tutti gli altri. La data qui sopra è la prima della serie.
+                                            </p>
+                                        </div>
+                                    </div>
+
                                     <div class="lg:col-span-4 flex flex-col sm:flex-row gap-3">
                                         <button type="submit" name="azione" value="nuova" class="flex-1 bg-red-600 hover:bg-red-700 font-bold py-3 rounded-xl transition-colors text-white shadow-md">
                                             Salva e inserisci un'altra
@@ -3806,6 +3877,7 @@
                                                 <td class="p-4 text-sm font-medium text-gray-600">${dataConDettagli(r.data)}</td>
                                                 <td class="p-4 text-sm font-bold text-gray-800">
                                                     ${esc(r.categoria)}
+                                                    ${r.serie ? `<span class="ml-2 bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">ricorrente</span>` : ''}
                                                     ${r.nota ? `<span class="block text-xs font-medium text-gray-500 mt-0.5">${esc(r.nota)}</span>` : ''}
                                                 </td>
                                                 <td class="p-4 text-sm"><span class="${metodoBadgeClass(r.metodo)} px-2.5 py-1 rounded-md text-xs font-bold">${esc(r.metodo)}</span></td>
@@ -3813,6 +3885,7 @@
                                                 <td class="p-4 text-center whitespace-nowrap">
                                                     <button onclick="apriModificaRecord('${r.id}')" class="text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1 rounded mr-1">Modifica</button>
                                                     <button onclick="deleteRecord('${r.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>
+                                                    ${r.serie ? `<button onclick="eliminaSerieSpese('${escJs(r.serie)}')" title="Elimina tutti i movimenti di questa serie" class="ml-1 text-purple-700 hover:text-purple-900 text-xs font-bold bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded">Serie</button>` : ''}
                                                 </td>
                                             </tr>
                                         `).join('') || (fissiRaccolti.length ? '' : `<tr><td colspan="5" class="p-8 text-center text-gray-400">Nessuna spesa ${filtriUsciteAttivi ? 'in questa selezione. Usa le frecce per cambiare giorno, oppure × per togliere il filtro e vedere tutto l\'anno.' : 'registrata.'}</td></tr>`)}
@@ -4740,6 +4813,51 @@
 
         // Aggiorna il campo Nota quando si sceglie "Altro": diventa la descrizione
         // completa della spesa invece di un dettaglio facoltativo aggiunto alla categoria.
+        // La sezione della ricorrenza si apre con la spunta. Il "fino al" si
+        // propone al 31 dicembre dell'anno della spesa: e' il caso piu' comune.
+        function onRipetiChange() {
+            const spunta = document.getElementById('uscita-ripeti');
+            const box = document.getElementById('uscita-ripeti-box');
+            const fino = document.getElementById('uscita-fino');
+            if (!spunta || !box) return;
+            box.classList.toggle('hidden', !spunta.checked);
+            if (spunta.checked && fino && !fino.value) {
+                const data = (document.getElementById('uscita-data') || {}).value || oggiISO();
+                fino.value = `${data.slice(0, 4)}-12-31`;
+            }
+            aggiornaAnteprimaRipeti();
+        }
+
+        // Anteprima scritta a mano nel paragrafo, senza ridisegnare la pagina:
+        // un renderContent() qui cancellerebbe quello che si sta scrivendo.
+        function aggiornaAnteprimaRipeti() {
+            const p = document.getElementById('uscita-anteprima');
+            if (!p) return;
+            const dati = datiRipetizione();
+            if (!dati) { p.textContent = ''; return; }
+            if (!dati.date.length) {
+                p.textContent = 'La data finale viene prima della prima spesa.';
+                return;
+            }
+            const imp = parseFloat((document.getElementById('uscita-imp') || {}).value);
+            const totale = Number.isFinite(imp) ? ' · ' + formatCurrency(imp * dati.date.length) + ' in tutto' : '';
+            const futuri = dati.date.filter(d => d > oggiISO()).length;
+            p.textContent = `${dati.date.length} ${dati.date.length === 1 ? 'movimento' : 'movimenti'}, dal ${ggMm(dati.date[0])} al ${ggMm(dati.date[dati.date.length - 1])}${totale}.`
+                + (futuri ? ` ${futuri} ${futuri === 1 ? 'è' : 'sono'} in date future.` : '')
+                + (dati.date.length >= MAX_RICORRENZE ? ` Oltre ${MAX_RICORRENZE} movimenti non si va: accorcia il periodo.` : '');
+        }
+
+        // Quello che c'e' scritto adesso nel riquadro della ricorrenza
+        function datiRipetizione() {
+            const spunta = document.getElementById('uscita-ripeti');
+            if (!spunta || !spunta.checked) return null;
+            const inizio = (document.getElementById('uscita-data') || {}).value || '';
+            const cadenza = (document.getElementById('uscita-cadenza') || {}).value || 'mese';
+            const fino = (document.getElementById('uscita-fino') || {}).value || '';
+            if (!inizio || !fino) return null;
+            return { inizio, cadenza, fino, date: datePeriodiche(inizio, cadenza, fino) };
+        }
+
         // Il campo "Nome della spesa" serve solo quando si sceglie "Altro":
         // negli altri casi la categoria e' gia' quella del menu.
         function onUscitaCatChange(val) {
@@ -4751,8 +4869,9 @@
             if (altro && campo) campo.focus();
         }
 
-        function addUscita(e) {
+        async function addUscita(e) {
             e.preventDefault();
+            const continua = !!(e.submitter && e.submitter.value === 'nuova');
             const data = document.getElementById('uscita-data').value;
             const selCat = document.getElementById('uscita-cat-select').value;
             const nota = (document.getElementById('uscita-nota').value || '').trim();
@@ -4776,7 +4895,14 @@
 
             const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo };
             if (nota) record.nota = nota;
-            window.saveRecordToCloud(record);
+
+            const ripeti = datiRipetizione();
+            if (ripeti) {
+                if (!ripeti.date.length) { showToast('La data finale viene prima della prima spesa.'); return; }
+                if (!(await generaSerieSpese(record, ripeti))) return;
+            } else {
+                window.saveRecordToCloud(record);
+            }
 
             // Ricorda data, categoria e metodo per velocizzare l'inserimento successivo
             window.ultimoDataUscita = data;
@@ -4787,9 +4913,8 @@
                 try { localStorage.setItem('taxi_ultima_categoria_uscita', selCat); } catch (err) { /* spazio esaurito: pazienza */ }
             }
 
-            const continua = !!(e.submitter && e.submitter.value === 'nuova');
             window.showUscitaForm = continua;
-            showToast(continua ? '⚡ Spesa salvata! Pronta per la prossima.' : '⚡ Spesa salvata e sincronizzata!');
+            if (!ripeti) showToast(continua ? '⚡ Spesa salvata! Pronta per la prossima.' : '⚡ Spesa salvata e sincronizzata!');
             renderContent();
             if (continua) {
                 setTimeout(() => {
@@ -4907,6 +5032,58 @@
 
         function annullaModificaRecord() {
             window.editRecordId = null;
+            renderContent();
+        }
+
+        // Scrive tutti i movimenti di una serie. Chiede conferma prima, perche'
+        // ne nascono parecchi in un colpo solo e alcuni possono essere in date
+        // future: quelli entrano subito nei totali dell'anno.
+        async function generaSerieSpese(modello, ripeti) {
+            const serie = 'ric-' + nuovoId();
+            const date = ripeti.date;
+            const totale = date.length * modello.importo;
+            const futuri = date.filter(d => d > oggiISO()).length;
+            const cadenza = (CADENZE_SPESA.find(c => c.id === ripeti.cadenza) || {}).etichetta || '';
+
+            let avviso = `«${modello.categoria}» ${cadenza}: ${date.length} movimenti da ${formatCurrency(modello.importo)}, `
+                + `dal ${ggMm(date[0])} al ${ggMm(date[date.length - 1])}, per ${formatCurrency(totale)} in tutto.`;
+            if (futuri) {
+                avviso += `\n\n${futuri} ${futuri === 1 ? 'è in una data futura' : 'sono in date future'}: `
+                    + `entrano subito nei totali dell'anno e nella stima delle tasse.`;
+            }
+            if (!confirm(avviso + '\nProcedo?')) return false;
+
+            const nuovi = date.map(d => Object.assign({}, modello, { id: `${serie}-${d}`, data: d, serie }));
+            showToast(`Creo ${nuovi.length} movimenti...`);
+            if (typeof window.bulkSave === 'function') {
+                await window.bulkSave(nuovi, []);
+            } else {
+                nuovi.forEach(r => window.saveRecordToCloud(r));
+            }
+            showToast(`${nuovi.length} movimenti creati, ${formatCurrency(totale)} in tutto.`);
+            return true;
+        }
+
+        // Tutti i movimenti di una serie ricorrente
+        function movimentiDellaSerie(serie) {
+            return (window.dailyRecords || []).filter(r => r.serie && String(r.serie) === String(serie));
+        }
+
+        async function eliminaSerieSpese(serie) {
+            const voci = movimentiDellaSerie(serie);
+            if (!voci.length) return;
+            const totale = voci.reduce((a, r) => a + parseFloat(r.importo || 0), 0);
+            const date = voci.map(r => r.data).sort();
+            if (!confirm(`Elimino tutti i ${voci.length} movimenti di «${voci[0].categoria}», dal ${ggMm(date[0])} al ${ggMm(date[date.length - 1])}, per ${formatCurrency(totale)} in tutto?\nL'operazione non si può annullare.`)) return;
+            const ids = voci.map(r => r.id);
+            showToast(`Elimino ${ids.length} movimenti...`);
+            if (typeof window.deleteRecordsFromCloud === 'function') {
+                await window.deleteRecordsFromCloud(ids);
+            } else {
+                ids.forEach(id => window.deleteRecordFromCloud(id));
+            }
+            showToast(`${ids.length} movimenti della serie eliminati.`);
+            renderNav();
             renderContent();
         }
 
@@ -6005,11 +6182,17 @@
             const perNome = new Map(righe.map(r => [chiaveNome(r.nome), r]));
             const fuori = { nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0, maturato: 0, speso: 0, movimenti: 0, ultima: '', extra: true };
 
+            let futuri = 0, importoFuturi = 0;
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 const d = String(r.data || '');
                 if (d < da || d > fine) return;
                 if (!copertaDalBudget(r)) return;
+                // Una spesa gia' registrata ma con data futura - tipico di una
+                // serie ricorrente creata in anticipo - non e' ancora uscita dal
+                // conto: si conta quando arriva, altrimenti la voce sembrerebbe
+                // gia' pagata per intero a settembre.
+                if (d > aOggi) { futuri++; importoFuturi += parseFloat(r.importo || 0); return; }
                 // Stesso abbinamento che usa la quota del giorno: cosi' una spesa
                 // tolta dalla media perche' coperta dal budget finisce per forza
                 // nella riga di quella voce, e non fra le "altre".
@@ -6030,7 +6213,8 @@
             const pctSpeso = budget > 0 ? (speso / budget) * 100 : 0;
             return {
                 anno: String(anno), da, a: aOggi, fine, inCorso, righe: tutte,
-                budget, maturato, speso, differenza: budget - speso, pctAnno, pctSpeso
+                budget, maturato, speso, differenza: budget - speso, pctAnno, pctSpeso,
+                futuri, importoFuturi
             };
         }
 
@@ -6085,6 +6269,13 @@
                                 avevi messo a budget. A oggi ne è maturato ${formatCurrency(c.maturato)}.
                             </p>
                         </div>` : ''}
+
+                    ${c.futuri ? `
+                        <p class="text-xs text-gray-500 leading-relaxed bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                            Nel ${esc(c.anno)} ci sono anche <strong>${c.futuri} ${c.futuri === 1 ? 'movimento registrato in una data futura' : 'movimenti registrati in date future'}</strong>
+                            per ${formatCurrency(c.importoFuturi)} — tipicamente una serie ricorrente creata in anticipo.
+                            Qui non sono contati: entrano man mano che arriva la loro data. Nei totali dell'anno e nella stima delle tasse invece ci sono già.
+                        </p>` : ''}
 
                     ${nessunaSpesa ? `
                         <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
