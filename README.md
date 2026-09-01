@@ -246,6 +246,12 @@ bordo disegnato dentro l'icona finisce tagliato male. Perciò lo strumento ritag
 quadrato (angolo 157,157, lato 709 pixel) e **stringe di un altro 5,5%** per buttare via
 bordo e angoli: quello che resta riempie il quadrato da parte a parte.
 
+Sopra il ritaglio lo strumento disegna il **baffo tricolore**: una lama curva
+appoggiata in basso, appuntita alle due estremita' e divisa in tre parti uguali fra verde,
+bianco e rosso. E' disegnata in frazioni del lato, non in pixel fissi, percio' viene uguale
+a 512 come a 32. Le tre righe da toccare per spostarla o ingrossarla stanno nella funzione
+`baffo`: `punta sinistra`, `punta destra`, `curva di sotto` e `curva di sopra`.
+
 Da questo ritaglio escono sei file:
 
 | File | Dove si vede |

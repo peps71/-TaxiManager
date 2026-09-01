@@ -42,6 +42,38 @@ const out = await p.evaluate(async (uri) => {
   // Alle misure minime (favicon) si stringe sull'auto, altrimenti non si legge nulla.
   const stretto = 485, sxS = 511 - stretto / 2, syS = 543 - stretto / 2;
 
+  // Il baffo tricolore: una lama curva appoggiata in basso, appuntita alle due
+  // estremita' e tagliata in tre per verde, bianco e rosso. Le misure sono
+  // frazioni del lato, cosi' viene uguale a 512 come a 32 pixel.
+  const baffo = (g, ox, oy, lat) => {
+    const P = (fx, fy) => [ox + fx * lat, oy + fy * lat];
+    const [ax, ay] = P(0.160, 0.872);   // punta sinistra
+    const [bx, by] = P(0.840, 0.872);   // punta destra
+    const [csx, csy] = P(0.500, 0.960); // curva di sotto
+    const [cix, ciy] = P(0.500, 0.826); // curva di sopra
+    const sagoma = new Path2D();
+    sagoma.moveTo(ax, ay);
+    sagoma.quadraticCurveTo(csx, csy, bx, by);
+    sagoma.quadraticCurveTo(cix, ciy, ax, ay);
+    sagoma.closePath();
+    // un'ombra sottile sotto, perche' stacchi dal selciato
+    g.save();
+    g.translate(0, lat * 0.008);
+    g.fillStyle = 'rgba(8,12,24,0.42)';
+    g.fill(sagoma);
+    g.restore();
+    // verde, bianco, rosso in tre parti uguali
+    g.save();
+    g.clip(sagoma);
+    const colori = ['#009246', '#f1f2f1', '#ce2b37'];
+    const da = 0.160 * lat, largo = 0.680 * lat / 3;
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle = colori[i];
+      g.fillRect(ox + da + largo * i, oy, largo + 1, lat);
+    }
+    g.restore();
+  };
+
   const rendi = (n, dentro) => {
     const k = document.createElement('canvas');
     k.width = n; k.height = n;
@@ -55,9 +87,11 @@ const out = await p.evaluate(async (uri) => {
       g.filter = 'none';
       const m = n * 0.78, o = (n - m) / 2;
       g.drawImage(img, sx, sy, lato, lato, o, o, m, m);
+      baffo(g, o, o, m);
     } else {
       const zoom = n <= 64;
       g.drawImage(img, zoom ? sxS : sx, zoom ? syS : sy, zoom ? stretto : lato, zoom ? stretto : lato, 0, 0, n, n);
+      baffo(g, 0, 0, n);
     }
     return k.toDataURL('image/png');
   };
