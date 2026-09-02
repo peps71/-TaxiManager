@@ -280,6 +280,32 @@ quello che sono.
 È una lettura, non un movimento: nei totali di giorno, mese e anno ogni spesa conta una
 volta sola, e nel registro resta dov'era.
 
+## Quanto è già del fisco
+
+L'IRPEF **non** è un costo fisso: è una percentuale sull'utile, e a utile zero non se ne
+paga. Metterla a budget sposterebbe il pareggio nel posto sbagliato — in una giornata
+storta l'app addebiterebbe una tassa che non è dovuta. I contributi INPS **sul minimale**
+invece sì: quelli si pagano anche stando fermi, e vanno a budget come il resto.
+
+Perciò, sotto il pareggio, il riquadro della giornata spacca in due quello che c'è
+**sopra**:
+
+| | |
+| --- | --- |
+| Da mettere da parte | la fetta del margine che è già del fisco |
+| Tuoi | quello che resta davvero |
+
+La percentuale non è quella media dell'anno, è quella **marginale**: quanto costa in tasse
+l'euro guadagnato in più, allo scaglione dove ti trovi. Si ricava chiedendo due volte la
+stima delle tasse — una sull'utile dell'anno, una su mille euro in più — e guardando la
+differenza. A metà anno l'utile registrato viene annualizzato, altrimenti lo scaglione
+risulterebbe più basso del vero; se ci sono movimenti con data futura si tiene il più alto
+fra la proiezione e il totale scritto, così non falsano il conto.
+
+In `Cloud & Sync → Impostazioni Fiscali` c'è il campo **Accantonamento sul margine (%)**:
+lasciato **vuoto** lo calcola l'app come sopra, scrivendoci un numero si usa quello. Nel
+riquadro c'è sempre scritto quale dei due sta usando.
+
 ## Costi fissi scritti come movimenti (versioni precedenti)
 
 Fino alla versione 36 l'app scriveva i costi fissi come movimenti veri, uno al mese o
