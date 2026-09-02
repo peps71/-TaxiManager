@@ -133,6 +133,37 @@ proporre un'altra data già passata.
 La cadenza è un campo in più sulla scadenza (`cadenza`): le scadenze scritte prima di
 questa versione restano valide e semplicemente non ce l'hanno.
 
+## Il calendario delle scadenze
+
+Sopra l'elenco c'è il **Calendario dell'anno**: una riga per ogni data che le scadenze
+toccano in quell'anno. L'INPS, che torna ogni 3 mesi, ci compare quattro volte; il bollo e
+la revisione una volta. Con le frecce `‹ ›` si sfoglia avanti e indietro senza cambiare
+l'anno di esercizio di tutta l'app: il **2027 c'è già**, con le stesse voci del 2026 alle
+date corrispondenti, e a gennaio non c'è niente da ricopiare — c'è solo da verificarlo.
+
+Ogni riga ha due comandi:
+
+- il **quadratino verde** spunta quella singola data come fatta. La riga in elenco si
+  rimette da sola sulla prima data ancora da fare, senza saltare le rate arretrate: se
+  spunti febbraio e maggio non l'hai pagato, la prossima diventa maggio, non agosto.
+  Ritogliendo la spunta si torna indietro.
+- la **casella della data** sposta *solo quella occorrenza*. L'INPS teorico cade il 16
+  agosto ma quell'anno si paga il 20: si cambia lì, e la serie resta intatta — l'anno dopo
+  riparte dal 16.
+
+Quello che cambia resta scritto sulla scadenza, sotto `occorrenze`, con la data teorica
+come chiave: `{"2026-08-16": {"data": "2026-08-20"}}`. La prima data della serie è in
+`ancora` e non si tocca più: tutte le altre si contano da lì, così una scadenza del 31
+resta del 31 anche dopo essere passata da febbraio.
+
+### Le scadenze segnate una volta sola
+
+Le ricorrenti si ripresentano da sole. Quelle **non ricorrenti** no: se nel 2025 avevi la
+tassa rifiuti e nel 2026 non c'è, il calendario mostra in fondo un riquadro giallo *«Nel
+2025 avevi anche queste»* con la data già spostata avanti di un anno. Si spunta quello che
+serve, si correggono le date e si tocca **Aggiungi le selezionate**. Il confronto è sul
+nome, quindi una voce già rimessa a mano non viene riproposta due volte.
+
 ## Costi fissi: budget, non movimenti
 
 I costi fissi non sono spese che si registrano: sono **quanto costa lavorare**, prima
