@@ -106,6 +106,33 @@ lo segnala, perché le spese di quei giorni verrebbero contate su entrambe; e ne
 l'avviso «contachilometri all'indietro» non compare più quando fra i due turni c'è
 l'acquisto di un'auto nuova, dove ripartire da capo è normale.
 
+## Scadenze ricorrenti
+
+Revisione, bollo, RCA, verifica del tassametro: tornano sempre uguali a distanza regolare.
+Nel riquadro «Aggiungi una scadenza» c'è la spunta **Scadenza ricorrente**, con la cadenza
+da scegliere: ogni 3 mesi, 6 mesi, ogni anno, 2, 3, 5 o 10 anni.
+
+Funziona in modo diverso dalle spese ricorrenti, e apposta:
+
+- le **spese** ricorrenti generano davvero tanti movimenti, uno per ogni rata, perché ogni
+  rata è un'uscita che deve entrare nei conti;
+- le **scadenze** no. In elenco resta **una riga sola**, quella che scade per prima, con
+  l'etichetta viola della cadenza. Riempire la lista con dieci bolli futuri non servirebbe
+  a niente: quello che conta è la prossima.
+
+Quando la scadenza è stata fatta — revisione passata, bollo pagato — si tocca **Fatta** e
+la data salta al periodo successivo. L'app **non la sposta mai da sola**: una scadenza
+passata deve restare lì e diventare rossa, altrimenti sparirebbe proprio quando serve
+vederla.
+
+La data successiva si conta sempre dalla data di partenza, non da quella corretta il mese
+prima: una scadenza del 31 resta del 31 anche dopo essere passata da febbraio. Se una
+ricorrente è rimasta indietro di anni, «Fatta» salta avanti quanto serve invece di
+proporre un'altra data già passata.
+
+La cadenza è un campo in più sulla scadenza (`cadenza`): le scadenze scritte prima di
+questa versione restano valide e semplicemente non ce l'hanno.
+
 ## Costi fissi: budget, non movimenti
 
 I costi fissi non sono spese che si registrano: sono **quanto costa lavorare**, prima
