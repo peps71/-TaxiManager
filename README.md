@@ -116,14 +116,12 @@ Funziona in modo diverso dalle spese ricorrenti, e apposta:
 
 - le **spese** ricorrenti generano davvero tanti movimenti, uno per ogni rata, perché ogni
   rata è un'uscita che deve entrare nei conti;
-- le **scadenze** no. In elenco resta **una riga sola**, quella che scade per prima, con
-  l'etichetta viola della cadenza. Riempire la lista con dieci bolli futuri non servirebbe
-  a niente: quello che conta è la prossima.
+- le **scadenze** no. Tutto sta nel calendario dell'anno (qui sotto): lì compaiono le date
+  che ogni scadenza tocca in quell'anno, e lì si spuntano.
 
-Quando la scadenza è stata fatta — revisione passata, bollo pagato — si tocca **Fatta** e
-la data salta al periodo successivo. L'app **non la sposta mai da sola**: una scadenza
-passata deve restare lì e diventare rossa, altrimenti sparirebbe proprio quando serve
-vederla.
+Quando la scadenza è stata fatta — revisione passata, bollo pagato — si spunta e sparisce
+dall'elenco. L'app **non sposta mai una data da sola**: una scadenza passata e non spuntata
+deve restare lì e diventare rossa, altrimenti sparirebbe proprio quando serve vederla.
 
 La data successiva si conta sempre dalla data di partenza, non da quella corretta il mese
 prima: una scadenza del 31 resta del 31 anche dopo essere passata da febbraio. Se una
@@ -143,13 +141,16 @@ date corrispondenti, e a gennaio non c'è niente da ricopiare — c'è solo da v
 
 Ogni riga ha due comandi:
 
-- il **quadratino verde** spunta quella singola data come fatta. La riga in elenco si
-  rimette da sola sulla prima data ancora da fare, senza saltare le rate arretrate: se
-  spunti febbraio e maggio non l'hai pagato, la prossima diventa maggio, non agosto.
-  Ritogliendo la spunta si torna indietro.
+- il **quadratino verde** spunta quella data come fatta, **e la riga sparisce**: quello che
+  serve avere davanti è quello che resta da fare. Le fatte non sono perse — l'intestazione
+  dice «*N* fatte» ed è un pulsante che le rimette in vista (la scelta viene ricordata).
+  Dietro le quinte la scadenza si rimette sulla prima data ancora da fare, senza saltare le
+  rate arretrate: se spunti febbraio e maggio non l'hai pagato, la prossima è maggio, non
+  agosto. Ritogliendo la spunta si torna indietro.
 - la **casella della data** sposta *solo quella occorrenza*. L'INPS teorico cade il 16
   agosto ma quell'anno si paga il 20: si cambia lì, e la serie resta intatta — l'anno dopo
   riparte dal 16.
+- **Elimina** toglie la scadenza intera, con tutte le sue date: la conferma lo dice.
 
 Quello che cambia resta scritto sulla scadenza, sotto `occorrenze`, con la data teorica
 come chiave: `{"2026-08-16": {"data": "2026-08-20"}}`. La prima data della serie è in
