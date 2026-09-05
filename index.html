@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 62;
+        const VERSIONE_APP = 63;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -3327,6 +3327,12 @@
                 if (famigliaMetodo(r.metodo) === 'POS') g.pos += imp;
             });
 
+            // Con un giorno scelto il suo turno si mostra in alto, sotto il pulsante
+            // «+ Registra Turno»: e' li' che lo si cerca, non in fondo al registro.
+            const giornataScelta = giorno
+                ? (giornate.get(giorno) || { iso: giorno, turno: null, corse: [], tot: 0, pos: 0 })
+                : null;
+
             let lista = Array.from(giornate.values()).sort((a, b) => b.iso.localeCompare(a.iso));
             // Con un metodo selezionato restano solo le giornate che hanno corse di
             // quel tipo: le altre sarebbero righe a zero senza motivo.
@@ -3503,7 +3509,9 @@
                 </div>`;
 
             // --- il turno della giornata, con i comandi ---
-            const bloccoTurno = (g) => {
+            // conPulsante: nel registro la giornata senza turno offre il pulsante per
+            // registrarlo; in cima no, perche' il pulsante e' gia' li' sopra.
+            const bloccoTurno = (g, conPulsante = true) => {
                 const t = g.turno;
                 if (!t) return `
                     <div class="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5">
@@ -3511,7 +3519,7 @@
                             <p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Turno</p>
                             <p class="text-sm font-bold text-gray-400">Non registrato</p>
                         </div>
-                        <button onclick="apriFormTurno('${g.iso}')" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg">+ Registra turno</button>
+                        ${conPulsante ? `<button onclick="apriFormTurno('${g.iso}')" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg">+ Registra turno</button>` : ''}
                     </div>`;
                 const editing = !isRiposo(t) && String(window.editKmId) === String(t.id);
                 // Compilando i km a posteriori, i km inizio si ereditano dal turno
@@ -3593,7 +3601,7 @@
                         </button>
                         ${aperta ? `
                             <div class="border-t border-gray-100 p-3 space-y-3">
-                                ${bloccoTurno(g)}
+                                ${giorno ? '' : bloccoTurno(g)}
                                 ${g.corse.length ? `
                                     <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                                         ${g.corse.map(rigaCorsa).join('')}
@@ -3687,6 +3695,8 @@
                     ` : ''}
 
                     ${window.showShiftForm ? moduloTurno() : ''}
+
+                    ${giornataScelta ? bloccoTurno(giornataScelta, false) : ''}
 
                     <!-- I due riepiloghi, appena prima del pulsante delle corse -->
                     <div class="flex flex-wrap gap-2">

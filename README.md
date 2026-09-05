@@ -89,17 +89,23 @@ registrato mostrano **+ Registra turno**, che apre il modulo già puntato su que
 L'ordine della pagina segue il giro di una giornata di lavoro:
 
 1. il **giorno** con le frecce ‹ › — il comando che si usa ogni volta;
-2. **+ Registra Turno** e, quando serve, l'avviso della giornata di riposo: il turno si
-   segna all'inizio, prima di tutto il resto;
+2. **+ Registra Turno**, l'avviso della giornata di riposo quando serve, e il **turno del
+   giorno scelto** — tipo, orari, ore, km, con «Modifica» o «+ Aggiungi km» ed «Elimina».
+   Il turno si segna all'inizio e si controlla lì, sotto il suo pulsante;
 3. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km;
 4. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere;
 5. il **pannello dei filtri**: metodo di pagamento, mese, «Solo le N senza km», «Azzera
    filtri» e la ripartizione per metodo;
-6. il **registro**, in fondo: le giornate con il loro turno e le loro corse.
+6. il **registro**, in fondo: le giornate con le loro corse.
 
 Sopra c'è quello che si fa, sotto quello che è già registrato, e i filtri stanno subito
 sopra l'elenco che governano. Ogni modulo si apre sotto il proprio pulsante: quello del
 turno in alto, quello della corsa a metà pagina.
+
+Il turno compare **in un posto solo**: in cima quando c'è un giorno scelto (il caso
+normale), dentro la scheda della giornata quando il filtro giorno è spento e si stanno
+sfogliando più giorni. Così non c'è mai un doppione, e da nessuna delle due posizioni si
+perde il pulsante per completare i km.
 
 I moduli, standosene in fondo, si aprirebbero sotto il bordo dello schermo: perciò
 `toggleCorsaForm`, `toggleShiftForm` e `apriFormTurno` ci portano sopra da soli
