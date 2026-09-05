@@ -79,6 +79,16 @@ mese. Nell'elenco corse il giorno parte su oggi; in quello dei turni parte spent
 prima volta si vede tutto l'anno. Toccando un giorno del calendario e poi «Apri nell'elenco
 turni» il filtro si posiziona su quella data.
 
+Nel **calendario** ogni giornata lavorata mostra le ore, l'incasso totale in verde e,
+sotto, la quota incassata **a POS** in blu. Sono solo le entrate con metodo `POS`: una
+spesa pagata col bancomat non c'entra e non viene contata. Sopra la griglia c'è il totale
+POS del mese, e toccando un giorno il pannello ripete incasso e POS per esteso. Quando in
+una giornata non c'è POS la riga semplicemente non compare.
+
+Gli incassi del mese vengono contati **una volta sola**, in un passaggio, invece di
+rileggere tutto l'archivio in ogni casella: con qualche anno di corse alle spalle la
+differenza si sente.
+
 **I filtri dell'elenco turni vengono ricordati**, giorno e mese, come la vista: prima
 stavano solo in memoria e bastava chiudere l'app per ritrovarli azzerati. Un giorno
 ricordato però vale solo dentro l'anno di esercizio aperto — se cambi anno, o se resta
