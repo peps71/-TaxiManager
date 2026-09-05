@@ -79,6 +79,22 @@ mese. Nell'elenco corse il giorno parte su oggi; in quello dei turni parte spent
 prima volta si vede tutto l'anno. Toccando un giorno del calendario e poi «Apri nell'elenco
 turni» il filtro si posiziona su quella data.
 
+### Niente corse nelle giornate di riposo
+
+Se il filtro giorno del **registro corse** è su una giornata segnata come non lavorata —
+festivo, recupero festivo, malattia, sciopero — il pulsante «+ Nuova Corsa» è spento e al
+suo posto compare la spiegazione, con **Apri nel calendario** per andare a cambiare il tipo
+di giornata se quel giorno hai lavorato davvero. Il modulo eventualmente già aperto si
+chiude.
+
+Il blocco non sta solo nel pulsante: `addCorsa` controlla la **data scritta nel modulo**,
+che può essere diversa da quella del filtro, e rifiuta il salvataggio dicendo quale tipo di
+giornata è di mezzo. La via d'uscita è sempre la stessa — cambiare il tipo di giornata —
+così non ci si trova con un incasso in un giorno che l'app conta come riposo.
+
+Vale anche il contrario: segnando come non lavorata una giornata che ha già degli incassi,
+l'app chiede conferma dicendo quanto c'è registrato. Le corse non vengono toccate.
+
 Nel **calendario** ogni giornata lavorata mostra le ore, l'incasso totale in verde e,
 sotto, la quota incassata **a POS** in blu. Sono solo le entrate con metodo `POS`: una
 spesa pagata col bancomat non c'entra e non viene contata. Sopra la griglia c'è il totale
