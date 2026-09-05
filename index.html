@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 60;
+        const VERSIONE_APP = 61;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -3658,30 +3658,35 @@
                         <p class="text-gray-500">Turni, km e corse dello stesso giorno, in una riga sola.</p>
                     </header>
 
-                    <!-- La giornata scelta e i suoi numeri: e' la prima cosa da vedere -->
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
-                        <div>
-                            <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Giorno</label>
-                            <div class="flex items-center gap-1">
-                                <button onclick="scorriGiornoGiornate(-1)" title="Giorno precedente" class="w-9 h-9 flex-shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
-                                <input type="date" value="${giorno}" onchange="applyFilterGiornoGiornate(this.value)" class="flex-1 min-w-0 sm:flex-none p-2 border rounded-lg text-sm bg-gray-50 font-bold" />
-                                <button onclick="scorriGiornoGiornate(1)" title="Giorno successivo" class="w-9 h-9 flex-shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
-                                ${giorno ? `<button onclick="pulisciGiornoGiornate()" title="Togli il filtro giorno" class="w-9 h-9 flex-shrink-0 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-black">×</button>` : ''}
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                            <div class="bg-green-50 border border-green-200 px-4 py-2 rounded-xl text-right flex-[2] min-w-[10rem]">
-                                <p class="text-[10px] font-black uppercase tracking-wider text-green-700 capitalize">${etichettaPeriodo}${metodo !== 'ALL' ? ' · ' + ETICHETTE_METODO[metodo] : ''}</p>
-                                <p class="text-2xl font-black text-green-700 leading-tight">${formatCurrency(totCorse)}</p>
-                                <p class="text-[11px] font-bold text-green-700/70">${corseFiltrate.length} corse · ${formatCurrency(mediaCorsa)} a corsa</p>
-                            </div>
-                            <div class="bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-xl text-right flex-1 min-w-[6.5rem]">
-                                <p class="text-[10px] font-black uppercase tracking-wider text-yellow-700">Turni</p>
-                                <p class="text-2xl font-black text-yellow-700 leading-tight">${turniLavorati.length}</p>
-                                <p class="text-[11px] font-bold text-yellow-700/70">${oreTot.toFixed(1)} h · ${kmTot} km</p>
-                            </div>
+                    <!-- Il giorno scelto: resta la prima cosa della pagina -->
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                        <label class="block text-[10px] font-black uppercase tracking-wider text-gray-400 mb-1">Giorno</label>
+                        <div class="flex items-center gap-1">
+                            <button onclick="scorriGiornoGiornate(-1)" title="Giorno precedente" class="w-9 h-9 flex-shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
+                            <input type="date" value="${giorno}" onchange="applyFilterGiornoGiornate(this.value)" class="flex-1 min-w-0 sm:flex-none p-2 border rounded-lg text-sm bg-gray-50 font-bold" />
+                            <button onclick="scorriGiornoGiornate(1)" title="Giorno successivo" class="w-9 h-9 flex-shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
+                            ${giorno ? `<button onclick="pulisciGiornoGiornate()" title="Togli il filtro giorno" class="w-9 h-9 flex-shrink-0 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-black">×</button>` : ''}
                         </div>
                     </div>
+
+                    <!-- Il turno si registra all'inizio della giornata: sta qui, con l'avviso -->
+                    <button onclick="toggleShiftForm()" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white font-bold px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
+                        ${window.showShiftForm ? 'Annulla' : '+ Registra Turno'}
+                    </button>
+
+                    ${riposoDelGiorno ? `
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                            <p class="text-sm font-black text-gray-900">${esc(riposoDelGiorno.turno)}: qui non si registrano corse</p>
+                            <p class="text-xs text-gray-500 mt-1 leading-relaxed">
+                                <span class="capitalize">${dataEstesa(giorno)}</span> è segnata come
+                                <strong>${esc(riposoDelGiorno.turno)}</strong>, quindi il registro non accetta incassi in questa data.
+                                Se quel giorno hai lavorato lo stesso, cambia prima il tipo di giornata.
+                            </p>
+                            <button onclick="apriNelCalendario('${giorno}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Apri nel calendario</button>
+                        </div>
+                    ` : ''}
+
+                    ${window.showShiftForm ? moduloTurno() : ''}
 
                     ${lista.length > LIMITE_RIGHE ? `
                         <p class="text-center text-xs font-bold text-gray-500 bg-yellow-50 border border-yellow-200 rounded-xl p-3">
@@ -3699,33 +3704,29 @@
                             </div>`}
                     </div>
 
-                    <div class="flex flex-wrap gap-2 pt-1">
-                        ${riposoDelGiorno ? `
-                            <button disabled title="Giornata segnata come ${esc(riposoDelGiorno.turno)}" class="flex-1 sm:flex-none bg-gray-200 text-gray-400 font-bold px-3 py-3 rounded-xl cursor-not-allowed whitespace-nowrap">+ Nuova Corsa</button>
-                        ` : `
-                            <button onclick="toggleCorsaForm()" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-3 rounded-xl transition-colors shadow-sm whitespace-nowrap">
-                                ${window.showCorsaForm ? 'Annulla' : '+ Nuova Corsa'}
-                            </button>
-                        `}
-                        <button onclick="toggleShiftForm()" class="flex-1 sm:flex-none bg-gray-900 hover:bg-gray-800 text-white font-bold px-3 py-3 rounded-xl transition-colors whitespace-nowrap">
-                            ${window.showShiftForm ? 'Annulla' : '+ Registra Turno'}
-                        </button>
+                    <!-- I due riepiloghi, appena prima del pulsante delle corse -->
+                    <div class="flex flex-wrap gap-2">
+                        <div class="bg-green-50 border border-green-200 px-4 py-2 rounded-xl text-right flex-[2] min-w-[10rem]">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-green-700 capitalize">${etichettaPeriodo}${metodo !== 'ALL' ? ' · ' + ETICHETTE_METODO[metodo] : ''}</p>
+                            <p class="text-2xl font-black text-green-700 leading-tight">${formatCurrency(totCorse)}</p>
+                            <p class="text-[11px] font-bold text-green-700/70">${corseFiltrate.length} corse · ${formatCurrency(mediaCorsa)} a corsa</p>
+                        </div>
+                        <div class="bg-yellow-50 border border-yellow-200 px-4 py-2 rounded-xl text-right flex-1 min-w-[6.5rem]">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-yellow-700">Turni</p>
+                            <p class="text-2xl font-black text-yellow-700 leading-tight">${turniLavorati.length}</p>
+                            <p class="text-[11px] font-bold text-yellow-700/70">${oreTot.toFixed(1)} h · ${kmTot} km</p>
+                        </div>
                     </div>
 
                     ${riposoDelGiorno ? `
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                            <p class="text-sm font-black text-gray-900">${esc(riposoDelGiorno.turno)}: qui non si registrano corse</p>
-                            <p class="text-xs text-gray-500 mt-1 leading-relaxed">
-                                <span class="capitalize">${dataEstesa(giorno)}</span> è segnata come
-                                <strong>${esc(riposoDelGiorno.turno)}</strong>, quindi il registro non accetta incassi in questa data.
-                                Se quel giorno hai lavorato lo stesso, cambia prima il tipo di giornata.
-                            </p>
-                            <button onclick="apriNelCalendario('${giorno}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Apri nel calendario</button>
-                        </div>
-                    ` : ''}
+                        <button disabled title="Giornata segnata come ${esc(riposoDelGiorno.turno)}" class="w-full sm:w-auto bg-gray-200 text-gray-400 font-bold px-5 py-3 rounded-xl cursor-not-allowed whitespace-nowrap">+ Nuova Corsa</button>
+                    ` : `
+                        <button onclick="toggleCorsaForm()" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold px-5 py-3 rounded-xl transition-colors shadow-sm whitespace-nowrap">
+                            ${window.showCorsaForm ? 'Annulla' : '+ Nuova Corsa'}
+                        </button>
+                    `}
 
                     ${window.showCorsaForm && !riposoDelGiorno ? moduloCorsa() : ''}
-                    ${window.showShiftForm ? moduloTurno() : ''}
 
                     ${pannelloFiltri()}
                 </div>
