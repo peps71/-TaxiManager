@@ -101,6 +101,13 @@ spesa pagata col bancomat non c'entra e non viene contata. Sopra la griglia c'è
 POS del mese, e toccando un giorno il pannello ripete incasso e POS per esteso. Quando in
 una giornata non c'è POS la riga semplicemente non compare.
 
+Il POS è scritto **con i centesimi**, perché è il numero che si confronta con l'estratto
+conto e lì i centesimi contano; il totale della giornata resta arrotondato, che è una
+lettura a colpo d'occhio. Nella casella il POS non porta il simbolo dell'euro: con i
+centesimi «120,00 €» non ci starebbe, e su un telefono stretto verrebbe tagliato a metà.
+A dire quali sono i due numeri ci pensa la legenda sotto la griglia — **● incassato** in
+verde, **● di cui a POS** in blu.
+
 Gli incassi del mese vengono contati **una volta sola**, in un passaggio, invece di
 rileggere tutto l'archivio in ogni casella: con qualche anno di corse alle spalle la
 differenza si sente.
