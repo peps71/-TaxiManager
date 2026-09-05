@@ -86,8 +86,14 @@ Il motivo è che «ho messo i km di ieri?» e «quanto ho fatto ieri?» sono la 
 sullo stesso giorno: prima erano due schede e un rimbalzo continuo. Le giornate senza turno
 registrato mostrano **+ Registra turno**, che apre il modulo già puntato su quella data.
 
-I filtri sono **uno solo** per corse e turni — giorno con le frecce ‹ › e il × per toglierlo,
-metodo di pagamento, mese, «Azzera filtri» — e il giorno, quando è impostato, ha la
+L'ordine della pagina segue quello che serve appena si apre: i due pulsanti, poi la
+**giornata scelta** con le frecce ‹ › e i suoi numeri (incasso, corse, media a corsa;
+turni, ore, km), poi le giornate. Il resto dei filtri — metodo di pagamento, mese, «Azzera
+filtri» — e la ripartizione per metodo stanno **in fondo**: sono comandi per cercare, non
+quello che si viene a vedere. Sopra resta solo la data con le frecce, che è il comando che
+si usa ogni giorno.
+
+Il filtro è **uno solo** per corse e turni, e il giorno, quando è impostato, ha la
 precedenza sul mese. Con un metodo selezionato restano solo le giornate che hanno corse di
 quel tipo. Il promemoria dei **turni senza km** guarda sempre tutto l'anno, così non si
 perde di vista un turno da completare solo perché si sta guardando un altro mese.
