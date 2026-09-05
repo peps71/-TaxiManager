@@ -70,22 +70,45 @@ impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
 ## Turni & Corse
 
-Tre viste: **Elenco corse**, **Elenco turni** e **Calendario**. Quella scelta resta:
-riaprendo l'app si torna dov'eri, come per la scheda.
+Due viste: **Giornate** e **Calendario**. Quella scelta resta: riaprendo l'app si torna
+dov'eri, come per la scheda.
 
-Elenco corse ed elenco turni hanno gli stessi filtri — giorno con le frecce ‹ › e il × per
-toglierlo, mese, e «Azzera filtri» — e il giorno, quando è impostato, ha la precedenza sul
-mese. Nell'elenco corse il giorno parte su oggi; in quello dei turni parte spento, così la
-prima volta si vede tutto l'anno. Toccando un giorno del calendario e poi «Apri nell'elenco
-turni» il filtro si posiziona su quella data.
+### Giornate
+
+Fino alla versione 57 c'erano due elenchi separati, «Elenco corse» ed «Elenco turni», che
+guardavano gli stessi giorni con due serie di filtri da tenere allineate a mano. Adesso è
+una scheda sola e **la riga è la giornata**: data, tipo di turno con ore e km, incasso
+totale, quanto di quello è andato a POS, quante corse. Toccando la riga si apre il
+dettaglio — il turno con «Modifica» / «+ Aggiungi km» / «Elimina», e sotto le corse di quel
+giorno, ognuna con il suo metodo, modificabile ed eliminabile sul posto.
+
+Il motivo è che «ho messo i km di ieri?» e «quanto ho fatto ieri?» sono la stessa domanda
+sullo stesso giorno: prima erano due schede e un rimbalzo continuo. Le giornate senza turno
+registrato mostrano **+ Registra turno**, che apre il modulo già puntato su quella data.
+
+I filtri sono **uno solo** per corse e turni — giorno con le frecce ‹ › e il × per toglierlo,
+metodo di pagamento, mese, «Azzera filtri» — e il giorno, quando è impostato, ha la
+precedenza sul mese. Con un metodo selezionato restano solo le giornate che hanno corse di
+quel tipo. Il promemoria dei **turni senza km** guarda sempre tutto l'anno, così non si
+perde di vista un turno da completare solo perché si sta guardando un altro mese.
+
+**I filtri vengono ricordati**, tutti e tre, come la vista. Il giorno parte su oggi la prima
+volta — è il caso normale, si apre l'app per registrare quello che si è appena fatto — e
+dopo resta quello scelto; il × lo toglie e anche quello viene ricordato. Un giorno ricordato
+vale però solo dentro l'anno di esercizio aperto: se cambi anno, o se resta appeso un giorno
+di un anno diverso, il filtro si spegne da solo, altrimenti l'elenco risulterebbe vuoto
+senza che si capisca perché. Le chiavi sono `taxi_giorno_giornate`, `taxi_mese_giornate` e
+`taxi_metodo_giornate`.
+
+Toccando un giorno del calendario e poi «Apri nelle giornate» il filtro si posiziona su
+quella data con la giornata già aperta.
 
 ### Niente corse nelle giornate di riposo
 
-Se il filtro giorno del **registro corse** è su una giornata segnata come non lavorata —
-festivo, recupero festivo, malattia, sciopero — il pulsante «+ Nuova Corsa» è spento e al
-suo posto compare la spiegazione, con **Apri nel calendario** per andare a cambiare il tipo
-di giornata se quel giorno hai lavorato davvero. Il modulo eventualmente già aperto si
-chiude.
+Se il filtro giorno è su una giornata segnata come non lavorata — festivo, recupero festivo,
+malattia, sciopero — il pulsante «+ Nuova Corsa» è spento e al suo posto compare la
+spiegazione, con **Apri nel calendario** per andare a cambiare il tipo di giornata se quel
+giorno hai lavorato davvero. Il modulo eventualmente già aperto si chiude.
 
 Il blocco non sta solo nel pulsante: `addCorsa` controlla la **data scritta nel modulo**,
 che può essere diversa da quella del filtro, e rifiuta il salvataggio dicendo quale tipo di
@@ -94,6 +117,8 @@ così non ci si trova con un incasso in un giorno che l'app conta come riposo.
 
 Vale anche il contrario: segnando come non lavorata una giornata che ha già degli incassi,
 l'app chiede conferma dicendo quanto c'è registrato. Le corse non vengono toccate.
+
+### Il calendario
 
 Nel **calendario** ogni giornata lavorata mostra le ore, l'incasso totale in verde e,
 sotto, la quota incassata **a POS** in blu. Sono solo le entrate con metodo `POS`: una
@@ -111,13 +136,6 @@ verde, **● di cui a POS** in blu.
 Gli incassi del mese vengono contati **una volta sola**, in un passaggio, invece di
 rileggere tutto l'archivio in ogni casella: con qualche anno di corse alle spalle la
 differenza si sente.
-
-**I filtri dell'elenco turni vengono ricordati**, giorno e mese, come la vista: prima
-stavano solo in memoria e bastava chiudere l'app per ritrovarli azzerati. Un giorno
-ricordato però vale solo dentro l'anno di esercizio aperto — se cambi anno, o se resta
-appeso un giorno di un anno diverso, il filtro si spegne da solo: altrimenti l'elenco
-risulterebbe vuoto senza che si capisca perché. Le chiavi sono `taxi_giorno_turni` e
-`taxi_mese_turni`; «Azzera filtri» e il × le cancellano.
 
 ## Parco auto
 
