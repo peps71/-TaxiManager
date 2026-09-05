@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 53;
+        const VERSIONE_APP = 54;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -737,10 +737,13 @@
         window.ultimoMetodoCorsa = localStorage.getItem('taxi_ultimo_metodo_corsa') || 'Contanti';
         window.ultimoMetodoUscita = localStorage.getItem('taxi_ultimo_metodo_uscita') || 'Contanti';
         window.ultimaCategoriaUscita = localStorage.getItem('taxi_ultima_categoria_uscita') || '';
-        window.filterMonthTurni = 'ALL';
-        // Filtro giorno dell'elenco turni: '' = spento. A differenza delle corse
-        // parte spento, cosi' aprendo l'elenco si continua a vedere tutto l'anno.
-        window.filterGiornoTurni = '';
+        // Filtri dell'elenco turni: si ricordano fra un'apertura e l'altra, come
+        // la modalita' di visualizzazione. Prima stavano solo in memoria e
+        // riaprendo l'app si tornava sempre a "tutto l'anno".
+        window.filterMonthTurni = localStorage.getItem('taxi_mese_turni') || 'ALL';
+        // '' = filtro giorno spento: a differenza delle corse parte spento, cosi'
+        // la prima volta che si apre l'elenco si vede tutto l'anno.
+        window.filterGiornoTurni = localStorage.getItem('taxi_giorno_turni') || '';
         // Bozze dei km digitati a mano nel form "+ Registra Turno" (null = usa il suggerimento
         // automatico dal turno precedente). Si azzerano ogni volta che il form si riapre, cosi'
         // il valore digitato non va perso se il form si ridisegna (es. cambio tipo di turno).
@@ -1154,7 +1157,7 @@
             window.dashMese = null;
             window.filterGiornoCorse = null;   // si riposiziona sull'anno scelto
             window.filterGiornoUscite = null;
-            window.filterGiornoTurni = '';     // il giorno di un altro anno non c'entra piu'
+            ricordaGiornoTurni('');            // il giorno di un altro anno non c'entra piu'
             window.annoScadenze = null;        // il calendario scadenze segue l'anno scelto
             renderContent();
         }
@@ -3900,8 +3903,8 @@
         // Dal calendario all'elenco turni, posizionato sul mese giusto
         function apriNellElenco(iso) {
             ricordaVista('turni');
-            window.filterGiornoTurni = iso;
-            window.filterMonthTurni = 'ALL';
+            ricordaGiornoTurni(iso);
+            ricordaMeseTurni('ALL');
             window.giornoCalendarioAperto = null;
             renderContent();
         }
@@ -5882,34 +5885,57 @@
         }
 
         function applyFilterTurni(val) {
-            window.filterMonthTurni = val;
-            window.filterGiornoTurni = '';   // il mese e il giorno si escludono a vicenda
+            ricordaMeseTurni(val);
+            ricordaGiornoTurni('');          // il mese e il giorno si escludono a vicenda
             renderContent();
         }
 
+        // Il giorno ricordato vale solo dentro l'anno di esercizio aperto: uno di
+        // un altro anno non filtrerebbe niente e sembrerebbe un elenco vuoto.
         function giornoFiltroTurni() {
-            return window.filterGiornoTurni || '';
+            const giorno = window.filterGiornoTurni || '';
+            if (giorno && giorno.slice(0, 4) !== annoAttivo()) {
+                ricordaGiornoTurni('');
+                return '';
+            }
+            return giorno;
+        }
+
+        function ricordaGiornoTurni(iso) {
+            window.filterGiornoTurni = iso || '';
+            try {
+                if (window.filterGiornoTurni) localStorage.setItem('taxi_giorno_turni', window.filterGiornoTurni);
+                else localStorage.removeItem('taxi_giorno_turni');
+            } catch (err) { /* spazio esaurito: pazienza */ }
+        }
+
+        function ricordaMeseTurni(val) {
+            window.filterMonthTurni = val || 'ALL';
+            try {
+                if (window.filterMonthTurni !== 'ALL') localStorage.setItem('taxi_mese_turni', window.filterMonthTurni);
+                else localStorage.removeItem('taxi_mese_turni');
+            } catch (err) { /* spazio esaurito: pazienza */ }
         }
 
         function applyFilterGiornoTurni(val) {
-            window.filterGiornoTurni = val || '';
+            ricordaGiornoTurni(val);
             renderContent();
         }
 
         function scorriGiornoTurni(delta) {
             const base = giornoFiltroTurni() || ultimoGiornoConDati() || oggiISO();
-            window.filterGiornoTurni = spostaGiorno(base, delta);
+            ricordaGiornoTurni(spostaGiorno(base, delta));
             renderContent();
         }
 
         function pulisciGiornoTurni() {
-            window.filterGiornoTurni = '';
+            ricordaGiornoTurni('');
             renderContent();
         }
 
         function azzeraFiltriTurni() {
-            window.filterGiornoTurni = '';
-            window.filterMonthTurni = 'ALL';
+            ricordaGiornoTurni('');
+            ricordaMeseTurni('ALL');
             window.soloSenzaKm = false;
             renderContent();
         }

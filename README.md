@@ -75,9 +75,16 @@ riaprendo l'app si torna dov'eri, come per la scheda.
 
 Elenco corse ed elenco turni hanno gli stessi filtri — giorno con le frecce ‹ › e il × per
 toglierlo, mese, e «Azzera filtri» — e il giorno, quando è impostato, ha la precedenza sul
-mese. Nell'elenco corse il giorno parte su oggi; in quello dei turni parte spento, così
-all'apertura si continua a vedere tutto l'anno. Toccando un giorno del calendario e poi
-«Apri nell'elenco turni» il filtro si posiziona su quella data.
+mese. Nell'elenco corse il giorno parte su oggi; in quello dei turni parte spento, così la
+prima volta si vede tutto l'anno. Toccando un giorno del calendario e poi «Apri nell'elenco
+turni» il filtro si posiziona su quella data.
+
+**I filtri dell'elenco turni vengono ricordati**, giorno e mese, come la vista: prima
+stavano solo in memoria e bastava chiudere l'app per ritrovarli azzerati. Un giorno
+ricordato però vale solo dentro l'anno di esercizio aperto — se cambi anno, o se resta
+appeso un giorno di un anno diverso, il filtro si spegne da solo: altrimenti l'elenco
+risulterebbe vuoto senza che si capisca perché. Le chiavi sono `taxi_giorno_turni` e
+`taxi_mese_turni`; «Azzera filtri» e il × le cancellano.
 
 ## Parco auto
 
