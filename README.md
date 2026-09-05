@@ -91,15 +91,15 @@ L'ordine della pagina segue il giro di una giornata di lavoro:
 1. il **giorno** con le frecce ‹ › — il comando che si usa ogni volta;
 2. **+ Registra Turno** e, quando serve, l'avviso della giornata di riposo: il turno si
    segna all'inizio, prima di tutto il resto;
-3. la **giornata** con il suo turno e le sue corse;
-4. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km;
-5. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere;
-6. il **pannello dei filtri**: metodo di pagamento, mese, «Solo le N senza km», «Azzera
-   filtri» e la ripartizione per metodo. Sono comandi per cercare, non quello che si viene
-   a vedere.
+3. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km;
+4. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere;
+5. il **pannello dei filtri**: metodo di pagamento, mese, «Solo le N senza km», «Azzera
+   filtri» e la ripartizione per metodo;
+6. il **registro**, in fondo: le giornate con il loro turno e le loro corse.
 
-Ogni modulo si apre sotto il proprio pulsante: quello del turno in alto, quello della corsa
-in basso.
+Sopra c'è quello che si fa, sotto quello che è già registrato, e i filtri stanno subito
+sopra l'elenco che governano. Ogni modulo si apre sotto il proprio pulsante: quello del
+turno in alto, quello della corsa a metà pagina.
 
 I moduli, standosene in fondo, si aprirebbero sotto il bordo dello schermo: perciò
 `toggleCorsaForm`, `toggleShiftForm` e `apriFormTurno` ci portano sopra da soli
