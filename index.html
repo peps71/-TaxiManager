@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 70;
+        const VERSIONE_APP = 71;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -3486,7 +3486,7 @@
                             <p class="text-sm font-bold text-gray-800">
                                 ${isRiposo(t)
                                     ? `<span class="${t.turno === 'Recupero festivo' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-indigo-100 text-indigo-800 border-indigo-200'} border px-2 py-0.5 rounded-md text-xs font-black">${esc(t.turno || 'Festivo')}</span>`
-                                    : `${esc(t.turno || 'Personalizzato')} <span class="font-medium text-gray-500">· ${t.inizio} - ${t.fine} · ${t.ore} ore</span>`}
+                                    : `${esc(nomeTurno(t))} <span class="font-medium text-gray-500">${orariTurno(t) ? '· ' + esc(orariTurno(t)) + ' ' : ''}· ${t.ore} ore</span>`}
                             </p>
                             ${isRiposo(t) ? '' : `
                                 <p class="text-xs font-bold ${kmMancanti(t) ? 'text-yellow-700' : 'text-gray-500'}">
@@ -3676,7 +3676,7 @@
                         ? `${lavorati.length} turni · ${oreGiorno.toFixed(1)} h${kmGiorno ? ' · ' + kmGiorno + ' km' : ''}`
                         : (riposo
                             ? esc(t.turno || 'Festivo')
-                            : `${esc(t.turno || 'Personalizzato')} · ${t.ore} h${t.kmTot ? ' · ' + t.kmTot + ' km' : ''}`);
+                            : `${esc(nomeTurno(t))}${orariTurno(t) ? ' · ' + esc(orariTurno(t)) : ''} · ${t.ore} h${t.kmTot ? ' · ' + t.kmTot + ' km' : ''}`);
                 return `
                     <div class="bg-white rounded-2xl shadow-sm border ${riposo ? 'border-indigo-200' : 'border-gray-100'} overflow-hidden">
                         <button onclick="alternaGiornata('${g.iso}')" class="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 hover:bg-gray-50 transition-colors">
@@ -4090,7 +4090,7 @@
                             <div class="min-w-0">
                                 <p class="text-[10px] font-black uppercase tracking-wider text-yellow-400">Giornata scelta</p>
                                 <p class="text-base font-black text-white capitalize leading-tight">${dataEstesa(iso)}</p>
-                                <p class="text-xs font-bold text-gray-400">${esc(t ? t.turno + (t.ore ? ` · ${t.ore} h` : '') : 'Nessun turno registrato')}</p>
+                                <p class="text-xs font-bold text-gray-400">${t ? esc(nomeTurno(t) + (orariTurno(t) ? ' · ' + orariTurno(t) : '') + (t.ore ? ` · ${t.ore} h` : '')) : 'Nessun turno registrato'}</p>
                                 ${incassoDi(iso) > 0 ? `
                                     <p class="text-xs font-black text-green-400 mt-0.5">
                                         ${formatCurrency(incassoDi(iso))}
@@ -5537,6 +5537,18 @@
 
         function isRiposo(t) {
             return !!t && t.lavorato === false;
+        }
+
+        // Il nome del turno senza gli orari fra parentesi, e gli orari veri presi
+        // dal turno registrato. Cosi' si vedono anche quando l'orario e' stato
+        // scelto a mano («Personalizzato», che nel nome non li porta) o corretto
+        // dopo, e non si leggono due volte per quelli che li hanno nel nome.
+        function nomeTurno(t) {
+            return String((t && t.turno) || 'Personalizzato').split(' (')[0].trim() || 'Personalizzato';
+        }
+
+        function orariTurno(t) {
+            return t && t.inizio && t.fine ? `${t.inizio} - ${t.fine}` : '';
         }
 
         // Il turno di una giornata, se quel giorno e' segnato come non lavorato

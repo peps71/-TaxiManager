@@ -501,6 +501,22 @@ Poi si sostituisce il contenuto del `<style>` in cima a `index.html` con quello 
 JavaScript e tiene solo quelle: ne esce una trentina di kilobyte invece dei due megabyte
 del pacchetto intero.
 
+## Gli orari del turno si vedono sempre
+
+I turni predefiniti hanno gli orari **nel nome** — «L'una (13:00 - 1:00)» — ma
+«Personalizzato» no: l'orario scelto a mano stava solo nei campi `inizio` e `fine` del
+turno, e quando l'elenco dei turni è diventato la scheda Giornate quei due campi non li
+mostrava più nessuno. Chi lavorava a orario libero non vedeva più a che ora aveva
+attaccato.
+
+Adesso il nome e gli orari si mostrano sempre separati: `nomeTurno` toglie la parentesi dal
+nome e `orariTurno` prende gli orari dal turno registrato. Si legge **«Personalizzato ·
+05:45 - 15:15 · 9.5 h»** e **«L'una · 13:00 - 01:00 · 12 h»** — senza ripetizioni, e con gli
+orari veri anche quando sono stati corretti dopo averli salvati.
+
+Vale nella testata di ogni giornata, nell'intestazione del pannello del calendario e nel
+riquadro del turno.
+
 ## Verifica generale (versione 70)
 
 Una passata di controllo su tutta l'app, con quattro bug veri trovati e sistemati e
