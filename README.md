@@ -258,6 +258,19 @@ e il conguaglio dice a fine anno quanto ci si è presi. Quello che non è a budg
 spalma da sola, facendo la media di quello che è stato registrato nel mese. INPS e IRPEF
 restano fuori: sono già stimate.
 
+## Una sola voce «Carburante»
+
+Nel **Registro Uscite** la tipologia si ricava da quello che viene prima del trattino o
+della parentesi: «Manutenzione - Tagliando» diventa «Manutenzione». Col carburante non
+bastava, perché negli anni l'hai scritto in modi diversi — «Carburante», «Carburante /
+Diesel», «Diesel», «Carburante - Q8 corso Francia» — e nel menu delle tipologie comparivano
+come voci separate, ognuna con il suo totale parziale.
+
+Adesso `tipoSpesa` chiede prima a `categoriaBase`: se è carburante, la tipologia è
+**«Carburante»** e basta. Nel menu fa una riga sola con il totale vero, e selezionandola il
+filtro prende tutti i rifornimenti insieme, comunque siano scritti. Le altre categorie
+continuano a dividersi per tipologia com'erano.
+
 ## Il carburante si divide per come l'hai pagato
 
 Nel dettaglio delle **spese per categoria** — in Dashboard, nel riepilogo mensile e nel

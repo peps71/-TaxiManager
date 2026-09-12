@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 66;
+        const VERSIONE_APP = 67;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -4650,7 +4650,7 @@
 
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 class="font-bold text-gray-800 text-lg mb-2">Carburante / Diesel</h3>
+                                <h3 class="font-bold text-gray-800 text-lg mb-2">Carburante</h3>
                                 <p class="text-3xl font-black text-gray-900 mb-2">${formatCurrency(carbo)}</p>
                                 <span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full">Deducibile 100% (con fattura)</span>
                             </div>
@@ -6273,6 +6273,11 @@
         function tipoSpesa(categoria) {
             const c = (categoria || '').trim();
             if (!c) return 'Senza categoria';
+            // Il carburante e' scritto in mille modi - "Carburante", "Carburante /
+            // Diesel", "Diesel", "Carburante - Q8 corso Francia" - ma la tipologia e'
+            // una sola: nell'elenco delle uscite deve fare una riga sola, e il filtro
+            // deve prenderle tutte insieme.
+            if (categoriaBase(c) === 'Carburante') return 'Carburante';
             const taglio = c.split(' - ')[0].split(' (')[0].trim();
             return taglio || 'Senza categoria';
         }
