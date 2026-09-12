@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 68;
+        const VERSIONE_APP = 69;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -981,16 +981,14 @@
             // Carburante: le diciture non distinguono niente, conta solo il pagamento.
             if (base === 'Carburante') return raggruppaPerPagamento(voci);
 
+            // Tutte le altre: le tipologie dicono cosa hai comprato (tagliando,
+            // gomme, carrozzeria) e restano. In coda, staccato, quanto e' andato in
+            // contanti e quanto e' passato dal conto. Solo se ci sono tutti e due i
+            // modi: altrimenti sarebbe la stessa cifra scritta una seconda volta.
             const perTipo = raggruppaPerSottocategoria(voci);
-            // Manutenzione: le tipologie dicono cosa hai fatto (tagliando, gomme,
-            // carrozzeria) e restano. In coda, staccato, quanto e' andato in contanti
-            // e quanto e' passato dal conto. Solo se ci sono tutti e due i modi:
-            // altrimenti sarebbe la stessa cifra scritta una seconda volta.
-            if (base === 'Manutenzione') {
-                const pagamenti = raggruppaPerPagamento(voci);
-                if (pagamenti.length > 1) {
-                    return perTipo.concat(pagamenti.map(g => Object.assign({}, g, { pagamento: true })));
-                }
+            const pagamenti = raggruppaPerPagamento(voci);
+            if (pagamenti.length > 1) {
+                return perTipo.concat(pagamenti.map(g => Object.assign({}, g, { pagamento: true })));
             }
             return perTipo;
         }

@@ -271,10 +271,10 @@ Adesso `tipoSpesa` chiede prima a `categoriaBase`: se è carburante, la tipologi
 filtro prende tutti i rifornimenti insieme, comunque siano scritti. Le altre categorie
 continuano a dividersi per tipologia com'erano.
 
-## La manutenzione: cosa hai fatto, e come l'hai pagato
+## Ogni spesa: cosa hai comprato, e come l'hai pagato
 
-Per la **manutenzione** le tipologie servono davvero — un tagliando non è un treno di gomme
-— e restano. Sotto, staccato da una riga e dall'etichetta **PER PAGAMENTO**, si aggiunge il
+In **ogni categoria** le tipologie servono — un tagliando non è un treno di gomme — e
+restano. Sotto, staccato da una riga e dall'etichetta **PER PAGAMENTO**, si aggiunge il
 riepilogo di quanto è andato in contanti e quanto è passato dal conto (POS, fattura, app):
 
 | Manutenzione (5) | 1.684,00 € |
@@ -286,8 +286,11 @@ riepilogo di quanto è andato in contanti e quanto è passato dal conto (POS, fa
 | POS / Fattura ×3 | 1.204,00 € |
 | Contanti ×2 | 480,00 € |
 
-La coda compare **solo se ci sono tutti e due i modi**: se una categoria è tutta in contanti
-sarebbe la stessa cifra scritta una seconda volta, e non serve a niente.
+La coda compare **solo se in quella categoria ci sono tutti e due i modi**: se è tutta in
+contanti sarebbe la stessa cifra scritta una seconda volta, e non serve a niente.
+
+L'unica categoria fatta diversamente è il **carburante**, che ha solo le due righe del
+pagamento: lì le tipologie non distinguono niente (vedi qui sotto).
 
 ## Il carburante si divide per come l'hai pagato
 
