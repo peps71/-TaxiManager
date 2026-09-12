@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 65;
+        const VERSIONE_APP = 66;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -943,7 +943,30 @@
         }
 
         // Raggruppa un elenco di movimenti per tipologia, dal piu' pesante al piu' leggero
+        // Il carburante si paga in tanti modi - contanti al distributore, POS, fattura
+        // Q8, app - e le diciture scritte a mano moltiplicano le righe: nove voci
+        // quasi uguali per dire la stessa cosa. Quello che conta e' come e' stato
+        // pagato: contanti da una parte, e dall'altra tutto cio' che passa dal conto.
+        function raggruppaCarburantePerPagamento(voci) {
+            const m = {
+                'Contanti': { nome: 'Contanti', tot: 0, n: 0, ultima: '' },
+                'POS / Fattura': { nome: 'POS / Fattura', tot: 0, n: 0, ultima: '' }
+            };
+            (voci || []).forEach(v => {
+                const g = m[famigliaMetodo(v.metodo) === 'Contanti' ? 'Contanti' : 'POS / Fattura'];
+                g.tot += parseFloat(v.importo || 0) || 0;
+                g.n++;
+                if (String(v.data) > String(g.ultima)) g.ultima = v.data;
+            });
+            return Object.values(m).filter(g => g.n).sort((a, b) => b.tot - a.tot);
+        }
+
         function raggruppaPerTipologia(voci) {
+            // Le voci di un gruppo appartengono tutte alla stessa categoria di base:
+            // basta la prima per sapere se siamo nel carburante.
+            if ((voci || []).length && categoriaBase(voci[0].categoria) === 'Carburante') {
+                return raggruppaCarburantePerPagamento(voci);
+            }
             const m = {};
             (voci || []).forEach(v => {
                 const nome = sottocategoria(v.categoria);

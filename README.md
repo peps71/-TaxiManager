@@ -258,6 +258,30 @@ e il conguaglio dice a fine anno quanto ci si è presi. Quello che non è a budg
 spalma da sola, facendo la media di quello che è stato registrato nel mese. INPS e IRPEF
 restano fuori: sono già stimate.
 
+## Il carburante si divide per come l'hai pagato
+
+Nel dettaglio delle **spese per categoria** — in Dashboard, nel riepilogo mensile e nel
+Report — ogni categoria si apre nelle sue tipologie, cioè quello che viene dopo il trattino
+o la parentesi. Per il carburante non funzionava: «Carburante / Diesel», «Carburante /
+Diesel (Icad app)», «Carburante / Diesel (Fattura singola agip corso)», «Q8 fattura
+236311km»… nove righe quasi uguali per dire la stessa cosa.
+
+Il carburante fa eccezione e si divide in **due sole voci, per come è stato pagato**:
+
+| | |
+| --- | --- |
+| Contanti | quello pagato al distributore di tasca |
+| POS / Fattura | tutto il resto: POS, carta, fattura, app — quello che passa dal conto |
+
+È `raggruppaCarburantePerPagamento`, che entra in gioco dentro `raggruppaPerTipologia`
+quando le voci del gruppo sono di categoria `Carburante` (basta guardare la prima: un gruppo
+contiene sempre una sola categoria di base). Una spesa **senza metodo di pagamento**
+registrato finisce in «POS / Fattura», che è il comportamento della funzione
+`famigliaMetodo` quando il campo è vuoto.
+
+Le altre categorie restano divise per tipologia come prima: lì le diciture distinguono
+davvero — un tagliando non è un treno di gomme.
+
 ## Le note sulle spese
 
 Ogni spesa ha una **categoria** e, a parte, delle **note**. La categoria è quella che
