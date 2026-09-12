@@ -84,7 +84,10 @@ e il promemoria dei km si mescolavano all'elenco degli incassi.
 L'ordine segue quello che si fa:
 
 1. il **giorno** con le frecce ‹ › — il comando che si usa ogni volta;
-2. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km del periodo;
+2. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km e **quanto rende
+   un'ora** (`€/h`: l'incasso del periodo diviso le ore dei turni). Segue il filtro metodo
+   come il riquadro verde, così i due numeri parlano sempre della stessa selezione, e
+   sparisce quando nel periodo non ci sono turni — senza ore non c'è niente da dividere;
 3. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere, con l'avviso della
    giornata di riposo quando quella data non accetta incassi;
 4. il **pannello dei filtri**: metodo di pagamento, mese, «Azzera filtri» e la ripartizione
