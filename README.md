@@ -501,6 +501,40 @@ Poi si sostituisce il contenuto del `<style>` in cima a `index.html` con quello 
 JavaScript e tiene solo quelle: ne esce una trentina di kilobyte invece dei due megabyte
 del pacchetto intero.
 
+## Verifica generale (versione 70)
+
+Una passata di controllo su tutta l'app, con quattro bug veri trovati e sistemati e
+un'ottimizzazione.
+
+**Il ripristino da backup perdeva le impostazioni fiscali.** Il file le conteneva
+(`impostazioniFiscali`), ma nessuno le rimetteva a posto: su un telefono nuovo aliquota
+INPS, addizionali, soglia del forfettario e accantonamento tornavano ai valori di fabbrica
+senza dire niente, e le stime delle tasse cambiavano di conseguenza. Ora vengono
+ripristinate, validate una per una, e il messaggio finale lo dice.
+
+**Benzina, GPL e metano finivano fra le «altre spese».** Il totale «Carburante» del Report e
+della Dashboard usava un elenco di parole a parte che conosceva solo «carburante» e
+«diesel», mentre il dettaglio per categoria usava `categoriaBase`, che conosce anche
+benzina, GPL e metano: i due numeri non tornavano. Adesso decide `categoriaBase` in
+tutti e due i posti.
+
+**L'accantonamento impazziva a gennaio.** La proiezione dell'utile annualizzava i giorni
+trascorsi: il 3 gennaio con 500 € di utile diceva 60.833 € e mandava l'aliquota marginale al
+50,6%. Ora nei primi due mesi si appoggia all'**utile vero dell'anno prima**, e se non c'è
+un anno prima non moltiplica mai per più di dodici.
+
+**Due turni nello stesso giorno** — l'app li permette, chiedendo conferma — comparivano come
+uno solo nel registro mentre ore e km li contavano entrambi. Adesso la testata della
+giornata li somma («2 turni · 12.0 h»), l'etichetta *senza km* guarda tutti i turni del
+giorno, e il pannello del calendario avverte che ce n'è più di uno.
+
+**La Dashboard si ridisegna in un terzo del tempo.** Il grafico del mese chiamava
+`aggrega()` una volta per colonna — trentuno riletture complete di movimenti e turni, con
+tanto di ordinamenti e raggruppamenti per categoria — e quello dell'anno altre dodici. Ora
+c'è `totaliPerChiave`, che fa un giro solo e raccoglie per giorno o per mese. Su un archivio
+di prova da tre anni (10.656 corse, 1.008 turni) il ridisegno passa da **34 a 13
+millisecondi**, e `serieMensile` da 10 a 1.
+
 ## Pubblicare un aggiornamento
 
 Due numeri da aumentare insieme a ogni modifica:
