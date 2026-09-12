@@ -73,63 +73,38 @@ impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 Due viste: **Giornate** e **Calendario**. Quella scelta resta: riaprendo l'app si torna
 dov'eri, come per la scheda.
 
-### Giornate
+### Due schede, due cose
 
-Fino alla versione 57 c'erano due elenchi separati, «Elenco corse» ed «Elenco turni», che
-guardavano gli stessi giorni con due serie di filtri da tenere allineate a mano. Adesso è
-una scheda sola e **la riga è la giornata**: data, tipo di turno con ore e km, incasso
-totale, quanto di quello è andato a POS, quante corse. Toccando la riga si apre il
-dettaglio — il turno con «Modifica» / «+ Aggiungi km» / «Elimina», e sotto le corse di quel
-giorno, ognuna con il suo metodo, modificabile ed eliminabile sul posto.
+**Giornate** sono le corse; **Calendario** sono i turni. Fino alla versione 63 stavano
+insieme e la scheda era lunga il doppio: il turno della giornata, il modulo per registrarlo
+e il promemoria dei km si mescolavano all'elenco degli incassi.
 
-Il motivo è che «ho messo i km di ieri?» e «quanto ho fatto ieri?» sono la stessa domanda
-sullo stesso giorno: prima erano due schede e un rimbalzo continuo. Le giornate senza turno
-registrato mostrano **+ Registra turno**, che apre il modulo già puntato su quella data.
+#### Giornate — le corse
 
-L'ordine della pagina segue il giro di una giornata di lavoro:
+L'ordine segue quello che si fa:
 
 1. il **giorno** con le frecce ‹ › — il comando che si usa ogni volta;
-2. **+ Registra Turno**, l'avviso della giornata di riposo quando serve, e il **turno del
-   giorno scelto** — tipo, orari, ore, km, con «Modifica» o «+ Aggiungi km» ed «Elimina».
-   Il turno si segna all'inizio e si controlla lì, sotto il suo pulsante;
-3. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km;
-4. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere;
-5. il **pannello dei filtri**: metodo di pagamento, mese, «Solo le N senza km», «Azzera
-   filtri» e la ripartizione per metodo;
-6. il **registro**, in fondo: le giornate con le loro corse.
+2. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km del periodo;
+3. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere, con l'avviso della
+   giornata di riposo quando quella data non accetta incassi;
+4. il **pannello dei filtri**: metodo di pagamento, mese, «Azzera filtri» e la ripartizione
+   per metodo;
+5. il **registro**, in fondo: una riga per giornata, che si apre e mostra le corse di quel
+   giorno, ognuna modificabile ed eliminabile sul posto.
 
-Sopra c'è quello che si fa, sotto quello che è già registrato, e i filtri stanno subito
-sopra l'elenco che governano. Ogni modulo si apre sotto il proprio pulsante: quello del
-turno in alto, quello della corsa a metà pagina.
+La testata di ogni giornata riporta il turno — tipo, ore, km, e l'etichetta **SENZA KM**
+quando mancano — ma solo come informazione: il turno si tocca nel calendario.
 
-Il turno compare **in un posto solo**: in cima quando c'è un giorno scelto (il caso
-normale), dentro la scheda della giornata quando il filtro giorno è spento e si stanno
-sfogliando più giorni. Così non c'è mai un doppione, e da nessuna delle due posizioni si
-perde il pulsante per completare i km.
+#### Calendario — i turni
 
-I moduli, standosene in fondo, si aprirebbero sotto il bordo dello schermo: perciò
-`toggleCorsaForm`, `toggleShiftForm` e `apriFormTurno` ci portano sopra da soli
-(`portaInVista`, con `scrollIntoView`).
+In cima **+ Registra Turno** con il suo modulo, e il promemoria «N turni senza km» con
+**Vai al primo**, che porta il calendario sul mese giusto, apre il pannello di quella
+giornata e mette i km in modifica. Sotto la griglia del mese; toccando un giorno si apre il
+pannello con i tipi di turno, le giornate non lavorate, il riquadro di modifica di ore e km,
+«Sposta ad altro giorno», «Elimina» e «Apri nelle giornate».
 
-Il riquadro giallo «N turni senza km» non c'è più: era grosso e diceva una cosa che si vede
-già sulla giornata, con l'etichetta **SENZA KM** e il pulsante **+ Aggiungi km**. Il filtro
-è rimasto, come pulsante «Solo le N senza km» dentro il pannello in fondo.
-
-Il filtro è **uno solo** per corse e turni, e il giorno, quando è impostato, ha la
-precedenza sul mese. Con un metodo selezionato restano solo le giornate che hanno corse di
-quel tipo. Il promemoria dei **turni senza km** guarda sempre tutto l'anno, così non si
-perde di vista un turno da completare solo perché si sta guardando un altro mese.
-
-**I filtri vengono ricordati**, tutti e tre, come la vista. Il giorno parte su oggi la prima
-volta — è il caso normale, si apre l'app per registrare quello che si è appena fatto — e
-dopo resta quello scelto; il × lo toglie e anche quello viene ricordato. Un giorno ricordato
-vale però solo dentro l'anno di esercizio aperto: se cambi anno, o se resta appeso un giorno
-di un anno diverso, il filtro si spegne da solo, altrimenti l'elenco risulterebbe vuoto
-senza che si capisca perché. Le chiavi sono `taxi_giorno_giornate`, `taxi_mese_giornate` e
-`taxi_metodo_giornate`.
-
-Toccando un giorno del calendario e poi «Apri nelle giornate» il filtro si posiziona su
-quella data con la giornata già aperta.
+Il modulo del turno e il riquadro di modifica sono due funzioni a sé (`moduloTurnoHTML`,
+`bloccoTurnoHTML`) proprio perché servono da due punti diversi.
 
 ### Niente corse nelle giornate di riposo
 
@@ -146,9 +121,9 @@ così non ci si trova con un incasso in un giorno che l'app conta come riposo.
 Vale anche il contrario: segnando come non lavorata una giornata che ha già degli incassi,
 l'app chiede conferma dicendo quanto c'è registrato. Le corse non vengono toccate.
 
-### Il calendario
+### I numeri nelle caselle del calendario
 
-Nel **calendario** ogni giornata lavorata mostra le ore, l'incasso totale in verde e,
+Ogni giornata lavorata mostra le ore, l'incasso totale in verde e,
 sotto, la quota incassata **a POS** in blu. Sono solo le entrate con metodo `POS`: una
 spesa pagata col bancomat non c'entra e non viene contata. Sopra la griglia c'è il totale
 POS del mese, e toccando un giorno il pannello ripete incasso e POS per esteso. Quando in
