@@ -685,7 +685,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 67;
+        const VERSIONE_APP = 68;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -947,7 +947,7 @@
         // Q8, app - e le diciture scritte a mano moltiplicano le righe: nove voci
         // quasi uguali per dire la stessa cosa. Quello che conta e' come e' stato
         // pagato: contanti da una parte, e dall'altra tutto cio' che passa dal conto.
-        function raggruppaCarburantePerPagamento(voci) {
+        function raggruppaPerPagamento(voci) {
             const m = {
                 'Contanti': { nome: 'Contanti', tot: 0, n: 0, ultima: '' },
                 'POS / Fattura': { nome: 'POS / Fattura', tot: 0, n: 0, ultima: '' }
@@ -961,12 +961,7 @@
             return Object.values(m).filter(g => g.n).sort((a, b) => b.tot - a.tot);
         }
 
-        function raggruppaPerTipologia(voci) {
-            // Le voci di un gruppo appartengono tutte alla stessa categoria di base:
-            // basta la prima per sapere se siamo nel carburante.
-            if ((voci || []).length && categoriaBase(voci[0].categoria) === 'Carburante') {
-                return raggruppaCarburantePerPagamento(voci);
-            }
+        function raggruppaPerSottocategoria(voci) {
             const m = {};
             (voci || []).forEach(v => {
                 const nome = sottocategoria(v.categoria);
@@ -976,6 +971,28 @@
                 if (String(v.data) > String(m[nome].ultima)) m[nome].ultima = v.data;
             });
             return Object.values(m).sort((a, b) => b.tot - a.tot);
+        }
+
+        function raggruppaPerTipologia(voci) {
+            // Le voci di un gruppo appartengono tutte alla stessa categoria di base:
+            // basta la prima per sapere dove siamo.
+            if (!(voci || []).length) return [];
+            const base = categoriaBase(voci[0].categoria);
+            // Carburante: le diciture non distinguono niente, conta solo il pagamento.
+            if (base === 'Carburante') return raggruppaPerPagamento(voci);
+
+            const perTipo = raggruppaPerSottocategoria(voci);
+            // Manutenzione: le tipologie dicono cosa hai fatto (tagliando, gomme,
+            // carrozzeria) e restano. In coda, staccato, quanto e' andato in contanti
+            // e quanto e' passato dal conto. Solo se ci sono tutti e due i modi:
+            // altrimenti sarebbe la stessa cifra scritta una seconda volta.
+            if (base === 'Manutenzione') {
+                const pagamenti = raggruppaPerPagamento(voci);
+                if (pagamenti.length > 1) {
+                    return perTipo.concat(pagamenti.map(g => Object.assign({}, g, { pagamento: true })));
+                }
+            }
+            return perTipo;
         }
 
         // Le spese sono salvate come "Categoria - nota" (es. "Carburante - Q8 corso Francia").
@@ -2604,11 +2621,12 @@
                     </div>
                     ${aperta ? `
                         <div class="ml-1 pl-2 border-l-2 border-gray-100">
-                            ${(cat.tipologie || raggruppaPerTipologia(cat.voci)).map(t => `
+                            ${(cat.tipologie || raggruppaPerTipologia(cat.voci)).map((t, i, tutte) => `
+                                ${t.pagamento && !(tutte[i - 1] || {}).pagamento ? '<p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mt-2 pt-2 border-t border-gray-200">Per pagamento</p>' : ''}
                                 <div class="flex justify-between items-baseline gap-2 py-1">
-                                    <span class="text-[11px] text-gray-500 truncate">
+                                    <span class="text-[11px] ${t.pagamento ? 'text-gray-600 font-bold' : 'text-gray-500'} truncate">
                                         ${esc(t.nome)}
-                                        <span class="text-gray-400">${t.n > 1 ? '×' + t.n : ggMm(t.ultima)}</span>
+                                        <span class="text-gray-400 font-normal">${t.n > 1 ? '×' + t.n : ggMm(t.ultima)}</span>
                                     </span>
                                     <span class="text-[11px] font-bold text-red-600 whitespace-nowrap">-${formatCurrency(t.tot)}</span>
                                 </div>`).join('')}
@@ -5238,9 +5256,10 @@
                                                 </div>
                                                 ${aperta ? `
                                                     <div class="ml-3 pl-3 border-l-2 border-gray-200 pb-2">
-                                                        ${(c.tipologie || []).map(t => `
+                                                        ${(c.tipologie || []).map((t, i, tutte) => `
+                                                            ${t.pagamento && !(tutte[i - 1] || {}).pagamento ? '<p class="text-[9px] font-black uppercase tracking-wider text-gray-400 mt-2 pt-2 border-t border-gray-200">Per pagamento</p>' : ''}
                                                             <div class="flex justify-between items-baseline gap-2 py-0.5">
-                                                                <span class="text-xs text-gray-500">${esc(t.nome)} <span class="text-gray-400">${t.n > 1 ? '×' + t.n : ''}</span></span>
+                                                                <span class="text-xs ${t.pagamento ? 'text-gray-600 font-bold' : 'text-gray-500'}">${esc(t.nome)} <span class="text-gray-400 font-normal">${t.n > 1 ? '×' + t.n : ''}</span></span>
                                                                 <span class="text-xs font-bold text-gray-700 whitespace-nowrap">${formatCurrency(t.tot)}</span>
                                                             </div>`).join('')}
                                                     </div>` : ''}
