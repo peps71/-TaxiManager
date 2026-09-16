@@ -68,6 +68,29 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Spese tracciate o in contanti (versione 96)
+
+Tolto il tasto «Fattura» (v95), le spese avevano tre modi di pagamento: contanti, POS/carta,
+carta carburante. Mancava il **bonifico** — e mancava soprattutto la divisione che conta
+davvero: **quello che lascia una traccia e quello che non ne lascia.**
+
+- **Bonifico** è il quarto tasto del pannello veloce. I tasti sono di nuovo quattro, due per
+  riga: Contanti · POS/Carta · Carta carburante · Bonifico.
+- **`metodoTracciato(metodo)`**: contanti no, tutto il resto sì. Una riga sola, usata
+  ovunque, così non ci sono due idee diverse di «tracciato» in giro per l'app.
+- **«Come le hai pagate»**, nuovo riquadro in fondo al registro spese: i due mucchi in cima
+  — *tracciate* (con quanto di quelle ha anche la fattura) e *in contanti* — e sotto il
+  dettaglio per metodo, con la barra della percentuale. Il riepilogo in alto guadagna la riga
+  *«tracciate X € · contanti Y €»*.
+- Lo stesso riquadro è nel **foglio per il commercialista**, sopra il dettaglio per categoria,
+  e si stampa con il resto.
+
+Sulla deducibilità l'app dice quello che sa e si ferma lì: *«Tracciata vuol dire che del
+pagamento resta una prova: POS, carta, bonifico, app. È quella che il commercialista può
+portare in deduzione senza doverti credere sulla parola. Sui contanti chiediglielo: la regola
+non è uguale per tutte le voci, e non la decide questa app.»* I conti li fa, la qualifica
+fiscale no — quella ha regole che cambiano voce per voce e anno per anno.
+
 ## La fattura non è un modo di pagare (versione 95)
 
 Fra i tasti «come ha pagato» c'era **Fattura / Convenzione**, sia sulle corse che sulle
