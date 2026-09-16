@@ -68,6 +68,29 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La sigla in cima (versione 87)
+
+La sigla compare nella barra in alto. **Sigla e colore sono la stessa cosa detta in due modi**
+— identificano la vettura — quindi sono un elemento solo: una targhetta con la sigla scritta
+dentro, colorata del turno. Tre elementi staccati in cima a un telefono si contenderebbero i
+pixel per dire una cosa sola.
+
+```
+🚕 Giuseppe  [ Torino 57 ]  [ v87 ]        turno giallo → targhetta gialla
+🚕 Giuseppe  [ Torino 57 ]  [ v87 ]        senza turno  → targhetta scura
+🚕 Giuseppe La Viana  ●  [ v87 ]           solo turno   → il pallino di prima
+```
+
+**Con la sigla accanto, in cima resta il nome di battesimo.** Il nome per intero non ci
+stava e veniva tagliato — «Giuse…» a 320px, che è peggio di niente. In cima serve
+riconoscersi, non leggere l'anagrafe: il cognome resta nel titolo per chi ci passa sopra, e
+per intero nella scheda e sul foglio del commercialista. Senza sigla, nome e cognome come
+prima.
+
+Misurato a 320, 375 e 390px con sigle corte e lunghe: l'unico caso in cui il nome si accorcia
+ancora è **320px con una sigla da quindici caratteri**, cioè un iPhone SE della prima
+generazione con «Torino 1234 bis». Su 375 e 390 non si taglia niente.
+
 ## Sigla e colore del turno (versione 86)
 
 **«Codice radio» diventa «Sigla»**, che è come la si chiama davvero, e l'esempio passa da
