@@ -998,7 +998,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 90;
+        const VERSIONE_APP = 91;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4739,7 +4739,7 @@
             // ============================================================
             const corsaLampoHTML = () => `
                 <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5">
-                    <label for="corsa-lampo" class="etichetta block">Quanto hai incassato</label>
+                    <label for="corsa-lampo" class="etichetta block">Incasso corsa</label>
                     <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-green-600 pb-2.5 transition-colors">
                         <input type="text" inputmode="decimal" id="corsa-lampo" placeholder="0,00"
                                onkeydown="if (event.key === 'Enter') { event.preventDefault(); corsaLampo(window.ultimoMetodoCorsa || 'Contanti'); }"

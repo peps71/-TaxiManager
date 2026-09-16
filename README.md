@@ -68,6 +68,13 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Incasso corsa» (versione 91)
+
+L'etichetta sopra il campo dell'importo, nella schermata Oggi, era **«Quanto hai incassato»**:
+una domanda, e riferita alla giornata più che alla corsa che stai segnando in quel momento.
+Adesso dice **«Incasso corsa»** — è il nome di quello che stai scrivendo, e si distingue a
+colpo d'occhio dal riquadro della spesa qui sotto.
+
 ## La stessa lingua in Andamento e Gestione (versione 90)
 
 La direzione della v89 portata sulle altre due schermate. Nessun conto è cambiato.
