@@ -68,6 +68,23 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La divisione per metodo su fondo scuro (versione 92)
+
+Il pannello «Filtra per metodo», nella schermata Oggi, era cinque rettangoli grigi uguali su
+bianco: il colore del metodo — quello dei tasti con cui la corsa è stata salvata — non si
+vedeva da nessuna parte.
+
+Adesso è una scheda scura come quella della giornata, e **ogni riquadro ha il colore del suo
+metodo**: verde contanti, rosso Satispay, blu app, azzurro fattura. Quando ne scegli uno, il
+riquadro si accende pieno di quel colore e in alto compare «filtro attivo» in giallo.
+
+Una scelta da dire: **il POS nei tasti è nero**, e sul nero non si vedrebbe. Qui è il chiaro
+— il suo contrario — e resta riconoscibile accanto agli altri quattro.
+
+I riquadri sono passati sopra i menu a tendina: quello che si guarda (quanto ho preso in
+contanti) viene prima di quello che si imposta. Gli importi sono senza simbolo dell'euro e
+allineati in colonna, come nelle caselle della scheda in cima.
+
 ## «Incasso corsa» (versione 91)
 
 L'etichetta sopra il campo dell'importo, nella schermata Oggi, era **«Quanto hai incassato»**:
