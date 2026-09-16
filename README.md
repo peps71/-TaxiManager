@@ -68,6 +68,27 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Anche le tre schede di «Spese e tasse» (versione 98)
+
+Rimasto indietro dalla v97: le tre schede in fondo a «Spese e tasse» — Carburante,
+Manutenzione & cura, Altre spese operative — mostravano il **totale intero** con sotto il
+cartellino *«Deducibile 100%»*. Anche sulla parte pagata in contanti, che deducibile non è.
+
+Adesso ogni scheda dice il totale speso e, sotto, **quanto di quel totale va davvero in
+deduzione**:
+
+- tutto tracciato → cartellino verde **«Tutta deducibile»**;
+- in parte no → cartellino blu **«Deducibili 4.320,00 €»** e sotto, in piccolo,
+  *«810,00 € pagati in contanti o senza metodo: fuori»*.
+
+`aggrega()` porta tre totali nuovi (`carburanteDed`, `manutenzioneDed`, `altroSpeseDed`, più
+`usciteDed`) calcolati con la stessa `metodoTracciato()` di tutto il resto — un posto solo
+dove sta la regola.
+
+Sotto le schede una riga lo dice a chiare lettere: *«Deducibili» qui vuol dire pagate in modo
+tracciato, secondo la regola che hai stabilito. Quanto poi sia deducibile ogni singola voce —
+e in che percentuale — lo dice il commercialista: questa è la somma, non la dichiarazione.*
+
 ## In deduzione solo le spese tracciate (versione 97)
 
 La regola, decisa dal tassista: **in deduzione vanno solo le spese tracciate.** Dalla v97

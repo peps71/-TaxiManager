@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 97;
+        const VERSIONE_APP = 98;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3350,6 +3350,9 @@
             const r = {
                 incassi: 0, contanti: 0, pos: 0, satispay: 0, app: 0, fattura: 0,
                 nCorse: 0, uscite: 0, carburante: 0, manutenzione: 0, altroSpese: 0,
+                // Le stesse tre voci, ma solo per la parte pagata in modo
+                // tracciato: e' quella che va in deduzione.
+                usciteDed: 0, carburanteDed: 0, manutenzioneDed: 0, altroSpeseDed: 0,
                 perCategoria: {}, speseCategorie: [],
                 listaUscite: [], ore: 0, nTurni: 0, turni: []
             };
@@ -3373,9 +3376,11 @@
                     // Stessa regola del report: decide categoriaBase, non un elenco
                     // di parole a parte che dimenticava benzina, GPL e metano.
                     const base = categoriaBase(x.categoria);
-                    if (base === 'Carburante') r.carburante += imp;
-                    else if (base === 'Manutenzione' || base === 'Lavaggio') r.manutenzione += imp;
-                    else r.altroSpese += imp;
+                    const ded = metodoTracciato(x.metodo) ? imp : 0;
+                    r.usciteDed += ded;
+                    if (base === 'Carburante') { r.carburante += imp; r.carburanteDed += ded; }
+                    else if (base === 'Manutenzione' || base === 'Lavaggio') { r.manutenzione += imp; r.manutenzioneDed += ded; }
+                    else { r.altroSpese += imp; r.altroSpeseDed += ded; }
 
                     if (!r.perCategoria[base]) r.perCategoria[base] = { nome: base, tot: 0, voci: [] };
                     r.perCategoria[base].tot += imp;
@@ -6347,6 +6352,28 @@
                 // un solo posto dove cambiarle.
                 const spese = aggrega(annoAttivo());
                 const carbo = spese.carburante, man = spese.manutenzione, altro = spese.altroSpese;
+
+                // La scheda di una categoria di spesa: il totale speso, e sotto
+                // quanto di quel totale va davvero in deduzione. Prima diceva
+                // «Deducibile 100%» sul totale intero - anche sulla parte pagata
+                // in contanti, che deducibile non e'.
+                const schedaSpesa = (titolo, totale, deducibile) => {
+                    const fuori = totale - deducibile;
+                    const tutta = totale > 0 && fuori < 0.005;
+                    return `
+                        <div class="bg-white p-5 rounded-[1.25rem] shadow-sm border border-gray-100">
+                            <h3 class="font-bold text-gray-800 text-base">${titolo}</h3>
+                            <p class="cifra text-[1.75rem] text-gray-900 mt-1">${cifraEuro(totale)}</p>
+                            ${totale > 0 ? `
+                                <p class="mt-2.5">
+                                    <span class="${tutta ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'} text-xs font-bold px-2.5 py-1 rounded-full">
+                                        ${tutta ? 'Tutta deducibile' : 'Deducibili ' + formatCurrency(deducibile)}
+                                    </span>
+                                </p>
+                                ${fuori >= 0.005 ? `<p class="text-[11px] font-medium text-gray-400 mt-1.5">${formatCurrency(fuori)} pagati in contanti o senza metodo: fuori</p>` : ''}
+                            ` : '<p class="text-xs text-gray-400 mt-2">Niente registrato quest\'anno.</p>'}
+                        </div>`;
+                };
                 const sf = statsForfettario();
 
                 main.innerHTML = `
@@ -6380,23 +6407,16 @@
                         ${sezioneBudgetFissi()}
                         ${sezioneConguaglio()}
 
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 class="font-bold text-gray-800 text-lg mb-2">Carburante</h3>
-                                <p class="text-3xl font-black text-gray-900 mb-2">${formatCurrency(carbo)}</p>
-                                <span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full">Deducibile 100% (con fattura)</span>
-                            </div>
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 class="font-bold text-gray-800 text-lg mb-2">Manutenzione & Cura</h3>
-                                <p class="text-3xl font-black text-gray-900 mb-2">${formatCurrency(man)}</p>
-                                <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-full">Deducibile 100%</span>
-                            </div>
-                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 class="font-bold text-gray-800 text-lg mb-2">Altre Spese Operative</h3>
-                                <p class="text-3xl font-black text-gray-900 mb-2">${formatCurrency(altro)}</p>
-                                <span class="bg-yellow-100 text-yellow-800 text-xs font-bold px-2.5 py-1 rounded-full">In base a regime fiscale</span>
-                            </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            ${schedaSpesa('Carburante', carbo, spese.carburanteDed)}
+                            ${schedaSpesa('Manutenzione &amp; cura', man, spese.manutenzioneDed)}
+                            ${schedaSpesa('Altre spese operative', altro, spese.altroSpeseDed)}
                         </div>
+                        <p class="text-[11px] text-gray-400 leading-relaxed -mt-2">
+                            «Deducibili» qui vuol dire <strong class="text-gray-500">pagate in modo tracciato</strong>, secondo la
+                            regola che hai stabilito. Quanto poi sia deducibile ogni singola voce — e in che
+                            percentuale — lo dice il commercialista: questa è la somma, non la dichiarazione.
+                        </p>
 
                         <!-- Stima tasse Regime Ordinario -->
                         ${(() => {
