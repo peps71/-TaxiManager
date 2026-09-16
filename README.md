@@ -68,6 +68,29 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Impaginazione del foglio per il commercialista (versione 101)
+
+Le quattro caselle della sintesi provavano a stare **orizzontali sul telefono** per
+risparmiare spazio: etichetta a sinistra, numero a destra. Con le righe nuove — tracciati,
+deducibili, la scomposizione dell'INPS — il conto non tornava più e la casella andava a
+pezzi: tre testi accavallati e il numero in mezzo.
+
+- Le caselle sono **in colonna su ogni schermo**: etichetta, numero, dettaglio. Sul telefono
+  una sotto l'altra, dal tablet in su in griglia. Il numero usa la stessa `cifra` del resto
+  dell'app, con il simbolo dell'euro più piccolo.
+- **Testata rifatta:** titolo e anno sulla stessa riga, sotto il menu del periodo e il tasto
+  **«Stampa / PDF»** (era «Stampa / Esporta PDF» e andava a capo in mezzo).
+- **I titoli di schermata sono tutti della stessa misura.** Erano rimasti a `text-3xl` in sei
+  schermate — Calendario, Registro spese, Rendimento, Spese e tasse, Le mie auto, Backup e
+  impostazioni — mentre le altre erano già passate a `text-2xl` con la v90.
+- I due totali in fondo alle spese si chiamano «di cui deducibili» e «non deducibili»: la
+  versione lunga andava a capo e sballava la colonna degli importi.
+
+**E il punto delle migliaia adesso c'è sempre.** In italiano, per impostazione del browser,
+compare solo da 10.000 in su: nella stessa colonna si leggeva «23.636,63» e sotto «4329,50»,
+e sembravano scritti da due persone diverse. Adesso `useGrouping: true` su tutti e tre i
+formattatori.
+
 ## L'INPS come si paga davvero (versione 100)
 
 Segnalato dal tassista: **l'INPS artigiani non è il 24% sull'utile.** Sono due pezzi:
