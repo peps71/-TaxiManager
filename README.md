@@ -68,6 +68,29 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Registro spese» esce dall'indice (versione 80)
+
+Di spese si parlava in tre posti: «Oggi» (dove si segnano), «Spese e tasse» (dove si
+leggono, divise per categoria, con il budget e il conguaglio) e «Registro spese». Tre voci
+per una cosa sola sono due di troppo, e l'indice di «Altro» esiste proprio per non far
+cercare.
+
+**La voce è sparita** dall'indice e dal menu laterale (leggono lo stesso elenco,
+`SCHEDE_SECONDARIE`). L'indice passa da sette voci a sei:
+
+```
+Spese e tasse · Scadenze · Le mie auto · Quanto rendo
+Per il commercialista · Backup e impostazioni
+```
+
+**Ma la scheda resta, e si apre da «Spese e tasse».** L'elenco riga per riga è ancora
+l'unico posto dove si **corregge una spesa vecchia** e si **governano quelle che si
+ripetono** (la rata della licenza, il radio taxi): renderlo irraggiungibile avrebbe tolto
+delle funzioni, non una voce di menu. In cima a «Spese e tasse» — che è dove uno lo va a
+cercare — c'è la riga **«Tutte le spese, riga per riga»**.
+
+Se preferisci che sparisca del tutto, si toglie anche quella riga in un attimo.
+
 ## Via il POS dal calendario (versione 79)
 
 Il POS nella casella del calendario era nato quando l'incrocio fra giorno e metodo non

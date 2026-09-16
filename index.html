@@ -850,7 +850,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 79;
+        const VERSIONE_APP = 80;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -2378,7 +2378,6 @@
 
         const SCHEDE_SECONDARIE = [
             { id: 'categorie',  label: 'Spese e tasse',         desc: 'Dove vanno i soldi, e quanto è già del fisco', icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
-            { id: 'uscite',     label: 'Registro spese',        desc: 'Tutto quello che hai speso, riga per riga',     icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>' },
             { id: 'scadenze',   label: 'Scadenze',              desc: 'Bollo, revisione, INPS: cosa scade e quando',   icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14v3"/><circle cx="12" cy="19.5" r="0.5" fill="currentColor"/></svg>' },
             { id: 'auto',       label: 'Le mie auto',           desc: 'Le vetture, i chilometri, quanto valgono',      icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
             { id: 'rendimento', label: 'Quanto rendo',          desc: 'Euro all\'ora, al chilometro, per corsa',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>' },
@@ -5329,6 +5328,22 @@
                             </div>
                             ${pillolaAnno('spese')}
                         </header>
+
+                        <!-- «Registro spese» non e' piu' una voce a se' nell'indice:
+                             le spese si segnano da «Oggi» e si leggono qui. L'elenco
+                             completo, riga per riga, resta pero' l'unico posto dove si
+                             correggono le spese vecchie e si governano le ricorrenti,
+                             quindi da qualche parte si deve poter aprire. -->
+                        <button onclick="switchTab('uscite')" class="w-full flex items-center gap-4 p-4 bg-white rounded-2xl shadow-sm border border-gray-100 text-left hover:bg-gray-50 transition-colors">
+                            <span class="shrink-0 w-11 h-11 rounded-xl bg-yellow-400 text-gray-900 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="block font-black text-gray-900">Tutte le spese, riga per riga</span>
+                                <span class="block text-xs text-gray-500">Per correggerne una vecchia o gestire quelle che si ripetono</span>
+                            </span>
+                            <span class="shrink-0 text-gray-300 text-xl font-black" aria-hidden="true">›</span>
+                        </button>
 
                         ${sezioneBudgetFissi()}
                         ${sezioneConguaglio()}
