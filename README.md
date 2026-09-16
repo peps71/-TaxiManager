@@ -68,6 +68,50 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Anche le spese stanno in «Oggi» (versione 75)
+
+Il pieno si fa tutti i giorni, il lavaggio quasi: è lavoro di turno, non contabilità da
+scrivania. Ma per segnarlo bisognava cambiare scheda — e la 74, spostando il registro spese
+dentro «Altro», l'aveva pure allontanato di un tocco.
+
+Adesso su «Oggi» c'è anche la spesa, con lo stesso meccanismo della corsa:
+
+```
+Stai segnando una spesa                     16/09/2026
+Che spesa è?   [ Carburante ▾ ]
+€ [ 62,35 ]
+[ 💵 Contanti ]  [ 💳 POS / Fattura ]       ← ognuno salva
+```
+
+Il tipo di spesa propone l'ultimo usato, che nove volte su dieci è il carburante. Il metodo
+di pagamento è il pulsante di conferma, come per la corsa, e dopo il salvataggio il campo
+torna vuoto col cursore dentro. Il messaggio conferma anche il totale delle spese di
+giornata. Sotto, «Nota, data diversa o spesa ricorrente» apre il **modulo completo lì
+dentro**, senza cambiare scheda: `moduloUscitaHTML()` è stato estratto da `renderContent` e
+adesso lo usano tutte e due le schermate.
+
+**O la corsa o la spesa, non tutt'e due insieme.** Con i due pannelli aperti nella stessa
+schermata c'erano due pulsanti «Contanti» uno sotto l'altro e due campi «quanto» — e non è
+un'ipotesi: il primo giro di prove ha salvato come corsa un importo che doveva essere una
+spesa, proprio per quell'ambiguità. Sono due lavori diversi, se ne fa uno per volta: aprendo
+la spesa la corsa lampo si chiude, e da «← Torna alle corse» si rientra.
+
+**Le spese si vedono dove si registrano.** Segnare il pieno e non vederlo comparire da
+nessuna parte sarebbe un salto nel buio. Quindi:
+
+- la testata della giornata dice anche `spese −77,35 €`;
+- il riquadro verde in cima aggiunge `spese −77,35 € · ti resta 47,65 €`;
+- aprendo la giornata, sotto le corse c'è **Spese della giornata**, con le stesse righe
+  toccabili delle corse (si tocca, si apre, e lì dentro c'è anche «Elimina»).
+
+**Nei giorni di riposo le spese si registrano lo stesso.** Le corse restano bloccate — un
+incasso in un festivo vuol dire che il tipo di giornata è sbagliato — ma l'auto in un giorno
+di riposo costa come sempre, e l'app lo diceva già («nei riposi le spese corrono lo stesso,
+ma non c'è incasso a coprirle»). Sarebbe stato contraddittorio impedirne la registrazione.
+
+Il **registro completo** di tutte le spese, con i filtri per tipologia e mese, resta in
+«Altro → Registro spese»: quello si guarda a mese, non in mezzo al traffico.
+
 ## Tre schede, un riquadro, due tocchi (versione 74)
 
 Secondo e ultimo passo della revisione. La 73 aveva sistemato quello che era
