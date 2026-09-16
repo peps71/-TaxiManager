@@ -68,6 +68,25 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Due nomi più asciutti (versione 83)
+
+| prima | adesso |
+|---|---|
+| Quanto rendo | **Rendimento** |
+| Per il commercialista | **Commercialista** |
+
+«Quanto rendo» suonava come una domanda, e una voce di menu non fa domande: dice dove
+porta. «Rendimento» è anche la parola che quella scheda usa già al suo interno, ed è quella
+che si dice al commercialista o in cooperativa.
+
+«Per il commercialista» spiegava troppo: il «per il» è la frase, non l'etichetta. Il
+sottotitolo sotto la voce — *«Il riepilogo da stampare o da esportare»* — dice già a cosa
+serve.
+
+Cambiati l'etichetta nell'indice, il titolo della schermata e la pastiglia nella fila delle
+sezioni: sono tre punti diversi ma leggono tutti lo stesso elenco (`SCHEDE_SECONDARIE`)
+tranne il titolo, quindi non possono divergere per distrazione.
+
 ## «Gestione», e muoversi dentro (versione 82)
 
 ### Il nome
