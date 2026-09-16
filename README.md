@@ -68,6 +68,39 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'INPS come si paga davvero (versione 100)
+
+Segnalato dal tassista: **l'INPS artigiani non è il 24% sull'utile.** Sono due pezzi:
+
+- una **quota fissa**, in **quattro rate da 1.130,34 €** (4.521,36 € l'anno), dovuta anche se
+  l'anno va male o si chiude in perdita: copre il reddito fino al **minimale di 18.415 €**;
+- il **24% solo su quello che supera il minimale**.
+
+Prima l'app faceva il 24% su tutto l'utile. Sotto il minimale **sottostimava** — la quota
+fissa si paga lo stesso, anche a zero — e sopra **sovrastimava**, perché contava la
+percentuale anche sulla parte già coperta dalle rate.
+
+| utile fiscale | prima | adesso |
+| --- | --- | --- |
+| 0 € | 0 € | **4.521,36 €** (le rate si pagano comunque) |
+| 10.000 € | 2.400 € | **4.521,36 €** |
+| 18.415 € | 4.419,60 € | **4.521,36 €** |
+| 25.000 € | 6.000 € | **6.101,76 €** (4.521,36 + 24% su 6.585) |
+| 40.000 € | 9.600 € | **9.701,76 €** |
+
+I quattro valori — **rata, numero di rate, minimale, percentuale sull'eccedenza** — si
+cambiano in «Backup e impostazioni» → Impostazioni Fiscali: cambiano ogni anno, e non devono
+restare sepolti nel codice. Lasciando la rata a zero si torna al conto vecchio (percentuale
+secca), per chi avesse un'altra cassa.
+
+Nel prospetto della stima l'INPS adesso è su due righe: *«INPS · rate fisse 4 × 1.130,34 €»*
+e *«INPS · 24% oltre 18.415,00 €»*, così si vede da dove viene il numero. L'IRPEF continua a
+contarsi su quello che resta tolti i contributi.
+
+**Cambia anche l'accantonamento suggerito:** finché l'utile sta sotto il minimale, mille euro
+in più non portano INPS in più — la marginale scende, e la percentuale da mettere da parte
+con lei.
+
 ## Anche gli incassi: la stima guarda solo il tracciato (versione 99)
 
 Chiuso il giro: dalla v99 la base delle tasse è **tracciato meno tracciato**, da una parte e

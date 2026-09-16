@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 99;
+        const VERSIONE_APP = 100;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1195,7 +1195,11 @@
         // Impostazioni fiscali per Regime Ordinario (configurabili dall'utente in "Cloud & Sync")
         window.fiscalSettings = Object.assign(
             // accantonamentoPerc vuoto = calcolato da solo sulla stima delle tasse
-            { inpsPerc: 24, addizionaliPerc: 2, sogliaForfettario: 85000, accantonamentoPerc: null },
+            // L'INPS artigiani non e' una percentuale secca sull'utile: si paga
+            // una quota fissa a rate (il «minimale»), dovuta anche se l'anno va
+            // male, e la percentuale solo su quello che supera il minimale.
+            { inpsPerc: 24, inpsRata: 1130.34, inpsNumeroRate: 4, inpsMinimale: 18415,
+              addizionaliPerc: 2, sogliaForfettario: 85000, accantonamentoPerc: null },
             leggiLocale('taxi_fiscal_settings', {})
         );
 
@@ -1656,14 +1660,49 @@
             return memo('tasse:' + utileLordo + ':' + anno, () => calcolaTasseOrdinarioCalcola(utileLordo, anno));
         }
 
+        // ============================================================
+        //  COME SI PAGA DAVVERO L'INPS ARTIGIANI
+        //  Non e' il 24% sull'utile. Sono due pezzi:
+        //  - una quota fissa, in quattro rate da 1.130,34 € (importi 2026,
+        //    cambiabili in Impostazioni Fiscali), dovuta anche se l'anno va
+        //    male o si chiude in perdita: copre il reddito fino al minimale;
+        //  - il 24% solo su quello che supera il minimale di 18.415 €.
+        //  Prima l'app faceva il 24% su tutto l'utile: sotto il minimale
+        //  sottostimava (la quota fissa si paga lo stesso), sopra sovrastimava
+        //  (contava due volte la parte gia' coperta dalle rate).
+        // ============================================================
+        function contributiInpsCalcola(utile) {
+            const fs = window.fiscalSettings || {};
+            const rata = parseFloat(fs.inpsRata);
+            const rate = parseFloat(fs.inpsNumeroRate);
+            const minimale = parseFloat(fs.inpsMinimale);
+            const perc = (parseFloat(fs.inpsPerc) || 0) / 100;
+
+            // Senza quota fissa impostata si torna al conto semplice di prima:
+            // chi ha un'altra cassa o un altro regime non si ritrova numeri
+            // che non gli appartengono.
+            if (!Number.isFinite(rata) || rata <= 0 || !Number.isFinite(minimale) || minimale < 0) {
+                return { fissa: 0, eccedenza: utile > 0 ? utile * perc : 0, totale: utile > 0 ? utile * perc : 0, rate: 0, rata: 0 };
+            }
+            const nRate = Number.isFinite(rate) && rate > 0 ? rate : 4;
+            const fissa = rata * nRate;
+            const sopra = Math.max(0, utile - minimale);
+            const eccedenza = sopra * perc;
+            return { fissa, eccedenza, totale: fissa + eccedenza, rate: nRate, rata };
+        }
+
         function calcolaTasseOrdinarioCalcola(utileLordo, anno) {
             const fs = window.fiscalSettings || { inpsPerc: 24, addizionaliPerc: 2 };
-            const contributiInps = utileLordo > 0 ? utileLordo * (fs.inpsPerc / 100) : 0;
+            const inps = contributiInpsCalcola(utileLordo);
+            const contributiInps = inps.totale;
+            // I contributi si scaricano dal reddito: l'IRPEF si conta su quello
+            // che resta. Se i contributi superano l'utile, l'imponibile e' zero,
+            // non negativo.
             const imponibileIrpef = Math.max(0, utileLordo - contributiInps);
             const irpef = calcolaIRPEF(imponibileIrpef, anno);
             const addizionali = imponibileIrpef * (fs.addizionaliPerc / 100);
             return {
-                contributiInps, irpef, addizionali, imponibileIrpef,
+                contributiInps, inps, irpef, addizionali, imponibileIrpef,
                 tasseTot: contributiInps + irpef + addizionali
             };
         }
@@ -1846,6 +1885,20 @@
                 showToast('Valori non validi.');
                 return;
             }
+            // La quota fissa dell'INPS: rata, quante rate, e fin dove arriva.
+            const leggiFiscale = (id, valoreOra) => {
+                const el = document.getElementById(id);
+                if (!el) return valoreOra;
+                const v = numeroScritto(el.value);
+                return Number.isFinite(v) && v >= 0 ? v : NaN;
+            };
+            const rata = leggiFiscale('set-inps-rata', window.fiscalSettings.inpsRata);
+            const nRate = leggiFiscale('set-inps-rate', window.fiscalSettings.inpsNumeroRate);
+            const minimale = leggiFiscale('set-inps-minimale', window.fiscalSettings.inpsMinimale);
+            if (isNaN(rata) || isNaN(nRate) || isNaN(minimale)) {
+                showToast('Controlla rata, numero di rate e minimale INPS.');
+                return;
+            }
             // Lasciato vuoto: l'accantonamento se lo calcola l'app.
             const campoAcc = document.getElementById('set-accantonamento');
             const scritto = campoAcc ? String(campoAcc.value).trim() : '';
@@ -1857,7 +1910,10 @@
                     return;
                 }
             }
-            window.fiscalSettings = { inpsPerc: inps, addizionaliPerc: add, sogliaForfettario: soglia, accantonamentoPerc: accantonamento };
+            window.fiscalSettings = {
+                inpsPerc: inps, inpsRata: rata, inpsNumeroRate: nRate, inpsMinimale: minimale,
+                addizionaliPerc: add, sogliaForfettario: soglia, accantonamentoPerc: accantonamento
+            };
             localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings));
             showToast('⚡ Impostazioni fiscali salvate!');
             renderContent();
@@ -6516,7 +6572,15 @@
                                                         ma restano fuori dal conto delle tasse.
                                                     </p>
                                                 ` : ''}
-                                                ${rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
+                                                ${f.inps && f.inps.fissa > 0 ? `
+                                                    ${rigaFiscale(
+                                                        'INPS \u00b7 rate fisse <span class="font-normal text-gray-400">' + f.inps.rate + ' \u00d7 ' + formatCurrency(f.inps.rata) + '</span>',
+                                                        '-' + formatCurrency(f.inps.fissa), { classe: 'text-purple-600' })}
+                                                    ${rigaFiscale(
+                                                        'INPS \u00b7 ' + fs.inpsPerc + '% oltre ' + formatCurrency(fs.inpsMinimale ?? 18415),
+                                                        f.inps.eccedenza > 0 ? '-' + formatCurrency(f.inps.eccedenza) : formatCurrency(0),
+                                                        { classe: f.inps.eccedenza > 0 ? 'text-purple-600' : 'text-gray-400' })}
+                                                ` : rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
                                                 ${rigaFiscale('Imponibile IRPEF', formatCurrency(f.imponibileIrpef), { forte: true })}
                                             </div>
                                             <div>
@@ -7198,12 +7262,28 @@
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                             <h3 class="text-lg font-bold text-gray-900">Impostazioni Fiscali (Regime Ordinario)</h3>
                             <p class="text-xs text-gray-500 leading-relaxed">
-                                Le tasse vengono stimate così: sull'utile lordo (incassi − spese) si calcolano i contributi INPS, poi l'IRPEF a scaglioni sul reddito residuo (23% fino a 28.000€, ${(aliquotaSecondoScaglione(annoAttivo()) * 100).toFixed(0)}% fino a 50.000€, 43% oltre — dal 2026 il secondo scaglione scende dal 35% al 33%), più le addizionali regionali/comunali. È una stima indicativa: per gli importi esatti verifica sempre con il tuo commercialista.
+                                Le tasse vengono stimate così: sull'utile si calcolano i contributi INPS — le rate fisse del minimale, dovute comunque, più la percentuale su quello che supera il minimale — poi l'IRPEF a scaglioni sul reddito residuo (23% fino a 28.000€, ${(aliquotaSecondoScaglione(annoAttivo()) * 100).toFixed(0)}% fino a 50.000€, 43% oltre — dal 2026 il secondo scaglione scende dal 35% al 33%), più le addizionali regionali/comunali. È una stima indicativa: per gli importi esatti verifica sempre con il tuo commercialista.
                             </p>
                             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div>
-                                    <label for="set-inps" class="text-xs font-bold text-gray-600 uppercase">Aliquota Contributi INPS (%)</label>
+                                    <label for="set-inps-rata" class="text-xs font-bold text-gray-600 uppercase">INPS · rata fissa (€)</label>
+                                    <input type="text" inputmode="decimal" id="set-inps-rata" value="${importoScritto(window.fiscalSettings.inpsRata ?? 1130.34)}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
+                                    <p class="text-xs text-gray-400 mt-1 leading-relaxed">Quanto paghi per ogni rata del minimale.</p>
+                                </div>
+                                <div>
+                                    <label for="set-inps-rate" class="text-xs font-bold text-gray-600 uppercase">INPS · quante rate</label>
+                                    <input type="text" inputmode="decimal" id="set-inps-rate" value="${window.fiscalSettings.inpsNumeroRate ?? 4}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
+                                    <p class="text-xs text-gray-400 mt-1 leading-relaxed">In un anno: quattro, di solito.</p>
+                                </div>
+                                <div>
+                                    <label for="set-inps-minimale" class="text-xs font-bold text-gray-600 uppercase">INPS · minimale (€)</label>
+                                    <input type="text" inputmode="decimal" id="set-inps-minimale" value="${importoScritto(window.fiscalSettings.inpsMinimale ?? 18415)}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
+                                    <p class="text-xs text-gray-400 mt-1 leading-relaxed">Il reddito coperto dalle rate fisse.</p>
+                                </div>
+                                <div>
+                                    <label for="set-inps" class="text-xs font-bold text-gray-600 uppercase">INPS · % sull'eccedenza</label>
                                     <input type="text" inputmode="decimal" id="set-inps" value="${window.fiscalSettings.inpsPerc}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
+                                    <p class="text-xs text-gray-400 mt-1 leading-relaxed">Si applica solo a quello che supera il minimale.</p>
                                 </div>
                                 <div>
                                     <label for="set-add" class="text-xs font-bold text-gray-600 uppercase">Addizionali Reg./Com. (%)</label>
