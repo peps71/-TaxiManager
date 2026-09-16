@@ -68,6 +68,43 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## In deduzione solo le spese tracciate (versione 97)
+
+La regola, decisa dal tassista: **in deduzione vanno solo le spese tracciate.** Dalla v97
+l'app la applica dappertutto, invece di limitarsi a dividere i due mucchi.
+
+**Due utili, che non sono la stessa cosa:**
+
+| | come si calcola | a cosa serve |
+| --- | --- | --- |
+| **Utile di cassa** | incassi − **tutte** le spese | quello che ti resta davvero in tasca |
+| **Utile fiscale** | incassi − **le sole spese deducibili** | la base su cui si stimano le tasse |
+
+Le spese in contanti restano spese vere — tolgono soldi dalla cassa — ma non abbassano
+l'imponibile. Quindi:
+
+- la **stima delle tasse** in «Spese e tasse» si calcola sull'utile fiscale, e il prospetto
+  lo dice riga per riga: *Incassi · Spese deducibili (tracciate) · Utile fiscale*, e sotto,
+  in grigio, *Spese non deducibili*;
+- il **netto stimato** resta al netto di **tutte** le spese: `utile di cassa − tasse`;
+- l'**accantonamento automatico** (la percentuale che l'app suggerisce di mettere da parte)
+  si calcola sullo scaglione dell'utile fiscale, non più di quello di cassa;
+- il **foglio per il commercialista** mostra sotto le spese *«x € deducibili · y € no»*, sotto
+  la stima *«su x € di utile fiscale»*, e in fondo al dettaglio per categoria le due righe
+  divise;
+- anche il **confronto fra le due basi di calcolo** (negli approfondimenti fiscali) toglie
+  solo le deducibili.
+
+**Attenzione, e va detto chiaro: la stima delle tasse sale.** Con la regola vecchia tutte le
+spese abbassavano l'imponibile; adesso i contanti non lo fanno più. Su un esempio da 30.000 €
+di incassi con 6.000 € di spese tracciate e 5.000 € in contanti: utile di cassa 19.000 €,
+utile fiscale 24.000 €, tasse stimate 10.320 € invece di 8.170 €. Se i conti di prima ti
+sembravano più belli, erano semplicemente più ottimisti del dovuto.
+
+**Una spesa senza metodo di pagamento scritto non è deducibile.** Non si sa come è stata
+pagata, e darla per buona sarebbe inventare. Compare nell'elenco come **«Non indicato»**: se
+ne trovi, aprile e scrivi come le hai pagate.
+
 ## Spese tracciate o in contanti (versione 96)
 
 Tolto il tasto «Fattura» (v95), le spese avevano tre modi di pagamento: contanti, POS/carta,
