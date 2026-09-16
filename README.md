@@ -68,6 +68,52 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una grafica più curata: la giornata in una scheda sola (versione 89)
+
+Quattro bozze a confronto (com'è adesso, «Rifinitura», «Plancia» scura, «Chiaro» senza
+schede), scelta la **Rifinitura**: stesso giallo, stessa struttura, stessi gesti — cambia
+la cura. Niente di quello che si tocca si è spostato.
+
+**Cosa non andava, misurato sulla v88:**
+
+- **287 elementi scritti con il peso massimo del carattere.** Se tutto urla, non si legge
+  niente per primo.
+- **Una sola ombra, piatta** (`0 1px 2px rgba(0,0,0,.05)`): le schede sembravano adesivi
+  appoggiati sul fondo.
+- **L'incasso della giornata a 24px, il titolo «Oggi» a 30px.** Il titolo gridava più dei
+  soldi.
+
+**Cosa è cambiato:**
+
+- **Una lingua visiva sola**, in cima al `<style>`: i colori (fondo color carta `#faf9f6`
+  invece del grigio ufficio, fili e grigi caldi), la scala dei pesi (900 solo sulle cifre
+  grandi, il resto 800/650), due livelli di ombra. Riscrive le classi di Tailwind
+  (`.font-black`, `.shadow-sm`, `.border-gray-100`...), così il tono cambia ovunque senza
+  toccare novemila righe di markup, e una schermata scritta domani nasce già giusta.
+- **La scheda scura della giornata.** Prima erano tre blocchi in fila — il titolo «Oggi», la
+  scheda bianca con il campo data, due rettangoli colorati con i totali — mezza schermata per
+  dire una cosa sola. Adesso: il giorno con le frecce, **l'incasso a 42px**, e sotto la riga
+  che serve a fine turno — **Spese · Ti resta · All'ora**. L'euro all'ora continua ad
+  aggiornarsi ogni minuto mentre il turno è aperto.
+- **La data si legge**: «Mercoledì 16 / settembre 2026» su due righe invece di
+  «Mercoledì 16 Sett…». Il campo data del telefono è ancora lì, trasparente, sopra la scritta:
+  si tocca e si apre il calendario come prima.
+- **Niente più doppioni**: con un giorno selezionato, la scheda del registro ripeteva data,
+  totale e corse già scritti sopra. Adesso mostra solo quello che in cima non c'è — il turno
+  con i suoi orari e i suoi km.
+- **Le emoji dei metodi di pagamento sono diventate icone disegnate** (💵 💳 🔴 📱 🧾 →
+  stesso tratto del resto dell'app). Le emoji le disegna ogni telefono a modo suo. Restano
+  solo dentro i menu a tendina, dove il colore non si può mettere in altro modo.
+- **Il numero grande porta il simbolo più piccolo e più chiaro**: da lontano si legge
+  «116,50», non «€». Nelle tre caselle in fondo l'euro non c'è proprio: lo dice l'etichetta.
+- **In fondo la voce accesa è una pastiglia gialla** dietro l'icona, non un trattino sotto la
+  scritta: a un centimetro dal bordo dello schermo il trattino non si vedeva.
+- Le linguette «Giornate / Calendario» sono sottolineate invece che dentro una scheda: la
+  pagina comincia **40px più su**.
+
+Il foglio di stile è stato rifatto (vedi «Rifare il foglio di stile»): 446 classi usate, 446
+coperte.
+
 ## Il promemoria del backup (versione 88)
 
 Le tre copie automatiche (v72) vivono nello **stesso account Google** dell'app. Bastano per
