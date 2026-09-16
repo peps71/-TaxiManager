@@ -850,7 +850,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 80;
+        const VERSIONE_APP = 81;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -1823,6 +1823,15 @@
         function oreScritte(n) {
             const v = Number(n) || 0;
             return (Math.round(v * 10) % 10 === 0 ? String(Math.round(v)) : v.toFixed(1).replace('.', ','));
+        }
+
+        // L'ora in cui la riga e' stata scritta, non l'ora della corsa: se una
+        // corsa la segni la sera per la mattina, qui c'e' la sera. E' quello che
+        // serve davvero - ritrovare l'ordine in cui hai battuto le cose, e
+        // riconoscere una riga sbagliata fra due uguali.
+        function oraDiAdesso() {
+            const d = new Date();
+            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         }
 
         function importoScritto(v) {
@@ -4083,7 +4092,10 @@
             // Quanto rende un'ora di lavoro: l'incasso del periodo diviso le ore dei
             // turni. Segue il filtro metodo come il riquadro verde, cosi' i due numeri
             // parlano sempre della stessa selezione.
-            const euroOra = oreTot > 0 ? totCorse / oreTot : 0;
+            // Se il turno di quella giornata e' in corso adesso, il conto e' sulle
+            // ore fatte finora e si rinfresca da solo ogni minuto.
+            const eo = euroOraVivo(totCorse, oreTot, giorno ? turniLavorati : []);
+            const euroOra = eo.valore;
 
             const etichettaPeriodo = giorno
                 ? dataEstesa(giorno)
@@ -4256,10 +4268,11 @@
                 </div>
             ` : `
                 <button onclick="apriModificaRecord('${r.id}')" class="w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-green-50/50 transition-colors">
+                    ${r.ora ? `<span class="text-xs font-black text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
                     <span class="${metodoBadgeClass(r.metodo)} px-2 py-0.5 rounded-md text-xs font-black whitespace-nowrap">${esc(r.metodo)}</span>
                     <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}</span>
                     <span class="text-sm font-black text-green-600 whitespace-nowrap">${formatCurrency(r.importo)}</span>
-                    <span class="text-gray-300 font-black" aria-hidden="true">›</span>
+                    <span class="hidden sm:inline text-gray-300 font-black" aria-hidden="true">›</span>
                 </button>`;
 
             const rigaSpesa = (r) => String(window.editRecordId) === String(r.id) ? `
@@ -4281,10 +4294,11 @@
                 </div>
             ` : `
                 <button onclick="apriModificaRecord('${r.id}')" class="w-full text-left px-3 py-2.5 flex items-center gap-2 hover:bg-red-50/50 transition-colors">
+                    ${r.ora ? `<span class="text-xs font-black text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
                     <span class="${metodoBadgeClass(r.metodo)} px-2 py-0.5 rounded-md text-xs font-black whitespace-nowrap">${esc(r.metodo)}</span>
                     <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}${r.nota ? ` <span class="font-normal text-gray-400">· ${esc(r.nota)}</span>` : ''}</span>
                     <span class="text-sm font-black text-red-600 whitespace-nowrap">−${formatCurrency(r.importo)}</span>
-                    <span class="text-gray-300 font-black" aria-hidden="true">›</span>
+                    <span class="hidden sm:inline text-gray-300 font-black" aria-hidden="true">›</span>
                 </button>`;
 
             // --- il turno della giornata, con i comandi ---
@@ -4426,7 +4440,12 @@
                             <p class="text-xs font-black uppercase tracking-wider text-yellow-700">Turni</p>
                             <p class="text-2xl font-black text-yellow-700 leading-tight">${turniLavorati.length}</p>
                             <p class="text-xs font-bold text-yellow-700/70 whitespace-nowrap">${oreScritte(oreTot)} h · ${kmTot} km</p>
-                            ${oreTot > 0 ? `<p class="text-sm font-black text-yellow-800 mt-0.5 whitespace-nowrap" title="Incasso del periodo diviso le ore dei turni">${formatCurrency(euroOra)}/h</p>` : ''}
+                            ${eo.vivo ? `
+                                <p id="euro-ora-vivo" class="text-sm font-black text-yellow-800 mt-0.5" title="Incasso diviso le ore che hai fatto finora in questo turno">
+                                    <span class="whitespace-nowrap">${eo.troppoPresto ? '—' : formatCurrency(euroOra) + '/h'}</span>
+                                    <span class="block text-xs font-bold text-yellow-700/70 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>
+                                </p>`
+                              : (oreTot > 0 ? `<p class="text-sm font-black text-yellow-800 mt-0.5 whitespace-nowrap" title="Incasso del periodo diviso le ore dei turni">${formatCurrency(euroOra)}/h</p>` : '')}
                         </div>
                     </div>
 
@@ -6229,6 +6248,69 @@
             return diffHours;
         }
 
+        // ============================================================
+        //  IL €/H DENTRO IL TURNO
+        //  Diviso per le ore del turno intero, a meta' giornata quel numero
+        //  non dice niente: alle dieci di un turno 08-20, con 40 € fatti,
+        //  segnava 3,33 €/h - e uno pensa di stare andando male quando sta
+        //  solo andando da due ore. Finche' il turno e' in corso il conto va
+        //  fatto sulle ore lavorate FINORA, e rifatto man mano.
+        //  Fuori dal turno - prima che cominci, o a giornata chiusa - resta
+        //  il conto sulle ore intere, che e' il consuntivo vero.
+        // ============================================================
+
+        // Quanto e' passato dall'inizio del turno, senza mai superarne la fine.
+        // Restituisce null se il turno non e' in corso adesso.
+        function oreFinora(t, adesso) {
+            if (!t || !t.data || !t.inizio || !t.fine || isRiposo(t)) return null;
+            const ora = adesso || new Date();
+            const inizio = new Date(`${t.data}T${t.inizio}`);
+            let fine = new Date(`${t.data}T${t.fine}`);
+            // Turno a cavallo di mezzanotte: la fine e' il giorno dopo
+            if (fine <= inizio) fine.setDate(fine.getDate() + 1);
+            if (isNaN(inizio.getTime()) || isNaN(fine.getTime())) return null;
+            if (ora < inizio || ora >= fine) return null;
+
+            let ore = (ora - inizio) / 3600000;
+            // La pausa dello Spezzato si toglie solo quando e' gia' passata:
+            // mentre la si sta facendo il conto si ferma all'inizio della pausa.
+            const preset = t.pausaInizio && t.pausaFine ? t : null;
+            if (preset) {
+                const pIni = new Date(`${t.data}T${t.pausaInizio}`);
+                let pFin = new Date(`${t.data}T${t.pausaFine}`);
+                if (pFin <= pIni) pFin.setDate(pFin.getDate() + 1);
+                if (ora >= pFin) ore -= (pFin - pIni) / 3600000;
+                else if (ora > pIni) ore = (pIni - inizio) / 3600000;
+            }
+            return ore;
+        }
+
+        // Il turno in corso adesso fra quelli della giornata scelta.
+        function turnoInCorso(turni, adesso) {
+            return (turni || []).find(t => oreFinora(t, adesso) !== null) || null;
+        }
+
+        // Il €/h da mostrare: dentro il turno sulle ore fatte finora, fuori
+        // sulle ore intere. Sotto il quarto d'ora non si divide: con cinque
+        // minuti di lavoro una corsa da 20 € darebbe 240 €/h, un numero vero
+        // in aritmetica e falso in tutto il resto.
+        const ORE_MINIME_EURO_ORA = 0.25;
+
+        function euroOraVivo(incasso, oreIntere, turni) {
+            const inCorso = turnoInCorso(turni);
+            if (!inCorso) {
+                return { valore: oreIntere > 0 ? incasso / oreIntere : 0, vivo: false, ore: oreIntere };
+            }
+            // Le ore fatte finora sono quelle del turno in corso piu' quelle
+            // dei turni gia' chiusi nella stessa giornata.
+            const altre = (turni || [])
+                .filter(t => t !== inCorso && !isRiposo(t))
+                .reduce((a, t) => a + (parseFloat(t.ore || 0) || 0), 0);
+            const ore = oreFinora(inCorso) + altre;
+            if (ore < ORE_MINIME_EURO_ORA) return { valore: 0, vivo: true, ore, troppoPresto: true };
+            return { valore: incasso / ore, vivo: true, ore };
+        }
+
         // I moduli stanno in fondo alla scheda Giornate: aprendoli finirebbero
         // sotto il bordo dello schermo, percio' ci si porta sopra da soli.
         function portaInVista(id) {
@@ -6363,7 +6445,7 @@
             // lo stesso, e il conto della giornata lo dice gia' a chiare lettere.
             const data = giornoGiornate() || oggiISO();
 
-            const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo };
+            const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo, ora: oraDiAdesso() };
             window.saveRecordToCloud(record);
             window.ultimoDataUscita = data;
             window.ultimaCategoriaUscita = categoria;
@@ -6425,7 +6507,8 @@
             }
             const record = {
                 id: nuovoId(), data, tipo: 'ENTRATA',
-                categoria: etichettaCorsaAutomatica(data), metodo, importo
+                categoria: etichettaCorsaAutomatica(data), metodo, importo,
+                ora: oraDiAdesso()
             };
             window.saveRecordToCloud(record);
             window.ultimoDataCorsa = data;
@@ -6461,7 +6544,7 @@
             }
 
             const categoria = scritta || etichettaCorsaAutomatica(data);
-            const record = { id: nuovoId(), data, tipo: 'ENTRATA', categoria, metodo, importo };
+            const record = { id: nuovoId(), data, tipo: 'ENTRATA', categoria, metodo, importo, ora: oraDiAdesso() };
             window.saveRecordToCloud(record);
 
             // Ricorda data e metodo per velocizzare l'inserimento successivo
@@ -6565,7 +6648,7 @@
             if (!data || !categoria || isNaN(importo)) return;
             if (importo < 0) { showToast('L\'importo non può essere negativo.'); return; }
 
-            const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo };
+            const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo, ora: oraDiAdesso() };
             if (nota) record.nota = nota;
 
             const ripeti = datiRipetizione();
@@ -7281,10 +7364,11 @@
         // come si aspetta un Excel impostato in italiano).
         function exportCSV() {
             const recs = recordsAnno().slice().sort((a, b) => new Date(a.data) - new Date(b.data));
-            const righe = [['Data', 'Tipo', 'Categoria', 'Note', 'Metodo', 'Importo (EUR)']];
+            const righe = [['Data', 'Ora', 'Tipo', 'Categoria', 'Note', 'Metodo', 'Importo (EUR)']];
             recs.forEach(r => {
                 righe.push([
                     r.data || '',
+                    r.ora || '',
                     r.tipo === 'ENTRATA' ? 'Incasso' : 'Spesa',
                     (r.categoria || '').replace(/;/g, ','),
                     (r.nota || '').replace(/;/g, ','),
@@ -7488,6 +7572,46 @@
             }
         }
         window.controllaIstantanea = controllaIstantanea;
+
+        // Il €/h dentro il turno si muove da solo: ogni minuto si riscrive quel
+        // numero e basta. Un rendering completo cancellerebbe un modulo aperto a
+        // meta', e con l'app in tasca durante il turno succederebbe di continuo.
+        function aggiornaEuroOraVivo() {
+            const el = document.getElementById('euro-ora-vivo');
+            if (!el || document.visibilityState !== 'visible') return;
+
+            const giorno = giornoGiornate();
+            if (!giorno) return;
+            const turni = (window.shifts || []).filter(t => t.data === giorno && !isRiposo(t));
+            const metodo = window.filterMetodoGiornate;
+            const incasso = (window.dailyRecords || [])
+                .filter(r => r.tipo === 'ENTRATA' && r.data === giorno
+                    && (metodo === 'ALL' || famigliaMetodo(r.metodo) === metodo))
+                .reduce((a, r) => a + (parseFloat(r.importo || 0) || 0), 0);
+            const oreIntere = turni.reduce((a, t) => a + (parseFloat(t.ore || 0) || 0), 0);
+            const eo = euroOraVivo(incasso, oreIntere, turni);
+
+            // Turno finito mentre l'app era aperta: il riquadro deve tornare al
+            // consuntivo sulle ore intere, e quello e' un ridisegno vero.
+            if (!eo.vivo) {
+                if (!formConDatiNonSalvatiLocale()) renderContent();
+                return;
+            }
+            el.innerHTML = `<span class="whitespace-nowrap">${eo.troppoPresto ? '—' : formatCurrency(eo.valore) + '/h'}</span>`
+                + `<span class="block text-xs font-bold text-yellow-700/70 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>`;
+        }
+
+        // formConDatiNonSalvati() sta nel modulo e da qui non si vede: qui
+        // bastano le stesse spie, lette dalle variabili globali.
+        function formConDatiNonSalvatiLocale() {
+            return !!(window.showCorsaForm || window.showUscitaForm || window.showShiftForm
+                || window.editRecordId || window.editKmId || window.veicoloInModifica);
+        }
+
+        setInterval(aggiornaEuroOraVivo, 60000);
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') aggiornaEuroOraVivo();
+        });
 
         // Chi lascia l'app aperta e la riprende al mattino non ripassa
         // dall'avvio: l'appuntamento delle due va ricontrollato anche qui.

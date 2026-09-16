@@ -68,6 +68,54 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il €/h che si muove, e l'ora della corsa (versione 81)
+
+### Il €/h dentro il turno
+
+Diviso per le ore del turno **intero**, a metà giornata quel numero non dice niente: alle
+dieci di un turno 08–20, con 40 € fatti, segnava **3,33 €/h** — e uno pensa di stare andando
+male quando sta solo andando da due ore.
+
+Adesso, finché il turno è in corso, il conto è sulle ore lavorate **finora** e si rifà da
+solo ogni minuto:
+
+| ora | incassato | prima | adesso |
+|---|---|---|---|
+| 10:00 | 40 € | 3,33 €/h | **20,00 €/h · 2 h finora** |
+| 18:00 | 220 € | 18,33 €/h | **22,00 €/h · 10 h finora** |
+| a turno chiuso | 260 € | 21,67 €/h | 21,67 €/h *(il consuntivo, invariato)* |
+
+Dettagli che contano:
+
+- **Fuori dal turno** — prima che cominci, o a giornata chiusa — resta il conto sulle ore
+  intere, che è il consuntivo vero. L'etichetta «h finora» compare solo mentre serve.
+- **Turni a cavallo di mezzanotte** (13:00–01:00): alle 00:30 sono 11,5 h, non un numero
+  negativo.
+- **Lo Spezzato**: la pausa si toglie solo quando è già passata. Durante la pausa il conto
+  si ferma all'ora in cui è cominciata, invece di gonfiarsi.
+- **Sotto il quarto d'ora non si divide**: con cinque minuti di lavoro una corsa da 20 €
+  darebbe 240 €/h — vero in aritmetica, falso in tutto il resto. Fino a lì si vede «—».
+- **Due turni nello stesso giorno**: le ore del turno già chiuso si sommano a quelle fatte
+  finora in quello in corso.
+- **Il rinfresco non ridisegna la pagina.** Ogni minuto `aggiornaEuroOraVivo()` riscrive
+  solo quel numero: un rendering completo cancellerebbe un modulo aperto a metà, e con
+  l'app in tasca durante il turno succederebbe di continuo. Quando il turno finisce, quello
+  sì è un ridisegno — ma solo se non c'è un modulo aperto.
+
+### L'ora di inserimento
+
+Ogni corsa e ogni spesa si porta dietro l'ora in cui l'hai scritta (`ora: "09:02"`), e la
+mostra a sinistra della riga nel registro della giornata. Serve a ritrovare l'ordine in cui
+hai battuto le cose e a riconoscere una riga sbagliata fra due uguali.
+
+**È l'ora dell'inserimento, non della corsa**: se segni la sera le corse della mattina, lì
+c'è la sera. Le righe registrate prima della 81 non ce l'hanno e semplicemente non la
+mostrano. L'ora finisce anche nel CSV dei movimenti, in una colonna sua accanto alla data.
+
+Per far posto all'ora, la freccia `›` a fine riga — che è decorativa — sparisce sul
+telefono: quei dodici pixel servono alla descrizione della corsa, che altrimenti diventa
+«Carbur…».
+
 ## «Registro spese» esce dall'indice (versione 80)
 
 Di spese si parlava in tre posti: «Oggi» (dove si segnano), «Spese e tasse» (dove si
