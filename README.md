@@ -68,6 +68,22 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il nome e la versione, anche sul telefono (versione 78)
+
+Il menu laterale, dove stavano il nome dell'app e il numero di versione, sul telefono è
+nascosto dalla 74: ne restava solo una riga in fondo ad «Altro». Ma **la versione va vista a
+colpo d'occhio**: è il primo controllo quando ci si chiede se l'aggiornamento è arrivato
+davvero — ed è già successo di restare fermi su una versione vecchia senza accorgersene.
+
+Adesso in cima c'è una striscia da 57px (non il blocco alto che c'era prima della 74) con
+l'icona, **TaxiManager** e la pastiglia della versione. Su schermo largo non compare: lì il
+menu laterale la dice già.
+
+**La pastiglia si tocca** e porta in «Backup e impostazioni», dove c'è «Aggiorna adesso»: il
+giro che si fa davvero è *che versione ho? è vecchia? aggiorno*, e adesso sono due tocchi
+invece di quattro. Il numero lo scrive il programma da `VERSIONE_APP`, in tutti e due i
+posti, così non può restare indietro rispetto al codice.
+
 ## Il prospetto dei corrispettivi (versione 77)
 
 Il registro dei corrispettivi si compila una data alla volta, e per ogni data serve la

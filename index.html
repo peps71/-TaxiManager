@@ -114,6 +114,24 @@
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col md:flex-row">
 
+    <!-- ============================================================
+         LA BARRA IN CIMA (solo telefono)
+         Il menu laterale, dove stavano il nome e la versione, sul
+         telefono e' nascosto dalla v74: restava solo una riga in fondo
+         ad «Altro». Ma la versione va vista a colpo d'occhio - e' il
+         primo controllo quando ci si chiede se l'aggiornamento e'
+         arrivato davvero. Qui e' una striscia da 40px, non il blocco
+         alto che c'era prima.
+         ============================================================ -->
+    <header class="md:hidden flex items-center gap-2 px-4 py-1.5 bg-yellow-400 text-gray-900 border-b border-yellow-500 no-print flex-shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
+        <span class="font-black text-lg tracking-tight">TaxiManager</span>
+        <button onclick="switchTab('cloud')" title="Versione installata: tocca per cercarne una nuova" aria-label="Versione installata: tocca per cercarne una nuova"
+                class="ml-auto flex items-center text-xs font-black bg-gray-900 text-yellow-400 px-3 rounded-lg">
+            <span id="pastiglia-versione">v?</span>
+        </button>
+    </header>
+
     <!-- Toast Notifica -->
     <div id="toast" role="status" aria-live="polite" class="hidden fixed bottom-24 md:bottom-5 right-5 left-5 md:left-auto justify-center md:justify-start bg-gray-900 text-yellow-400 px-5 py-3 rounded-xl shadow-2xl z-50 items-center space-x-2 border border-yellow-400/30 slide-in font-bold text-sm no-print">
         <span id="toast-text">Messaggio</span>
@@ -832,7 +850,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 77;
+        const VERSIONE_APP = 78;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -3171,6 +3189,8 @@
         function mostraVersione() {
             const el = document.getElementById('etichetta-versione');
             if (el) el.textContent = `Edizione Cloud · v${VERSIONE_APP}`;
+            const pastiglia = document.getElementById('pastiglia-versione');
+            if (pastiglia) pastiglia.textContent = `v${VERSIONE_APP}`;
         }
 
         // Forza il passaggio alla versione nuova senza chiudere l'app: si chiede
