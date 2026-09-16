@@ -68,6 +68,42 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Gestione», e muoversi dentro (versione 82)
+
+### Il nome
+
+«Altro» è il nome di un cassetto, non di una scheda: dice dove **non** stanno le cose.
+Dentro ci sono le spese, le tasse, le scadenze, le vetture, i report e i backup — cioè il
+mestiere dalla parte della scrivania. Da qui si chiama **Gestione**, in basso e in cima alla
+schermata: `Oggi · Andamento · Gestione`.
+
+### Il ritorno, e il salto laterale
+
+Entrando in una sezione non c'era modo di tornare all'indice se non ritrovando «Gestione»
+nella barra in basso — che resta accesa, ma non è un tasto «indietro» e nessuno lo legge
+così. E per passare da «Scadenze» a «Le mie auto» servivano due tappe.
+
+Adesso in cima a ogni sezione c'è:
+
+```
+‹ Gestione
+[ Spese e tasse ] [ Scadenze ] [ Le mie auto ] [ Quanto rendo ] …   ← scorre di lato
+```
+
+Il ritorno all'indice, e la fila delle sorelle con quella dove sei accesa: **da una sezione
+all'altra è un tocco solo**. La fila scorre di lato sul telefono e non fa sbordare la
+pagina.
+
+Il **registro spese** non è una voce dell'indice (v80) ma si apre da «Spese e tasse»: il suo
+indietro dice `‹ Spese e tasse` e torna lì, non all'indice (`GENITORE_SEZIONE`). Un
+«indietro» che salta una tappa è peggio di nessun indietro.
+
+Una nota di verifica: la freccia `‹` del ritorno convive con quella del cambio anno nel
+calendario delle scadenze. Per un occhio umano sono due cose diverse (una dice «‹ Gestione»,
+l'altra è una freccia nuda in uno stepper), ma una prova automatica che cercava `‹` prendeva
+la prima delle due. Corretta puntando la freccia per nome (`aria-label="Anno precedente"`),
+che è poi come la trova anche uno screen reader.
+
 ## Il €/h che si muove, e l'ora della corsa (versione 81)
 
 ### Il €/h dentro il turno
