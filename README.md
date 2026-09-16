@@ -68,6 +68,53 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Tutti i metodi di pagamento, e la spesa che si vede (versione 76)
+
+### Cinque tasti per la corsa, non due
+
+La 75 aveva solo **Contanti** e **POS**. Sono la maggioranza, non sono tutto: Satispay, le
+app e le convenzioni a fattura ci sono, e mandarle nel modulo completo voleva dire fare sei
+passaggi proprio per i casi meno comuni — quelli in cui ti ricordi meno com'è che si fa.
+
+```
+💵 Contanti       💳 POS
+🔴 Satispay       📱 App / Voucher
+🧾 Fattura / Convenzione
+```
+
+I colori sono gli stessi delle pastiglie nel registro (verde contanti, nero POS, rosso
+Satispay, blu app e fattura), così il tasto insegna la legenda mentre lo usi. Il valore
+salvato è quello vero — `App/Nexi`, `Satispay`, `Fattura` — quindi i totali per metodo, il
+«da versare» e i report li dividono correttamente.
+
+### Quattro tasti per la spesa, e una correzione
+
+La 75 aveva un tasto solo **«POS / Fattura»**, che salvava tutto come `Fattura`: due metodi
+diversi finiti sotto un nome solo, con i conti per metodo che ne risentivano. Corretto.
+Adesso sono quattro, quelli veri di una spesa:
+
+```
+💵 Contanti          💳 POS / Carta
+⛽ Carta carburante   🧾 Fattura
+```
+
+Satispay e bonifico restano nel modulo completo, che si apre lì sotto senza cambiare scheda.
+
+### «Segna una spesa» è un pulsante, non un link
+
+Era un link sottolineato da 12px in fondo al riquadro, in mezzo ad altri comandi piccoli: si
+faceva fatica a trovarlo, e la spesa si segna tutti i giorni quanto la corsa. Adesso è un
+pulsante suo, largo tutta la schermata, 64px di altezza, testo da 18px, con l'icona del più
+dentro un cerchio. Lo stesso pulsante compare anche nei giorni di riposo, dove la corsa è
+bloccata ma la spesa no.
+
+### Una classe sola per i tasti del metodo
+
+Con il corpo normale «Satispay» e «App / Voucher» andavano a capo già a 375px, e quei due
+tasti crescevano più degli altri: l'occhio legge una gerarchia che non c'è. La misura adesso
+è definita una volta sola nel foglio di stile (`.tasto-metodo`), così il prossimo tasto non
+può nascere di misura diversa per distrazione. Verificato a 320, 375 e 390px.
+
 ## Anche le spese stanno in «Oggi» (versione 75)
 
 Il pieno si fa tutti i giorni, il lavaggio quasi: è lavoro di turno, non contabilità da
