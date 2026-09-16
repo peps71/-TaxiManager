@@ -68,6 +68,51 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il prospetto dei corrispettivi (versione 77)
+
+Il registro dei corrispettivi si compila una data alla volta, e per ogni data serve la
+divisione per come hanno pagato. I numeri c'erano già tutti, ma sparsi: il totale del mese
+per metodo da una parte, il totale del giorno dall'altra, e **l'incrocio — che è esattamente
+quello che va trascritto — da nessuna parte**.
+
+In `Andamento → Mese` c'è adesso **Corrispettivi giorno per giorno**: una riga per data, una
+colonna per metodo, il totale del mese in fondo.
+
+```
+Giorno          Contanti     POS   Satispay      App   Fattura     Totale
+01/09 mar · 2     120,00   80,50       0,00     0,00      0,00     200,50
+02/09 mer · 2      95,00    0,00      22,30     0,00      0,00     117,30
+04/09 ven · 3       0,00    0,00       0,00    63,00    200,00     263,00
+Totale Settembre  215,00   80,50      22,30    63,00    200,00     580,80
+```
+
+- **Il filtro** in cima isola un metodo alla volta: comodo quando si trascrive una voce per
+  volta, o per controllare solo il POS.
+- **Le colonne vuote non si mostrano.** Cinque colonne di cui tre a zero rendono la tabella
+  illeggibile su un telefono: compaiono solo i metodi che nel mese hanno qualcosa.
+- **La colonna del giorno resta ferma** mentre si scorre di lato (`.col-ferma`). Con cinque
+  metodi su un telefono, senza questo si perde di vista la riga che si sta copiando.
+- **Toccando la data** si apre quel giorno nel riepilogo giornaliero, per vedere le singole
+  corse.
+- **I giorni senza incassi non compaiono**, e una riga in fondo dice quanti sono: «in
+  Settembre sono 27 su 30».
+- **Un metodo scritto a mano** o arrivato da una versione vecchia non sparisce dal conto:
+  `famigliaMetodo()` lo riporta a una delle cinque colonne, e «App» raccoglie il resto. Un
+  incasso segnato «Voucher comunale» finisce in App, non nel nulla.
+- **Solo gli incassi**: le spese non entrano in questo prospetto.
+
+C'è anche **«Scarica questo prospetto (.csv)»**, per chi compila i corrispettivi al computer
+e preferisce tenersi il foglio aperto accanto invece di leggerlo dal telefono. Separatore
+punto e virgola e virgola decimale, come si aspetta un Excel italiano:
+
+```
+"Data";"Contanti";"POS";"Satispay";"App";"Fattura";"Totale";"Corse"
+"01/09/2026";"120,00";"80,50";"0,00";"0,00";"0,00";"200,50";"2"
+"TOTALE";"215,00";"80,50";"22,30";"63,00";"200,00";"580,80";"7"
+```
+
+Il riquadro è pieghevole e si ricorda come l'hai lasciato, come il budget e il conguaglio.
+
 ## Tutti i metodi di pagamento, e la spesa che si vede (versione 76)
 
 ### Cinque tasti per la corsa, non due
