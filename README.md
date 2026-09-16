@@ -68,6 +68,30 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Anche gli incassi: la stima guarda solo il tracciato (versione 99)
+
+Chiuso il giro: dalla v99 la base delle tasse è **tracciato meno tracciato**, da una parte e
+dall'altra. Prima erano tutti gli incassi meno le sole spese tracciate.
+
+- `utileFiscaleAnno()`, `utileProiettato()` e `getStats()` tengono solo i movimenti con un
+  metodo che lascia una prova, in entrata e in uscita. `getStats()` torna anche
+  `entrateTracciate` e `entrateContanti`.
+- Il prospetto della stima ora comincia da **«Incassi tracciati 2026 — POS, app, bonifico»**,
+  e sotto, in un blocco a parte intitolato **«Fuori da questo conto»**, mette gli incassi in
+  contanti e le spese non deducibili: entrano ed escono dalla cassa davvero — il «ti resta»
+  ne tiene conto — ma restano fuori dal conto delle tasse.
+- Il foglio per il commercialista, sotto gli incassi lordi, dice *«x € tracciati · y €
+  contanti»*.
+- Nel confronto fra le due basi di calcolo **Satispay è passata fra i tracciati**, dov'era
+  giusto stesse: era esclusa dalla colonna B, che quindi risultava più bassa del vero.
+
+**Un avviso in giallo, sotto la stima, che non si toglie:** *questa stima guarda solo i
+movimenti tracciati; per il fisco, in regime ordinario, concorrono al reddito tutti i
+corrispettivi, contanti compresi, quindi il conto vero è più alto.* Quanto più alto lo dice
+il confronto fra le due basi: la colonna A (tutti gli incassi) resta quella che conta per il
+fisco, la colonna B è la base di questa stima, e la differenza fra le due è quello che la
+stima sta lasciando fuori.
+
 ## Anche le tre schede di «Spese e tasse» (versione 98)
 
 Rimasto indietro dalla v97: le tre schede in fondo a «Spese e tasse» — Carburante,

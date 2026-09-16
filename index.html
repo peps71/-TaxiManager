@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 98;
+        const VERSIONE_APP = 99;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1677,19 +1677,20 @@
         //  costa l'euro guadagnato in piu' - lo scaglione in cui ti trovi.
         // ------------------------------------------------------------
 
-        // L'utile su cui si contano le tasse: gli incassi meno le sole spese
-        // deducibili, cioe' quelle pagate in modo tracciato. Le spese in
-        // contanti restano spese vere - tolgono soldi dalla cassa - ma non
-        // abbassano l'imponibile, quindi qui non entrano.
+        // L'utile su cui si contano le tasse: da una parte e dall'altra si
+        // guarda solo quello che lascia una traccia. Gli incassi in contanti e
+        // le spese in contanti restano soldi veri - entrano ed escono dalla
+        // cassa - ma fuori da questo conto.
         function utileFiscaleAnno(anno) {
-            let entrate = 0, deducibili = 0;
+            let tracciati = 0, deducibili = 0;
             (window.dailyRecords || []).forEach(r => {
                 if (String(r.data || '').slice(0, 4) !== String(anno)) return;
+                if (!metodoTracciato(r.metodo)) return;
                 const imp = parseFloat(r.importo || 0) || 0;
-                if (r.tipo === 'ENTRATA') entrate += imp;
-                else if (r.tipo === 'USCITA' && metodoTracciato(r.metodo)) deducibili += imp;
+                if (r.tipo === 'ENTRATA') tracciati += imp;
+                else if (r.tipo === 'USCITA') deducibili += imp;
             });
-            return entrate - deducibili;
+            return tracciati - deducibili;
         }
 
         // A meta' anno l'utile registrato e' meta' di quello che sara': se lo
@@ -1709,9 +1710,10 @@
             (window.dailyRecords || []).forEach(r => {
                 const d = String(r.data || '');
                 if (d.slice(0, 4) !== String(anno) || d > oggi) return;
+                if (!metodoTracciato(r.metodo)) return;
                 const imp = parseFloat(r.importo || 0) || 0;
                 if (r.tipo === 'ENTRATA') entrate += imp;
-                else if (r.tipo === 'USCITA' && metodoTracciato(r.metodo)) deducibili += imp;
+                else if (r.tipo === 'USCITA') deducibili += imp;
             });
             const trascorsi = Math.max(1, Math.round((new Date(oggi) - new Date(`${anno}-01-01`)) / 86400000) + 1);
             // Nei primi due mesi annualizzare e' un azzardo: tre giorni moltiplicati
@@ -1805,25 +1807,31 @@
         }
 
         function getStats() {
-            let entrate = 0, uscite = 0, deducibili = 0;
+            let entrate = 0, entrateTracciate = 0, uscite = 0, deducibili = 0;
             recordsAnno().forEach(r => {
                 const imp = parseFloat(r.importo || 0) || 0;
-                if (r.tipo === 'ENTRATA') entrate += imp;
+                const tracciato = metodoTracciato(r.metodo);
+                if (r.tipo === 'ENTRATA') {
+                    entrate += imp;
+                    if (tracciato) entrateTracciate += imp;
+                }
                 if (r.tipo === 'USCITA') {
                     uscite += imp;
-                    if (metodoTracciato(r.metodo)) deducibili += imp;
+                    if (tracciato) deducibili += imp;
                 }
             });
             // Due utili, e non sono la stessa cosa:
-            // - di cassa: quello che ti resta davvero, tolte tutte le spese;
-            // - fiscale: la base delle tasse, tolte le sole spese deducibili.
+            // - di cassa: tutto quello che entra meno tutto quello che esce,
+            //   cioe' quello che ti resta davvero in mano;
+            // - fiscale: solo quello che lascia traccia, da una parte e
+            //   dall'altra, ed e' la base su cui si stimano le tasse.
             const utileCassa = entrate - uscite;
-            const utileFiscale = entrate - deducibili;
+            const utileFiscale = entrateTracciate - deducibili;
             const fiscale = calcolaTasseOrdinario(utileFiscale);
             const tasse = fiscale.tasseTot;
             return {
-                entrate, uscite,
-                deducibili, nonDeducibili: uscite - deducibili,
+                entrate, entrateTracciate, entrateContanti: entrate - entrateTracciate,
+                uscite, deducibili, nonDeducibili: uscite - deducibili,
                 utileCassa, utileFiscale,
                 tasse, fiscale, netto: utileCassa - tasse
             };
@@ -2875,8 +2883,9 @@
             // Cassa e fisco: le spese in contanti tolgono soldi veri ma non
             // abbassano l'imponibile, quindi i due utili non coincidono.
             const usciteDed = usciteDeducibili(records.filter(r => r.tipo === 'USCITA'));
+            const incassiTracc = incassiTracciati(records.filter(r => r.tipo === 'ENTRATA'));
             const utileLordo = incassiTot - usciteTot;          // di cassa
-            const utileFiscale = incassiTot - usciteDed;        // base delle tasse
+            const utileFiscale = incassiTracc - usciteDed;      // base delle tasse
             const fiscale = calcolaTasseOrdinario(utileFiscale);
             const stimaTasse = fiscale.tasseTot;
             const nettoStimato = utileLordo - stimaTasse;
@@ -2897,6 +2906,7 @@
                     .sort((a, b) => b.tot - a.tot)
                     .map(c => ({ ...c, tipologie: raggruppaPerTipologia(c.voci) })),
                 kmTot, oreTot, utileLordo, utileFiscale, usciteDed,
+                incassiTracc, incassiContanti: incassiTot - incassiTracc,
                 usciteNonDed: usciteTot - usciteDed,
                 stimaTasse, nettoStimato, fiscale,
                 mediaOra, mediaKm, costoKm
@@ -3605,6 +3615,13 @@
             // nell'elenco come «Non indicato», che darla per buona.
             if (!m) return false;
             return famigliaMetodo(m) !== 'Contanti';
+        }
+
+        // Quanto, di questi incassi, entra nella base delle tasse: solo quelli
+        // tracciati, con la stessa regola delle spese. Contanti fuori.
+        function incassiTracciati(elenco) {
+            return (elenco || []).reduce((t, r) =>
+                t + (metodoTracciato(r.metodo) ? (parseFloat(r.importo || 0) || 0) : 0), 0);
         }
 
         // Quanto, di queste spese, va a ridurre l'imponibile: solo quelle
@@ -6454,7 +6471,7 @@
                                     <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
                                         <div>
                                             <h3 class="text-lg font-black text-gray-900">Stima tasse ${annoAttivo()} · Regime Ordinario</h3>
-                                            <p class="text-xs text-gray-500">Sui movimenti registrati finora: incassi meno le spese deducibili, cioè quelle pagate in modo tracciato.</p>
+                                            <p class="text-xs text-gray-500">Sui soli movimenti tracciati, da una parte e dall\'altra: incassi con POS, app o bonifico meno le spese pagate allo stesso modo.</p>
                                         </div>
                                         <div class="text-right">
                                             <p class="etichetta block">Da accantonare</p>
@@ -6482,12 +6499,23 @@
 
                                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
                                             <div>
-                                                ${rigaFiscale('Incassi ' + annoAttivo(), formatCurrency(st.entrate), { classe: 'text-green-600' })}
+                                                ${rigaFiscale('Incassi tracciati ' + annoAttivo() + ' <span class="font-normal text-gray-400">POS, app, bonifico</span>', formatCurrency(st.entrateTracciate), { classe: 'text-green-600' })}
                                                 ${rigaFiscale('Spese deducibili <span class="font-normal text-gray-400">tracciate</span>', '-' + formatCurrency(st.deducibili), { classe: 'text-red-600' })}
                                                 ${rigaFiscale('Utile fiscale', formatCurrency(utile), { forte: true })}
+                                                ${st.entrateContanti > 0 || st.nonDeducibili > 0 ? `
+                                                    <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-3 pt-2 border-t border-gray-100">Fuori da questo conto</p>
+                                                ` : ''}
+                                                ${st.entrateContanti > 0 ? rigaFiscale(
+                                                    'Incassi in contanti', formatCurrency(st.entrateContanti), { classe: 'text-gray-500' }) : ''}
                                                 ${st.nonDeducibili > 0 ? rigaFiscale(
                                                     'Spese non deducibili <span class="font-normal text-gray-400">contanti o senza metodo</span>',
                                                     '-' + formatCurrency(st.nonDeducibili), { classe: 'text-gray-500' }) : ''}
+                                                ${st.entrateContanti > 0 || st.nonDeducibili > 0 ? `
+                                                    <p class="text-[11px] text-gray-400 leading-relaxed pb-2">
+                                                        Entrano e escono dalla cassa davvero — il «ti resta» qui sotto ne tiene conto —
+                                                        ma restano fuori dal conto delle tasse.
+                                                    </p>
+                                                ` : ''}
                                                 ${rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
                                                 ${rigaFiscale('Imponibile IRPEF', formatCurrency(f.imponibileIrpef), { forte: true })}
                                             </div>
@@ -6517,6 +6545,12 @@
                                             </div>
                                         ` : ''}
 
+                                        <p class="text-xs text-gray-600 leading-relaxed bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                                            <strong>Questa stima guarda solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
+                                            Per il fisco, in regime ordinario, concorrono al reddito <em>tutti</em> i corrispettivi, contanti compresi,
+                                            quindi il conto vero e' piu' alto. Quanto piu' alto lo vedi qui sotto, negli approfondimenti, nel confronto
+                                            fra le due basi di calcolo.
+                                        </p>
                                         <p class="text-xs text-gray-500">
                                             Stima indicativa, non una dichiarazione. Non tiene conto di detrazioni e deduzioni personali, dei minimali INPS artigiani,
                                             di acconti gia' versati o di redditi diversi da questa attivita'. Le percentuali INPS e addizionali si cambiano in
@@ -6550,7 +6584,10 @@
                             // degli incassi tracciati non cambia.
                             const inc = aggrega(annoAttivo());
                             inc.totale = inc.incassi;
-                            inc.elettronici = inc.pos + inc.app + inc.fattura;
+                            // Tracciato vuol dire tracciato: Satispay lo e' quanto il POS.
+                            // Prima restava fuori da questo confronto, e la colonna B
+                            // risultava piu' bassa del vero.
+                            inc.elettronici = inc.pos + inc.app + inc.fattura + inc.satispay;
                             const st2 = getStats();
                             // Anche qui si toglie solo quello che il fisco lascia togliere.
                             const uscite = st2.deducibili;
@@ -6950,6 +6987,7 @@
                                         </div>
                                         <p class="text-2xl font-black text-green-800 whitespace-nowrap sm:mt-1">${formatCurrency(rep.incassiTot)}</p>
                                         <p class="text-xs text-green-600 mt-1 font-medium hidden sm:block">${rep.countCorse} corse registrate</p>
+                                        <p class="text-xs text-green-700 mt-1 font-bold w-full">${formatCurrency(rep.incassiTracc)} tracciati${rep.incassiContanti > 0 ? ` · ${formatCurrency(rep.incassiContanti)} contanti` : ''}</p>
                                     </div>
                                     <div class="p-4 bg-red-50/60 border border-red-200 rounded-xl flex items-center justify-between gap-3 sm:block">
                                         <div class="min-w-0">
