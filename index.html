@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 92;
+        const VERSIONE_APP = 93;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -8062,12 +8062,11 @@
         // I colori dei metodi di pagamento sul fondo scuro. Sono gli stessi dei
         // tasti con cui si salva una corsa - verde contanti, rosso Satispay,
         // blu app - cosi' il riquadro «hai preso tanto in contanti» e il tasto
-        // «Contanti» parlano della stessa cosa. Il POS nei tasti e' nero: sul
-        // nero non si vedrebbe, quindi qui e' il chiaro, che e' il suo
-        // contrario e resta riconoscibile.
+        // «Contanti» parlano della stessa cosa. Il POS nei tasti e' nero e sul
+        // nero non si vedrebbe: qui porta il giallo taxi.
         const COLORI_METODO_SCURO = {
             'Contanti': { punto: 'bg-green-400',  testo: 'text-green-400',  pieno: 'bg-green-600 text-white' },
-            'POS':      { punto: 'bg-gray-200',   testo: 'text-gray-100',   pieno: 'bg-gray-100 text-gray-900' },
+            'POS':      { punto: 'bg-yellow-400', testo: 'text-yellow-400', pieno: 'bg-yellow-400 text-gray-900' },
             'Satispay': { punto: 'bg-red-400',    testo: 'text-red-400',    pieno: 'bg-red-600 text-white' },
             'App':      { punto: 'bg-blue-400',   testo: 'text-blue-400',   pieno: 'bg-blue-600 text-white' },
             'Fattura':  { punto: 'bg-sky-300',    testo: 'text-sky-300',    pieno: 'bg-sky-500 text-white' }

@@ -68,7 +68,7 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
-## La divisione per metodo su fondo scuro (versione 92)
+## La divisione per metodo su fondo scuro (versioni 92-93)
 
 Il pannello «Filtra per metodo», nella schermata Oggi, era cinque rettangoli grigi uguali su
 bianco: il colore del metodo — quello dei tasti con cui la corsa è stata salvata — non si
@@ -78,8 +78,7 @@ Adesso è una scheda scura come quella della giornata, e **ogni riquadro ha il c
 metodo**: verde contanti, rosso Satispay, blu app, azzurro fattura. Quando ne scegli uno, il
 riquadro si accende pieno di quel colore e in alto compare «filtro attivo» in giallo.
 
-Una scelta da dire: **il POS nei tasti è nero**, e sul nero non si vedrebbe. Qui è il chiaro
-— il suo contrario — e resta riconoscibile accanto agli altri quattro.
+Il POS nei tasti è nero, e sul nero non si vedrebbe: qui porta il **giallo taxi** (v93).
 
 I riquadri sono passati sopra i menu a tendina: quello che si guarda (quanto ho preso in
 contanti) viene prima di quello che si imposta. Gli importi sono senza simbolo dell'euro e
