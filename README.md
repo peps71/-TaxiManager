@@ -68,6 +68,32 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il promemoria del backup (versione 88)
+
+Le tre copie automatiche (v72) vivono nello **stesso account Google** dell'app. Bastano per
+un guaio tuo — una giornata cancellata per sbaglio, un telefono perso, un telefono nuovo da
+riempire — ma **non per la perdita dell'account**. Un file `.json` scaricato ogni tanto su
+iCloud o su una chiavetta è l'unica copia che non dipende da nessuno.
+
+In «Backup e impostazioni», accanto ai due scarichi, c'è **«⏰ Ricordamelo ogni 3 mesi»**: crea
+nelle Scadenze un promemoria ricorrente «Scarica il backup dei dati», datato fra tre mesi
+(non oggi: il primo giro lo fai adesso scaricando il backup).
+
+Il promemoria **non poteva metterlo nessuno al posto suo**: le scadenze stanno nei dati del
+tassista, nella sua cartella privata, e da fuori non ci si scrive. Quello che si può fare è
+il tasto che lo crea con un tocco.
+
+Dettagli:
+
+- **Non ne fa due uguali.** Se il promemoria c'è già, lo dice e porta in «Scadenze» invece di
+  aggiungerne un altro (il confronto passa da `chiaveNome`, lo stesso che abbina le spese al
+  budget).
+- **Una volta creato, il tasto diventa una conferma**: *«Te lo ricordo il 16/12/2026, e poi
+  ogni tre mesi»*, con il collegamento per andarlo a vedere.
+- Si comporta come qualsiasi altra scadenza ricorrente: si spunta, sparisce, e torna tre mesi
+  dopo. Verificato: nel 2027 cade quattro volte, il 16 di marzo, giugno, settembre e
+  dicembre.
+
 ## La sigla in cima (versione 87)
 
 La sigla compare nella barra in alto. **Sigla e colore sono la stessa cosa detta in due modi**

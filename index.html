@@ -883,7 +883,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 87;
+        const VERSIONE_APP = 88;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1843,6 +1843,46 @@
             salvaScadenze();
             if (window.saveScadenzaToCloud) window.saveScadenzaToCloud(nuova);
             showToast('⚡ Scadenza aggiunta.');
+            renderContent();
+        }
+
+        // ============================================================
+        //  IL PROMEMORIA DEL BACKUP
+        //  Le tre copie automatiche vivono nello stesso account Google
+        //  dell'app: bastano per un guaio tuo - una giornata cancellata, un
+        //  telefono perso - ma non per la perdita dell'account. Un file .json
+        //  scaricato ogni tanto su iCloud o su una chiavetta e' l'unica copia
+        //  che non dipende da Google.
+        //  Il promemoria non lo puo' mettere nessuno al posto tuo: le scadenze
+        //  stanno nei tuoi dati. Qui c'e' il tasto che lo crea, e si accorge
+        //  se c'e' gia' invece di farne due uguali.
+        // ============================================================
+        const NOME_PROMEMORIA_BACKUP = 'Scarica il backup dei dati';
+
+        function promemoriaBackupEsistente() {
+            return (window.scadenze || []).find(x => chiaveNome(x.nome) === chiaveNome(NOME_PROMEMORIA_BACKUP)) || null;
+        }
+
+        function creaPromemoriaBackup() {
+            const gia = promemoriaBackupEsistente();
+            if (gia) {
+                showToast('Il promemoria c\'è già: lo trovi in «Scadenze».');
+                switchTab('scadenze');
+                return;
+            }
+            // Fra tre mesi: il primo giro lo si fa adesso scaricando il backup,
+            // quindi non ha senso che scada oggi.
+            const d = new Date();
+            d.setMonth(d.getMonth() + 3);
+            const data = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+            const nuova = { id: nuovoId(), nome: NOME_PROMEMORIA_BACKUP, data, cadenza: '3mesi', ancora: data };
+            window.scadenze = window.scadenze || [];
+            window.scadenze.push(nuova);
+            window.scadenze.sort((a, b) => String(a.data).localeCompare(String(b.data)));
+            salvaScadenze();
+            if (window.saveScadenzaToCloud) window.saveScadenzaToCloud(nuova);
+            showToast(`⚡ Promemoria creato: te lo ricordo il ${ggMmAaaa(data)}, e poi ogni tre mesi.`);
             renderContent();
         }
 
@@ -6596,6 +6636,26 @@
                                 <button onclick="exportCSV()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors">
                                     📊 Scarica CSV ${annoAttivo()} (per il commercialista)
                                 </button>
+
+                                <div class="pt-3 border-t border-gray-100">
+                                    ${(() => {
+                                        const gia = promemoriaBackupEsistente();
+                                        return gia ? `
+                                            <p class="text-xs font-bold text-green-700">✅ Te lo ricordo il ${ggMmAaaa(gia.data)}, e poi ogni tre mesi.</p>
+                                            <button onclick="switchTab('scadenze')" class="text-xs font-black text-gray-500 hover:text-gray-900 underline underline-offset-2 mt-1">
+                                                Vedilo in Scadenze
+                                            </button>`
+                                        : `
+                                            <button onclick="creaPromemoriaBackup()" class="w-full bg-white hover:bg-yellow-50 border-2 border-yellow-400 text-gray-900 font-black py-3 px-4 rounded-xl transition-colors">
+                                                ⏰ Ricordamelo ogni 3 mesi
+                                            </button>
+                                            <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+                                                Le copie automatiche qui sotto vivono nello stesso account Google dell'app: bastano per un guaio tuo,
+                                                non se un giorno perdessi l'accesso a quell'account. Un file scaricato ogni tanto su iCloud o su una
+                                                chiavetta è l'unica copia che non dipende da nessuno.
+                                            </p>`;
+                                    })()}
+                                </div>
                             </div>
 
                             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
