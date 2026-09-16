@@ -68,6 +68,67 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Comandi grandi e la virgola al posto giusto (versione 73)
+
+Primo passo di una revisione dell'esperienza d'uso. Qui non si sposta niente di
+posto: si sistema quello che era misurabilmente sotto misura. Le misure sono state
+prese sulla versione 72, con un telefono da 375px e un mese di lavoro dentro.
+
+**Ventidue comandi erano più piccoli del minimo.** «Elimina» era alto 25px, le frecce
+del giorno e la × erano 36×36. Il minimo è 44px — è la misura di Apple (Human Interface
+Guidelines) ed è anche il criterio WCAG 2.5.5. Con il telefono nel supporto, mezzo guanto
+e gli occhiali da presbite, 25px non si centrano: o non succede niente, o si tocca quello
+sbagliato, e lì accanto c'è «Elimina». Adesso sono **zero**. La regola sta nel foglio di
+stile una volta sola (`button, select, summary, input { min-height: 44px }`) invece che
+classe per classe, così vale anche per i comandi che verranno dopo e nessuno può nascere
+piccolo per distrazione. I comandi quadrati chiedono il minimo anche in larghezza con la
+classe `.tasto-icona`.
+
+**Il tastierino non aveva la virgola.** Era il guaio più serio, ed era invisibile finché
+non si guardava. I campi degli importi erano `type="number"`: su iPhone quel tipo apre un
+tastierino **senza virgola decimale**. Chi scriveva `18,50` si ritrovava `1850`, o il
+campo vuoto. Adesso sono `type="text" inputmode="decimal"`, che apre il tastierino giusto,
+e a leggerli c'è `numeroScritto()` — che l'app aveva già e capisce sia la virgola sia il
+punto, separatore delle migliaia compreso:
+
+| scritto | salvato |
+|---|---|
+| `18,50` | 18,50 |
+| `18.50` | 18,50 |
+| `1.234,56` | 1.234,56 |
+
+Riguarda dieci campi: i due importi (corsa e spesa), quello della riga che si apre per
+modificare un movimento, le ore del turno, i tre valori delle vetture e i quattro della
+scheda fiscale. I chilometri e l'anno restano interi, con `inputmode="numeric"`. Tutti i
+punti che leggevano quei campi con `parseFloat` sono passati a `numeroScritto`: **un
+campo che accetta la virgola e un lettore che non la sa leggere sarebbe stato peggio di
+prima.**
+
+Di conseguenza anche le ore a video si scrivono all'italiana (`oreScritte`): prima il
+campo diceva `12,0` e due centimetri più in là la scheda diceva `12.0 h`.
+
+**Quarantadue campi, nessuno collegato alla sua etichetta.** Le etichette c'erano come
+testo ma nessuna era legata al campo con `for`: chi usa VoiceOver sentiva «campo di
+testo», e basta. Ora lo sono tutte e 42, più `aria-label` sui menu a tendina e sui campi
+data che un'etichetta a video non ce l'hanno (i filtri, il selettore dell'anno, le righe
+di modifica). È anche un miglioramento per tutti: un `<label for>` rende cliccabile
+l'etichetta, e allarga il bersaglio gratis.
+
+**Il messaggio di conferma non lo annunciava nessuno.** `showToast()` è l'unica risposta
+che l'app dà quando salvi una corsa. Adesso il riquadro è `role="status"` con
+`aria-live="polite"`: viene letto ad alta voce senza interrompere quello che si sta
+leggendo. Trentaquattro caratteri.
+
+**Centoventidue scritte sotto i 12px** (`text-[10px]` e `text-[11px]`) sono salite a 12.
+Sotto quella soglia non si legge con gli occhiali da presbite. Verificato: a 375 e 390px
+non taglia niente e non sborda niente; a 320px restano i tagli che c'erano **già prima**
+— nessuno nuovo.
+
+Il prezzo onesto: bersagli più grandi e scritte più grandi occupano più spazio. La
+schermata Giornate passa da 1.657 a 1.892px, la Dashboard da 4.202 a 4.492. È il passo
+successivo della revisione — un riquadro solo con l'interruttore Oggi/Mese/Anno al posto
+dei tre riepiloghi impilati — a restituire quello spazio con gli interessi.
+
 ## Le copie automatiche (versione 72)
 
 Il backup da scaricare va bene finché uno si ricorda di farlo. Quello che serviva era
