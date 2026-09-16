@@ -68,6 +68,106 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Tre schede, un riquadro, due tocchi (versione 74)
+
+Secondo e ultimo passo della revisione. La 73 aveva sistemato quello che era
+misurabilmente sotto misura senza spostare niente; qui si sposta.
+
+### Tre destinazioni invece di nove
+
+Il menu era piatto: nove porte tutte uguali in fila. Chi non è pratico le apre a caso
+finché non ritrova quella giusta. Ma in turno si fanno tre cose, e le altre sei sono
+roba da scrivania.
+
+- **Oggi** — il turno, le corse, le spese della giornata
+- **Andamento** — come sta andando, a giorno / mese / anno
+- **Altro** — un indice scritto a parole, con sotto ogni voce cosa ci trovi
+
+Sul telefono le tre stanno in una **barra in basso**, dove arriva il pollice, non in cima
+allo schermo: una mano sola, telefono nel supporto, mezzo guanto. `env(safe-area-inset-bottom)`
+le tiene sopra la barra di casa dell'iPhone. Su schermo largo resta il menu laterale, con le
+tre in cima e le altre sotto una riga di separazione.
+
+Le scadenze in corso **non** finiscono nel cassetto: l'avviso rosso compare su «Oggi» e su
+«Andamento», dove si passa tutti i giorni. Una scadenza nascosta in un sottomenu è una
+scadenza persa.
+
+L'**anno di esercizio** non sta più in cima a ogni schermata: costava ~60px su nove schede e
+si tocca due volte l'anno. Adesso è una pastiglia sulle quattro schermate i cui numeri
+riguardano un anno preciso, più il menu laterale.
+
+### Un riquadro solo, con l'interruttore del periodo
+
+Era il problema più grosso e il meno evidente. «Andamento» impilava **tre riquadri con la
+stessa identica struttura** — giornaliero, mensile, annuale — ripetendo venti etichette tre
+volte: 4.492px, sessantasette numeri in colonna, cinquantatré elementi cliccabili. Uno sopra
+l'altro non si confrontano nemmeno: per confrontarli dovresti vederli insieme, e insieme non
+ci stanno.
+
+Adesso è **lo stesso riquadro con tre posizioni**: `Oggi · Mese · Anno`. La scelta si ricorda.
+Sopra c'è una testata comune (`testataPeriodo`) con **il** numero — uno solo, grande davvero —
+e sotto le due righe che dicono cosa ne resta. Le quattro caselle che ripetevano incasso,
+spese e saldo sono sparite: le diceva già la testata.
+
+Nulla è stato tolto. Le spiegazioni lunghe (l'accantonamento, com'è fatta la quota
+giornaliera) stanno dietro una riga che si apre, e le due sezioni più pesanti di «Spese e
+tasse» — il budget dei costi fissi (1.224px) e il conguaglio (1.543px) — sono pieghevoli, con
+lo stato ricordato in `localStorage` (`taxi_apri_*`): **piegare invece di cancellare**.
+
+### La corsa in due tocchi
+
+Il 95% delle corse è *oggi, contanti o POS, tot euro*. Prima erano sei passaggi: apri l'app,
+scheda, scorri ~700px, «+ Nuova Corsa», quattro campi, salva.
+
+Adesso il metodo di pagamento **è** il pulsante di conferma:
+
+```
+Quanto hai incassato?   [  18,50  ]
+[ 💵 Contanti ]  [ 💳 POS ]     ← ognuno salva
+```
+
+Scrivi l'importo, tocchi il metodo, è salvata — e il campo torna vuoto col cursore dentro,
+pronto per la successiva. Il messaggio conferma anche il totale della giornata. Invio da
+tastiera usa l'ultimo metodo. Data, categoria e turno li mette il programma, e il blocco dei
+giorni di riposo vale qui come nel modulo completo.
+
+Il modulo completo non è sparito: sta sotto, dietro «Altro metodo, tratta o data diversa»,
+per la convenzione, la tratta scritta, la data di ieri. Accanto c'è «+ Segna una spesa», così
+il giro quotidiano sta tutto in una schermata.
+
+### Le altre pulizie
+
+- **«Mese (ignorato)»** era uno stato interno finito a video: un menu disattivato che dice
+  «ignorato» fa pensare di aver sbagliato qualcosa. Tolto; al suo posto una riga che dice
+  perché («stai guardando un giorno solo, quindi il mese non serve»).
+- **I filtri** stavano sopra il registro e lo spingevano ~400px più giù. Adesso sono in fondo
+  e chiusi, e si aprono da soli solo se un filtro c'è davvero — il giorno non conta, ha le
+  sue frecce in cima e in uso normale c'è sempre.
+- **I riquadri dei metodi** si mostrano solo se hanno qualcosa dentro: cinque riquadri di cui
+  tre a 0,00 € sono tre righe di niente.
+- **«Modifica» e «Elimina» su ogni riga**: una giornata da otto corse mostrava sedici
+  pulsanti, metà dei quali cancellano. Adesso si tocca la riga e si apre, e «Elimina» sta
+  lì dentro, dove stai già modificando quella corsa.
+- **I nomi**: se una parola non la diresti a un collega al posteggio, non va scritta.
+  «Bilancio & Statistiche» → «Come va il 2026». «Registro Uscite» → «Registro spese».
+  «Spese & Deducibilità Fiscale» → «Spese e tasse». «Parco Auto» → «Le mie auto».
+  «Report Finanziario & Stampa PDF» → «Per il commercialista». «Cloud & Sync» → «Backup e
+  impostazioni». «Metodo Incasso» → «Come ha pagato?». «Importo (€)» → «Quanto?».
+  «Azzera filtri» → «Mostra tutto». «Salva e chiudi» → «Salva e basta».
+
+### Le misure, prima e dopo
+
+| Schermata | v72 | v74 |
+|---|---|---|
+| Andamento | 4.202px · 67 numeri · 53 comandi | **1.752px · 29 numeri · 7 comandi** |
+| Spese e tasse | 4.673px | **2.732px** |
+| Oggi | 1.657px | **1.426px** (con la corsa lampo dentro) |
+| Voci di menu | 9 | **3** (+ un indice) |
+
+Verificato: a 375 e 390px non taglia e non sborda niente; a 320px restano i tagli che c'erano
+già prima. Tutte le prove passano, più tre nuove: `testNav` (le tre destinazioni e l'indice),
+`testLampo` (la corsa in due tocchi), `testVociNuovo` (il budget dietro il pieghevole).
+
 ## Comandi grandi e la virgola al posto giusto (versione 73)
 
 Primo passo di una revisione dell'esperienza d'uso. Qui non si sposta niente di
