@@ -68,6 +68,44 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La stessa lingua in Andamento e Gestione (versione 90)
+
+La direzione della v89 portata sulle altre due schermate. Nessun conto è cambiato.
+
+**Andamento**
+
+- La testata dei periodi (Oggi / Mese / Anno) è la stessa scheda scura della giornata:
+  incasso grande **bianco** invece che giallo — giallo su nero è la coppia che si legge
+  peggio di tutte con il sole in faccia — e sotto le tre caselle **Spese · Ti resta · A corsa**,
+  con le cifre allineate in colonna.
+- **I campi data e mese non sono più rettangoli bianchi dentro il nero.** Erano la cosa più
+  vistosa della schermata e mostravano «09/16/2026». Adesso c'è la data scritta
+  («Mercoledì 16 / settembre 2026», «Settembre 2026») con il campo del telefono trasparente
+  sopra: si tocca e si apre il calendario, come prima. Il pulsante «Ultimo» è diventato una
+  scritta, non un blocco giallo.
+- **Meno doppioni**: il titolo del giorno non è più ripetuto sopra le frecce, e la media a
+  corsa non è scritta due volte (sta nella casella; sotto resta l'euro all'ora).
+- Il riquadro **«Quanto costa questa giornata»** era tutto blu su blu: adesso è una scheda
+  bianca con il blu solo dove serve, la quota in grande e i due riquadri allineati.
+  «Incasso reale della giornata» si chiama **«Sopra il pareggio»**: mostrava la differenza,
+  non l'incasso.
+- Il selettore dell'anno era un blocco nero grande come il titolo: adesso è un comando quieto
+  accanto al titolo, bianco con un filo di bordo.
+
+**Gestione**
+
+- I sei reparti hanno **un colore ciascuno**, tenue: sei quadrati gialli uguali non aiutano a
+  ritrovare la voce, a colpo d'occhio erano sei bolli. La freccia a destra è disegnata, non
+  più il carattere `›`.
+- Titolo e sottotitolo più composti, e la riga non va più a capo sui telefoni stretti.
+
+**Dappertutto**
+
+- Il nero dell'app (`#111827`, blu di suo) è diventato lo stesso nero caldo della scheda
+  della giornata: accanto al fondo color carta il vecchio faceva una macchia fredda.
+- Le etichettine delle sezioni sono una classe sola (`.etichetta`), non tredici copie della
+  stessa riga di classi.
+
 ## Una grafica più curata: la giornata in una scheda sola (versione 89)
 
 Quattro bozze a confronto (com'è adesso, «Rifinitura», «Plancia» scura, «Chiaro» senza
