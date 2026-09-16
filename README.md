@@ -68,6 +68,34 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La fattura non è un modo di pagare (versione 95)
+
+Fra i tasti «come ha pagato» c'era **Fattura / Convenzione**, sia sulle corse che sulle
+spese. Ma la fattura non è un modo di pagare: è il documento che ti danno. Il tasto è
+sparito da tutti e due i pannelli — restano solo i modi veri: contanti, POS, Satispay, app,
+carta carburante.
+
+**«Fattura» resta scegliibile nel modulo completo** (il collegamento *«Tratta scritta o data
+diversa»* sulle corse, *«Nota, data diversa o spesa ricorrente»* sulle spese): le corse in
+convenzione già registrate restano quelle che sono, e chi vuole continuare a segnarle così
+può farlo.
+
+Al suo posto, sulle spese, c'è la spunta **«Mi fa fattura»**:
+
+- sta nel pannello veloce, sopra i tasti del pagamento, e nel modulo completo accanto al
+  metodo;
+- si ricorda l'ultima scelta, come categoria e metodo — la si vede sempre prima di salvare;
+- si può mettere e togliere anche dopo, dalla modifica della riga (sia in «Oggi» che nel
+  registro spese);
+- sulla riga compare il cartellino **«con fattura»** (in Oggi, per stare stretto, **«fatt.»**);
+- nel registro spese il totale dice anche **«di cui *x* € con fattura»**.
+
+Serve al commercialista e serve a te: il pieno con la ricevuta del distributore e il pieno
+con la fattura sono la stessa spesa e due cose diverse.
+
+Il campo si chiama `fattura` sul movimento e c'è solo quando è vero: i movimenti vecchi
+restano validi così come sono, senza nessuna conversione.
+
 ## La prossima scadenza era quella sbagliata (versione 94)
 
 Segnalato guardando l'app: in cima a **Scadenze** c'era scritto *«Prossima: Bollo Auto»*
