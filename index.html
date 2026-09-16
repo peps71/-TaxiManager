@@ -850,7 +850,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 78;
+        const VERSIONE_APP = 79;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -4687,20 +4687,16 @@
 
             // Incassi del mese contati una volta sola, giorno per giorno: prima
             // ogni cella rileggeva tutto l'archivio, trentuno volte di fila.
-            // Del totale si tiene da parte anche la quota incassata a POS.
+            // La divisione per metodo qui non serve piu': la dice il prospetto
+            // dei corrispettivi, per tutti e cinque i metodi e in colonna.
             const incassiDelMese = {};
-            let posMese = 0;
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'ENTRATA') return;
                 const d = String(r.data || '');
                 if (!d.startsWith(mese)) return;
-                const imp = parseFloat(r.importo || 0) || 0;
-                const g = incassiDelMese[d] || (incassiDelMese[d] = { tot: 0, pos: 0 });
-                g.tot += imp;
-                if (r.metodo === 'POS') { g.pos += imp; posMese += imp; }
+                incassiDelMese[d] = (incassiDelMese[d] || 0) + (parseFloat(r.importo || 0) || 0);
             });
-            const incassoDi = (iso) => (incassiDelMese[iso] || {}).tot || 0;
-            const posDi = (iso) => (incassiDelMese[iso] || {}).pos || 0;
+            const incassoDi = (iso) => incassiDelMese[iso] || 0;
 
             // Conteggi del mese
             const delMese = (window.shifts || []).filter(t => String(t.data).startsWith(mese));
@@ -4720,7 +4716,6 @@
                 const aperto = window.giornoCalendarioAperto === iso;
                 const rossa = classeEvidenziaGiorno(iso) === 'text-red-500';
                 const incasso = t && !isRiposo(t) ? incassoDi(iso) : 0;
-                const pos = t && !isRiposo(t) ? posDi(iso) : 0;
 
                 return `
                     <button onclick="toccaGiornoCalendario('${iso}')"
@@ -4728,7 +4723,6 @@
                         <span class="text-sm font-black ${t ? stile.testo : (rossa ? 'text-red-500' : 'text-gray-500')} leading-none">${giorno}</span>
                         ${t ? `<span class="text-[9px] font-bold ${stile.testo} leading-none truncate max-w-full px-0.5">${isRiposo(t) ? stile.breve : (t.ore ? t.ore + 'h' : '·')}</span>` : ''}
                         ${incasso > 0 ? `<span class="text-[8px] font-black text-green-700 leading-none">${Math.round(incasso)}€</span>` : ''}
-                        ${pos > 0 ? `<span class="text-[8px] font-black text-blue-600 leading-none tabular-nums truncate max-w-full" title="di cui a POS">${pos.toFixed(2).replace('.', ',')}</span>` : ''}
                     </button>`;
             };
 
@@ -4748,7 +4742,6 @@
                                 ${incassoDi(iso) > 0 ? `
                                     <p class="text-xs font-black text-green-400 mt-0.5">
                                         ${formatCurrency(incassoDi(iso))}
-                                        ${posDi(iso) > 0 ? `<span class="text-blue-300">· POS ${formatCurrency(posDi(iso))}</span>` : ''}
                                     </p>` : ''}
                             </div>
                             <button onclick="toccaGiornoCalendario('${iso}')" class="text-gray-400 hover:text-white text-xl leading-none px-2">×</button>
@@ -4823,7 +4816,6 @@
                             <div class="text-center min-w-0">
                                 <p class="text-lg font-black text-gray-900 capitalize leading-tight">${nomeMese(mm)} ${anno}</p>
                                 <p class="text-xs font-bold text-gray-400">${lavorati.length} lavorati · ${festivi.length} festivi · ${recuperi.length} recuperi · ${oreScritte(oreMese)} h</p>
-                                ${posMese > 0 ? `<p class="text-xs font-black text-blue-600">POS del mese ${formatCurrency(posMese)}</p>` : ''}
                             </div>
                             <div class="flex items-center gap-2">
                                 <button onclick="meseCalendarioOggi()" class="px-3 h-10 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black">Oggi</button>
@@ -4858,7 +4850,6 @@
                             <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-orange-200 border border-orange-400 align-middle"></span> recupero festivo</span>
                             <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-white border border-gray-300 align-middle"></span> da compilare</span>
                             <span class="text-green-700">● incassato</span>
-                            <span class="text-blue-600">● di cui a POS</span>
                         </div>
                     </div>
 

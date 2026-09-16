@@ -68,6 +68,24 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Via il POS dal calendario (versione 79)
+
+Il POS nella casella del calendario era nato quando l'incrocio fra giorno e metodo non
+esisteva da nessuna parte. Adesso c'è il prospetto dei corrispettivi (v77), che lo dice per
+**tutti e cinque** i metodi, in colonna e con i totali: nella casella restavano due numeri
+sovrapposti in otto pixel, senza più servire a niente.
+
+Tolto in tutti e quattro i punti della vista Calendario: la casella, il pannello del giorno
+aperto, la testata del mese («POS del mese …») e la legenda. Con lui è sparito anche il
+conteggio che lo alimentava, quindi la vista mensile fa un giro di conti in meno.
+
+Effetto collaterale misurato: a 320px la schermata Giornate passa da **28 elementi con il
+testo tagliato a zero** — era proprio quel numero in otto pixel a non starci.
+
+Il totale della giornata nella casella resta, ed è invariato. **Nella scheda «Giornate» la
+riga «di cui POS» resta dov'era**: lì lo spazio c'è, e serve a chi guarda una giornata alla
+volta.
+
 ## Il nome e la versione, anche sul telefono (versione 78)
 
 Il menu laterale, dove stavano il nome dell'app e il numero di versione, sul telefono è
