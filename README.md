@@ -68,6 +68,45 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La prossima scadenza era quella sbagliata (versione 94)
+
+Segnalato guardando l'app: in cima a **Scadenze** c'era scritto *«Prossima: Bollo Auto»*
+(31 ottobre) mentre il calendario, due dita più sotto, mostrava l'assicurazione il 7 ottobre.
+E *«Entro 30 giorni: 0»* con una scadenza a ventun giorni.
+
+**Perché.** Le tre caselle in cima leggevano la **data scritta nella scheda** della scadenza.
+Per una scadenza che si ripete quella data non è la prossima volta: è l'**àncora** della
+serie, il punto da cui si contano i giri (README, «Il calendario delle scadenze»). Il
+calendario le occorrenze le calcola davvero; le caselle no. Due conti diversi sulla stessa
+pagina, e quello sbagliato era in grande.
+
+Lo stesso errore lo faceva **l'avviso rosso** che compare su Oggi, Andamento e Gestione:
+poteva tacere su una scadenza fra tre giorni e strillare per una che non c'era.
+
+**Adesso** le caselle e l'avviso contano le occorrenze vere, le stesse del calendario, su tre
+anni: l'anno scorso per le arretrate, quest'anno, e l'anno prossimo — perché a dicembre la
+prossima cade oltre capodanno.
+
+Due regole che servivano:
+
+- **Di una scadenza in ritardo conta l'ultima volta, non tutte.** Il bollo del 2025 mai
+  spuntato non è una seconda cosa da fare oltre a quello del 2026: è la stessa, in ritardo.
+  Senza questa regola bastava non spuntare per un anno per avere l'avviso rosso pieno di
+  doppioni.
+- **Prima dell'àncora la serie non esisteva.** Il conto delle occorrenze, per non perdere i
+  bordi dell'anno, ne generava una in più da una parte e dall'altra: quella *prima*
+  dell'àncora finiva nel calendario come se fosse dovuta. È il motivo per cui il promemoria
+  del backup, creato per il 16 dicembre, compariva «da fare oggi» il 16 settembre. Restano
+  solo le date pre-àncora su cui c'è scritto qualcosa (spuntate, o spostate a mano): quelle
+  sono storia vera.
+
+**E le tre caselle stanno su una riga sola**, sul fondo scuro: Scadute · Entro 30 gg ·
+Prossima, con il nome della prossima, la data e i giorni che mancano. Prima erano tre
+schedine chiare in colonna, alte quanto mezzo schermo, per dire due zeri e un nome.
+
+Verificato: `testProssima` (nuovo) fallisce sulla v93 — *prossima: Revisione, tra 65 gg* —
+e passa dalla v94, con l'assicurazione a 21 giorni.
+
 ## La divisione per metodo su fondo scuro (versioni 92-93)
 
 Il pannello «Filtra per metodo», nella schermata Oggi, era cinque rettangoli grigi uguali su
