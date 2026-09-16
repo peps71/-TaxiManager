@@ -68,6 +68,69 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La scheda del tassista (versione 85)
+
+### Una premessa: l'app era già di più persone
+
+Non c'era una registrazione da costruire. Chi entra con Google ha **già** una cartella sua
+sul Cloud — `artifacts/{appId}/users/{uid}/…` — e a tenerli separati non è il programma ma
+le **regole del database**, che girano sui server di Google e dal browser non si aggirano:
+
+```
+match /artifacts/{appId}/users/{uid}/{documenti=**} {
+  allow read, write: if request.auth != null && request.auth.uid == uid;
+}
+```
+
+Due tassisti sullo stesso telefono, che entrano con due account, non si vedono i dati a
+vicenda. Quello che mancava non era la separazione: era **l'anagrafica**.
+
+### Cosa c'è adesso
+
+Nome, cognome, numero di licenza, codice radio e partita IVA. Vivono nella cartella privata
+(`profilo/dati`), si sincronizzano fra i dispositivi come tutto il resto, e viaggiano nel
+backup.
+
+**Il benvenuto** compare su «Oggi» al primo avvio e poi non si rivede più. **Non è una pagina
+di registrazione**: una schermata obbligatoria davanti all'app sarebbe un muro fra il
+tassista e la prima corsa, per dei dati che servono a fine mese. C'è un «Lo faccio dopo», e
+la scheda si compila quando si vuole da «Gestione → Backup e impostazioni». Lo stesso modulo
+serve in tutti e due i posti (`moduloProfiloHTML`): due copie finirebbero per divergere — in
+questa app è già successo.
+
+### Dove serve davvero
+
+**In testa al riepilogo per il commercialista.** Un foglio senza nome e partita IVA è un
+foglio anonimo: chi lo riceve non sa di chi è, e in archivio non lo ritrova più.
+
+```
+INTESTATARIO
+Giuseppe La Viana
+Licenza 1234    Codice radio 57    Partita IVA 00743110157
+```
+
+E il nome compare nella barra in alto al posto del marchio: «TaxiManager» lo sai già, il tuo
+nome dice invece con quale account stai lavorando.
+
+### La partita IVA viene controllata
+
+Undici cifre, e l'ultima è un controllo: si sommano le cifre di posto dispari e quelle di
+posto pari raddoppiate (togliendo 9 se superano 9), e il totale deve chiudere alla decina.
+Serve a intercettare una cifra battuta storta, che su un documento che va al commercialista
+non è un dettaglio.
+
+**Avvisa, non blocca**: potresti non averla sottomano, e la scheda si salva lo stesso con un
+messaggio che lo dice.
+
+### Un bug trovato dalla prova
+
+Il primo tentativo metteva il ripristino della scheda **dopo** il controllo «c'è qualcosa da
+rimettere in questo backup?». Risultato: un backup fatto appena installata l'app — che
+contiene la scheda e nient'altro — veniva scartato per «non ci sono movimenti», buttando via
+proprio l'unica cosa che c'era. Adesso la scheda si rimette per prima, fuori da quel
+controllo, e il messaggio lo dice: *«Rimessa la tua scheda. Di movimenti e turni in questo
+backup non ce n'erano.»*
+
 ## Revisione generale: più veloce, meno codice (versione 84)
 
 Una passata di analisi e ottimizzazione, **a comportamento invariato**. Misurato su un
