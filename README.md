@@ -68,6 +68,36 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Sigla e colore del turno (versione 86)
+
+**«Codice radio» diventa «Sigla»**, che è come la si chiama davvero, e l'esempio passa da
+`57` a `Torino 57`. Chi aveva già compilato il campo non lo perde: all'avvio, se c'è un
+vecchio `radio` e la sigla è vuota, il valore si sposta da solo.
+
+**Il colore del turno.** Non è una decorazione: è il colore scritto sulla licenza, quello che
+dice quali giorni tocca lavorare. Si sceglie toccando una pastiglia — bianco, giallo, verde,
+rosso, blu, nero, o nessuno — e compare in due posti:
+
+- un **pallino** accanto al nome nella barra in alto, che è quello che si guarda al volo la
+  mattina;
+- una **pastiglia «Turno giallo»** in testa al riepilogo per il commercialista, accanto a
+  nome, licenza, sigla e partita IVA.
+
+### Un bug trovato dalla prova, e la bozza
+
+Il primo tentativo scriveva il colore scelto direttamente nel profilo. Sembrava innocuo, ma:
+scegliendo il colore a metà compilazione, il riquadro di benvenuto **spariva** — perché a
+quel punto il profilo risultava «compilato» — e ti trovavi il modulo chiuso in faccia senza
+aver salvato niente.
+
+Adesso quello che stai battendo vive in una **bozza** (`window.bozzaProfilo`): il modulo la
+legge, il colore la aggiorna, e solo il salvataggio la travasa nel profilo vero e la butta.
+È lo stesso schema che l'app usa già per i chilometri del turno.
+
+*(Nota di manutenzione: `testBudget` aveva una `location.reload()` in corsa con la `goto`
+successiva e falliva a intermittenza. Tolta: cinque giri di fila, cinque verdi. Un test che
+fallisce a caso è peggio di un test che manca, perché insegna a ignorare il rosso.)*
+
 ## La scheda del tassista (versione 85)
 
 ### Una premessa: l'app era già di più persone
