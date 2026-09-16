@@ -68,6 +68,56 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le copie automatiche (versione 72)
+
+Il backup da scaricare va bene finché uno si ricorda di farlo. Quello che serviva era
+una copia che si facesse da sola, e che ci fosse anche il giorno in cui uno si accorge
+di aver combinato un guaio il giorno prima.
+
+Adesso l'app tiene **tre copie complete a rotazione** nella cartella privata su
+Firestore, in `artifacts/{appId}/users/{uid}/istantanee/{0,1,2}`. L'appuntamento è ogni
+notte alle 2:00: quella nuova prende il posto di quella di tre notti fa, così sotto mano
+restano sempre gli ultimi tre giorni.
+
+**Il limite da dire in chiaro:** un'app che sta nel telefono non può svegliarsi alle due
+di notte a telefono spento — nessuna app web può. L'appuntamento delle 2:00 è l'ora a
+cui la copia *scade*, non l'ora in cui parte il telefono: lo scatto avviene la prima
+volta che si riapre l'app dopo quell'ora (`controllaIstantanea`, chiamata all'accensione
+del Cloud e a ogni ritorno sull'app). Chi apre l'app tutti i giorni ha tutti i giorni la
+sua copia; chi non la apre per una settimana, al rientro ne trova una sola, fatta lì per
+lì. E serve l'accesso con Google: senza Cloud non c'è nessun posto dove metterla.
+
+Come è fatta:
+
+- `datiDaSalvare()` è lo stesso pacchetto del backup da scaricare — movimenti, turni,
+  scadenze, vetture, voci di costo fisso, impostazioni fiscali — così i due non possono
+  divergere.
+- `slotIstantanea(quando)` conta i giorni interi e fa il resto per tre: ogni notte tocca
+  uno slot diverso, ogni tre notti si ricomincia.
+- `ultimoScatto()` è l'ultimo appuntamento passato (oggi alle due se le due sono
+  passate, ieri alle due se è ancora notte fonda). Si confronta con
+  `taxi_ultima_istantanea` in `localStorage`: se la copia è più vecchia dell'appuntamento
+  si scatta, altrimenti no.
+- Due freni che contano: non si scatta se il Cloud non è acceso, e **non si scatta se
+  movimenti e turni sono entrambi vuoti** — i dati dal Cloud arrivano qualche secondo
+  dopo l'accesso, e senza quel freno la prima copia della giornata sarebbe un archivio
+  vuoto sopra una copia buona. Per lo stesso motivo il controllo all'avvio parte sei
+  secondi dopo l'accensione del Cloud.
+- Se la scrittura non riesce (rete assente, Cloud lento) non si segna niente: la copia si
+  rifà alla prossima apertura.
+- Un documento Firestore non può superare il megabyte e tre anni di corse lo superano:
+  il documento dell'istantanea tiene solo la scheda (quando, quanti movimenti, quanti
+  turni, quanti pezzi) e il contenuto sta in `parti/{n}` da 600.000 caratteri l'uno.
+  Se la copia nuova è più corta di quella vecchia i pezzi che avanzano vengono
+  cancellati, altrimenti resterebbero lì a occupare posto e a sporcare la rilettura.
+
+In `Cloud & Backup` c'è il riquadro **Copie automatiche**: le tre copie con data, ora e
+quanti movimenti e turni contengono, la più recente segnata in verde, un `Ripristina`
+per ciascuna e un `Fai una copia adesso` per chi non vuole aspettare la notte.
+Il ripristino passa da `applicaBackup()`, lo stesso del file: **unisce**, non cancella —
+quello che c'è resta, quello che manca torna, e i movimenti con lo stesso identificativo
+tornano come erano nella copia.
+
 ## Turni & Corse
 
 Due viste: **Giornate** e **Calendario**. Quella scelta resta: riaprendo l'app si torna
