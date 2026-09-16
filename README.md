@@ -68,6 +68,92 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Revisione generale: più veloce, meno codice (versione 84)
+
+Una passata di analisi e ottimizzazione, **a comportamento invariato**. Misurato su un
+archivio di prova da **9.697 movimenti e 1.096 turni** (tre anni pieni).
+
+### Quanto ci mette a disegnare una schermata
+
+| schermata | prima | dopo |
+|---|---|---|
+| Spese e tasse | 17,2 ms | **10,9 ms** −37% |
+| Andamento · mese | 14,7 ms | **8,1 ms** −45% |
+| Andamento · giorno | 8,9 ms | **7,0 ms** −21% |
+| Oggi | 7,0 ms | **5,8 ms** −17% |
+| Commercialista | 6,5 ms | **6,1 ms** |
+
+### Le quattro cose che pesavano
+
+**1. Il formattatore degli euro si costruiva a ogni importo.** `new Intl.NumberFormat(...)`
+è caro da costruire e gratis da riusare: misurato, ventimila importi costano **613 ms**
+costruendolo ogni volta e **11 ms** riusandolo — **54 volte tanto**. E una schermata di
+questa app formatta centinaia di importi, perché ogni corsa, ogni riga di spesa e ogni
+casella del calendario ne ha uno. Adesso i formattatori sono due costanti
+(`FORMATO_EURO`, `FORMATO_NUMERO`), costruite una volta all'avvio. Era la singola cosa che
+pesava di più.
+
+**2. Ogni spesa ri-normalizzava i nomi di tutte le voci di budget.** Per abbinare una spesa
+alla sua voce, `voceBudgetDiRecord` scorreva le voci ricalcolando `chiaveNome(v.nome)` —
+`normalize('NFD')` più due espressioni regolari — **per ognuno dei millecinquecento
+movimenti dell'anno**. Adesso le voci sono indicizzate per chiave una volta per disegno
+(`indiceVociBudget`), e `chiaveNome` tiene da parte i risultati: i nomi da confrontare sono
+una manciata, ripetuti migliaia di volte. Il conguaglio è passato da **4,00 a 1,75 ms**.
+
+**3. Il giro del budget chiedeva 365 volte quello che non cambiava.** `budgetPeriodo` e
+`budgetVocePeriodo` chiamavano `elencoVociFisse()` e `giorniDelMese()` dentro il ciclo dei
+giorni: 732 chiamate per un disegno di «Spese e tasse». Ora escono dal ciclo, e quanti
+giorni ha un mese o un anno si calcola una volta per sempre (`GIORNI_MESE`, `GIORNI_ANNO`) —
+sono fatti di calendario, non cambiano.
+
+**4. Gli stessi conti chiesti da punti diversi della stessa schermata.** Dodici funzioni
+pesanti (`aggrega`, `conguaglioAnno`, `corrispettiviMese`, `statsForfettario`,
+`calcolaTasseOrdinario`…) passano da una memoria che **vive solo per la durata di un
+disegno**.
+
+### La memoria del disegno, e un bug che ha quasi fatto danni
+
+La memoria si apre e si chiude in un guscio attorno a `renderContent`, con un `try/finally`:
+
+```js
+function renderContent() {
+    memoDisegno.clear();
+    dentroUnDisegno = true;
+    try { disegnaContenuto(); }
+    finally { dentroUnDisegno = false; memoDisegno.clear(); }
+}
+```
+
+Fuori da un disegno `memo()` non tiene niente da parte. **Serve davvero**: il primo tentativo
+svuotava la memoria «alla fine» di `renderContent`, ma quella riga era finita — per un
+aggancio sbagliato — dentro un'altra funzione. Risultato: il riepilogo di oggi restava
+bloccato a zero, perché il valore calcolato al primo avvio (archivio ancora vuoto) veniva
+riletto dopo. Il guscio con `try/finally` non dipende da dove finisce una funzione lunga
+milleduecento righe, e si richiude anche se qualcosa va storto.
+
+### Come so che i numeri non sono cambiati
+
+Una prova che mette a confronto la versione vecchia e quella nuova sullo stesso archivio e
+verifica **68 misure**: i totali di tre anni, il budget e il conguaglio per anno e per mese,
+le serie mensili e annuali, i corrispettivi, la quota del giorno, le tasse, il forfettario,
+le scadenze, l'HTML completo delle dieci schermate.
+
+**68 su 68 identiche.** Più le 39 prove della suite.
+
+### Meno codice
+
+- Tolta `pieghevole()`, mai chiamata (era rimasta dalla 74).
+- Le voci del menu «che spesa è» erano scritte due volte — nel modulo completo e nella spesa
+  lampo — e le due copie **erano già divergenti**: una passava le categorie da `esc()`,
+  l'altra no. Una funzione sola (`opzioniCategoriaSpesa`).
+- Zero blocchi di codice duplicati rimasti (prima: 1), zero funzioni mai chiamate.
+- Tre prove (`testLicenza`, `testRata`, `testMezzo`) erano **rotte da diverse versioni**:
+  cercavano `VOCI_COSTI_FISSI` e `#cf-anno`, spariti col rifacimento del budget. Una prova
+  che non può girare è peggio di nessuna prova, perché sembra copertura e non lo è.
+  Sostituite da `testCostiFissi`, che copre le stesse cose con l'API di oggi: la rata
+  mensile che pesa uguale in ogni mese, il finanziamento escluso dal costo al chilometro,
+  l'abbinamento «Costi fissi – X» nel conguaglio, il raggruppamento dei tipi di spesa.
+
 ## Due nomi più asciutti (versione 83)
 
 | prima | adesso |

@@ -850,7 +850,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 83;
+        const VERSIONE_APP = 84;
 
         function leggiLocale(chiave, predefinito) {
             try {
@@ -1216,7 +1216,19 @@
             }, 3000);
         }
 
-        const formatCurrency = (val) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val || 0);
+        // ============================================================
+        //  IL FORMATTATORE SI COSTRUISCE UNA VOLTA SOLA
+        //  Intl.NumberFormat e' caro da costruire e gratis da riusare:
+        //  misurato, ventimila importi costano 613 ms costruendolo ogni volta
+        //  e 11 ms riusandolo - cinquantaquattro volte tanto. E una schermata
+        //  di questa app formatta centinaia di importi per disegno, perche'
+        //  ogni corsa, ogni riga di spesa e ogni casella ne ha uno.
+        // ============================================================
+        const FORMATO_EURO = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
+        const FORMATO_NUMERO = new Intl.NumberFormat('it-IT');
+
+        const formatCurrency = (val) => FORMATO_EURO.format(val || 0);
+        const numeroIT = (val) => FORMATO_NUMERO.format(val || 0);
 
         // Stile badge colorato per metodo di pagamento: verde=Contanti, nero=POS, rosso=Satispay, blu=App/altri importi
         function metodoBadgeClass(metodo) {
@@ -1226,6 +1238,24 @@
                 case 'Satispay':  return 'bg-red-100 text-red-800 border border-red-300';
                 default:          return 'bg-blue-100 text-blue-800 border border-blue-300';
             }
+        }
+
+        // Le voci del menu «che spesa e'»: le categorie di sempre piu' le voci di
+        // budget che non ne hanno una loro. Stava scritta due volte, nel modulo
+        // completo e nella spesa lampo, e le due copie erano gia' divergenti -
+        // una passava le categorie da esc(), l'altra no.
+        function opzioniCategoriaSpesa(conAltro) {
+            const scelta = window.ultimaCategoriaUscita || 'Carburante';
+            const base = CATEGORIE_USCITA
+                .map(c => `<option value="${esc(c)}" ${scelta === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+            const voci = vociBudgetNelMenu();
+            const fissi = !voci.length ? '' : `<optgroup label="Costi fissi (vanno nel conguaglio)">
+                    ${voci.map(v => {
+                        const val = `Costi fissi - ${String(v.nome).trim()}`;
+                        return `<option value="${esc(val)}" ${window.ultimaCategoriaUscita === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
+                    }).join('')}
+                </optgroup>`;
+            return base + fissi + (conAltro ? '<option value="__altro__">✏️ Altro (scrivi tu)</option>' : '');
         }
 
         // Opzioni del menu metodo, condivise da form di inserimento e modifica in riga
@@ -1254,6 +1284,10 @@
 
         // Stima tasse per Regime Ordinario: Contributi INPS (deducibili) + IRPEF a scaglioni + Addizionali
         function calcolaTasseOrdinario(utileLordo, anno) {
+            return memo('tasse:' + utileLordo + ':' + anno, () => calcolaTasseOrdinarioCalcola(utileLordo, anno));
+        }
+
+        function calcolaTasseOrdinarioCalcola(utileLordo, anno) {
             const fs = window.fiscalSettings || { inpsPerc: 24, addizionaliPerc: 2 };
             const contributiInps = utileLordo > 0 ? utileLordo * (fs.inpsPerc / 100) : 0;
             const imponibileIrpef = Math.max(0, utileLordo - contributiInps);
@@ -1291,6 +1325,10 @@
         // tiene il piu' alto fra la proiezione e quello che c'e' scritto: cosi'
         // le spese e gli incassi con data futura non falsano il conto.
         function utileProiettato(anno) {
+            return memo('utileProiettato:' + anno, () => utileProiettatoCalcola(anno));
+        }
+
+        function utileProiettatoCalcola(anno) {
             const totale = utileLordoAnno(anno);
             const oggi = oggiISO();
             if (String(anno) !== oggi.slice(0, 4)) return totale;
@@ -1318,6 +1356,10 @@
         }
 
         function aliquotaAccantonamento(anno) {
+            return memo('accantonamento:' + anno, () => aliquotaAccantonamentoCalcola(anno));
+        }
+
+        function aliquotaAccantonamentoCalcola(anno) {
             const a = String(anno || annoAttivo());
             const scritta = parseFloat((window.fiscalSettings || {}).accantonamentoPerc);
             if (Number.isFinite(scritta) && scritta >= 0) {
@@ -1444,6 +1486,10 @@
 
         // Quanto manca alla soglia di uscita dal Regime Forfettario, sull'anno attivo.
         function statsForfettario() {
+            return memo('forfettario', () => statsForfettarioCalcola());
+        }
+
+        function statsForfettarioCalcola() {
             const fs = window.fiscalSettings || {};
             const soglia = fs.sogliaForfettario || 85000;
             const entrate = recordsAnno().filter(r => r.tipo === 'ENTRATA').reduce((a, r) => a + parseFloat(r.importo || 0), 0);
@@ -1755,6 +1801,10 @@
 
         // Ordina per data crescente e calcola i giorni mancanti da oggi.
         function scadenzeOrdinate() {
+            return memo('scadenzeOrdinate', () => scadenzeOrdinateCalcola());
+        }
+
+        function scadenzeOrdinateCalcola() {
             const oggi = oggiISO();
             return (window.scadenze || []).slice().sort((a, b) => String(a.data).localeCompare(String(b.data))).map(s => {
                 const giorni = Math.round((new Date(s.data) - new Date(oggi)) / 86400000);
@@ -2208,7 +2258,7 @@
         // Scheda di una singola vettura, con i conti gia' fatti
         function schedaVeicolo(v) {
             const s = statsVeicolo(v);
-            const km = (n) => n === null || n === undefined ? '—' : new Intl.NumberFormat('it-IT').format(Math.round(n)) + ' km';
+            const km = (n) => n === null || n === undefined ? '—' : numeroIT(Math.round(n)) + ' km';
             const centesimi = (n) => n === null ? '—' : formatCurrency(n).replace('€', '').trim() + ' €/km';
 
             return `
@@ -2769,6 +2819,10 @@
 
         // Aggrega i movimenti di un periodo (prefisso data: '2026-05' oppure '2026-05-14')
         function aggrega(prefisso) {
+            return memo('aggrega:' + prefisso, () => aggregaCalcola(prefisso));
+        }
+
+        function aggregaCalcola(prefisso) {
             const r = {
                 incassi: 0, contanti: 0, pos: 0, satispay: 0, app: 0, fattura: 0,
                 nCorse: 0, uscite: 0, carburante: 0, manutenzione: 0, altroSpese: 0,
@@ -2867,6 +2921,10 @@
         const METODI_BREVI = { 'Contanti': 'Contanti', 'POS': 'POS', 'Satispay': 'Satispay', 'App': 'App', 'Fattura': 'Fattura' };
 
         function corrispettiviMese(ym) {
+            return memo('corrispettivi:' + ym, () => corrispettiviMeseCalcola(ym));
+        }
+
+        function corrispettiviMeseCalcola(ym) {
             const [a, m] = ym.split('-').map(Number);
             const giorniMese = new Date(a, m, 0).getDate();
             const per = {};
@@ -2911,6 +2969,10 @@
 
         // Dettaglio giorno per giorno del mese, usato dal grafico a barre
         function serieMensile(ym) {
+            return memo('serieMensile:' + ym, () => serieMensileCalcola(ym));
+        }
+
+        function serieMensileCalcola(ym) {
             const [a, m] = ym.split('-').map(Number);
             const giorni = new Date(a, m, 0).getDate();
             const per = totaliPerChiave(ym, 10);
@@ -2925,6 +2987,10 @@
 
         // I 12 mesi dell'anno con i rispettivi totali: e' la base del grafico annuale
         function serieAnnuale(anno) {
+            return memo('serieAnnuale:' + anno, () => serieAnnualeCalcola(anno));
+        }
+
+        function serieAnnualeCalcola(anno) {
             const per = totaliPerChiave(String(anno), 7);
             const serie = [];
             for (let m = 1; m <= 12; m++) {
@@ -3062,10 +3128,20 @@
         //  lettura: non e' un movimento e non entra in nessun totale.
         // ============================================================
 
+        // Quanti giorni ha un mese e quanti ne ha un anno sono fatti di
+        // calendario: non cambiano mai, e si possono tenere da parte per
+        // sempre. Nei cicli del conguaglio venivano chiesti migliaia di volte,
+        // e ogni volta costruivano una data per buttarla via subito.
+        const GIORNI_MESE = new Map();
+        const GIORNI_ANNO = new Map();
+
         function giorniDelMese(ym) {
-            const [a, m] = String(ym).split('-').map(Number);
-            if (!a || !m) return 30;
-            return new Date(a, m, 0).getDate();
+            const k = String(ym);
+            if (GIORNI_MESE.has(k)) return GIORNI_MESE.get(k);
+            const [a, m] = k.split('-').map(Number);
+            const n = (!a || !m) ? 30 : new Date(a, m, 0).getDate();
+            GIORNI_MESE.set(k, n);
+            return n;
         }
 
         // Giornate in cui si e' davvero lavorato in quel mese: nei riposi le
@@ -3098,17 +3174,45 @@
         // punteggiatura. Diversa dallo slug, che invece taglia a 24 caratteri per
         // stare in un identificativo: qui il taglio farebbe combaciare due voci
         // dal nome lungo e simile.
+        // I nomi da confrontare sono una manciata - le categorie di spesa e le
+        // voci di budget - ma passavano di qui migliaia di volte per disegno,
+        // e ogni volta pagavano un normalize() e due espressioni regolari.
+        // Il risultato dipende solo dal testo, quindi si tiene da parte.
+        const CHIAVI_NOME = new Map();
+
         function chiaveNome(t) {
-            return String(t || '').toLowerCase()
+            const testo = String(t || '');
+            const pronta = CHIAVI_NOME.get(testo);
+            if (pronta !== undefined) return pronta;
+            const k = testo.toLowerCase()
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                 .replace(/[^a-z0-9]+/g, ' ')
                 .trim();
+            // Un tetto, per un nome scritto a mano diverso ogni volta
+            if (CHIAVI_NOME.size > 500) CHIAVI_NOME.clear();
+            CHIAVI_NOME.set(testo, k);
+            return k;
+        }
+
+        // Le voci di budget indicizzate per chiave: prima ogni spesa le scorreva
+        // tutte ri-normalizzandone il nome, cioe' lo stesso lavoro rifatto per
+        // ognuno dei movimenti dell'anno. L'indice si rifa' a ogni disegno, che
+        // e' anche quando le voci possono essere cambiate.
+        function indiceVociBudget() {
+            return memo('indiceVociBudget', () => {
+                const m = new Map();
+                elencoVociFisse().forEach(v => {
+                    const k = chiaveNome(v.nome);
+                    if (k && !m.has(k)) m.set(k, v);
+                });
+                return m;
+            });
         }
 
         function voceBudgetDiRecord(r) {
             if (!r || r.tipo !== 'USCITA') return null;
-            const voci = elencoVociFisse();
-            const cerca = (k) => k ? (voci.find(v => chiaveNome(v.nome) === k) || null) : null;
+            const indice = indiceVociBudget();
+            const cerca = (k) => k ? (indice.get(k) || null) : null;
 
             // 1. il nome scritto nel movimento, cosi' com'e'
             const diretta = cerca(chiaveNome(nomeSpesaDiRecord(r)));
@@ -3319,27 +3423,6 @@
                     </p>
                     </details>
                 </div>`;
-        }
-
-        // Piegare invece di cancellare. I numeri che ci sono servono tutti: il
-        // guaio non e' che ci siano, e' che gridano tutti insieme allo stesso
-        // volume. Quello che non guardi tutti i giorni sta dietro una riga, e
-        // se lo apri resta aperto - la scelta e' tua, una volta sola.
-        function pieghevole(chiave, titolo, contenuto, apertoDiNorma) {
-            let aperto = apertoDiNorma;
-            try {
-                const v = localStorage.getItem('taxi_apri_' + chiave);
-                if (v !== null) aperto = v === '1';
-            } catch (e) { /* pazienza */ }
-            return `
-                <details class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card" ${aperto ? 'open' : ''}
-                         ontoggle="ricordaPieghevole('${chiave}', this.open)">
-                    <summary class="flex items-center justify-between gap-3 p-5 cursor-pointer select-none">
-                        <h3 class="text-lg font-black text-gray-900">${titolo}</h3>
-                        <span class="text-xs font-black text-gray-400 no-print">apri / chiudi</span>
-                    </summary>
-                    <div class="border-t border-gray-100">${contenuto}</div>
-                </details>`;
         }
 
         function apertoPieghevole(chiave, apertoDiNorma) {
@@ -4206,17 +4289,7 @@
                     </div>
                     <label for="spesa-lampo-cat" class="block text-xs font-black uppercase tracking-wider text-gray-400">Che spesa è?</label>
                     <select id="spesa-lampo-cat" class="w-full p-3 border-2 border-gray-200 rounded-xl font-bold text-gray-900 outline-none focus:border-red-500">
-                        ${CATEGORIE_USCITA.map(c => `<option value="${esc(c)}" ${(window.ultimaCategoriaUscita || 'Carburante') === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-                        ${(() => {
-                            const voci = vociBudgetNelMenu();
-                            if (!voci.length) return '';
-                            return `<optgroup label="Costi fissi (vanno nel conguaglio)">
-                                ${voci.map(v => {
-                                    const val = `Costi fissi - ${String(v.nome).trim()}`;
-                                    return `<option value="${esc(val)}" ${window.ultimaCategoriaUscita === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
-                                }).join('')}
-                            </optgroup>`;
-                        })()}
+                        ${opzioniCategoriaSpesa(false)}
                     </select>
                     <div class="flex items-center gap-2">
                         <span class="text-3xl font-black text-gray-300" aria-hidden="true">€</span>
@@ -4962,7 +5035,47 @@
                 </div>`;
         }
 
+        // ============================================================
+        //  I CONTI PESANTI SI FANNO UNA VOLTA PER DISEGNO
+        //  Misurato su tre anni di lavoro (9.697 movimenti): disegnare
+        //  «Spese e tasse» chiamava elencoVociFisse() 732 volte e
+        //  calcolaTasseOrdinario() 7. Non era codice sbagliato - erano gli
+        //  stessi conti chiesti da punti diversi della stessa schermata.
+        //  Qui si tengono da parte per la durata di un disegno e basta: la
+        //  memoria si svuota all'inizio E alla fine di renderContent, cosi'
+        //  nessuno puo' leggere un valore vecchio fuori dal disegno e il
+        //  problema di quando invalidarla non esiste.
+        // ============================================================
+        const memoDisegno = new Map();
+        let dentroUnDisegno = false;
+
+        function memo(chiave, calcola) {
+            // Fuori da un disegno non si tiene niente da parte: il valore
+            // resterebbe li' mentre i dati cambiano, e chi lo rilegge dopo si
+            // troverebbe un numero vecchio. E' successo davvero mentre scrivevo
+            // questa ottimizzazione - il riepilogo di oggi restava a zero.
+            if (!dentroUnDisegno) return calcola();
+            if (memoDisegno.has(chiave)) return memoDisegno.get(chiave);
+            const v = calcola();
+            memoDisegno.set(chiave, v);
+            return v;
+        }
+
+        // Il guscio del disegno. La memoria si apre e si chiude qui, con un
+        // try/finally: cosi' non dipende da dove finisce una funzione lunga
+        // milleduecento righe, e si richiude anche se qualcosa va storto.
         function renderContent() {
+            memoDisegno.clear();
+            dentroUnDisegno = true;
+            try {
+                disegnaContenuto();
+            } finally {
+                dentroUnDisegno = false;
+                memoDisegno.clear();
+            }
+        }
+
+        function disegnaContenuto() {
             const main = document.getElementById('main-container');
             if (!main) return;
 
@@ -5688,7 +5801,7 @@
                             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                 ${boxDato('Vetture registrate', String(elenco.length))}
                                 ${boxDato('In uso adesso', attuale ? esc(attuale.modello) : 'nessuna', attuale ? 'text-green-700' : 'text-gray-400')}
-                                ${boxDato('Km totali percorsi', new Intl.NumberFormat('it-IT').format(Math.round(kmTotali)) + ' km')}
+                                ${boxDato('Km totali percorsi', numeroIT(Math.round(kmTotali)) + ' km')}
                                 ${boxDato('Speso in vetture', formatCurrency(spesoTotale), 'text-red-600')}
                             </div>
 
@@ -5713,7 +5826,7 @@
                                                 ${conCostoKm.map((x, i) => `
                                                     <tr class="${i === 0 ? 'bg-green-50' : ''}">
                                                         <td class="p-3 font-bold text-gray-800">${esc(x.v.modello)}${x.v.targa ? ` <span class="text-gray-400 font-medium">${esc(x.v.targa)}</span>` : ''}</td>
-                                                        <td class="p-3 text-right">${new Intl.NumberFormat('it-IT').format(Math.round(x.s.kmPercorsi))}</td>
+                                                        <td class="p-3 text-right">${numeroIT(Math.round(x.s.kmPercorsi))}</td>
                                                         <td class="p-3 text-right text-red-600">${x.s.perdita === null ? '—' : formatCurrency(x.s.perdita)}</td>
                                                         <td class="p-3 text-right text-red-600">${formatCurrency(x.s.speseTot)}</td>
                                                         <td class="p-3 text-right font-black ${i === 0 ? 'text-green-700' : 'text-gray-900'}">${formatCurrency(x.s.costoKm).replace('€', '').trim()} €/km</td>
@@ -6394,20 +6507,7 @@
                     <div>
                         <label for="uscita-cat-select" class="block text-xs font-bold text-gray-700 mb-1">Categoria</label>
                         <select id="uscita-cat-select" onchange="onUscitaCatChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium">
-                            ${CATEGORIE_USCITA.map(c => `<option value="${c}" ${(window.ultimaCategoriaUscita || 'Carburante') === c ? 'selected' : ''}>${c}</option>`).join('')}
-                            ${(() => {
-                                // Le voci del budget senza una categoria loro: scegliendole da
-                                // qui il movimento nasce con il nome che il conguaglio riconosce.
-                                const voci = vociBudgetNelMenu();
-                                if (!voci.length) return '';
-                                return `<optgroup label="Costi fissi (vanno nel conguaglio)">
-                                    ${voci.map(v => {
-                                        const val = `Costi fissi - ${String(v.nome).trim()}`;
-                                        return `<option value="${esc(val)}" ${window.ultimaCategoriaUscita === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
-                                    }).join('')}
-                                </optgroup>`;
-                            })()}
-                            <option value="__altro__">✏️ Altro (scrivi tu)</option>
+                            ${opzioniCategoriaSpesa(true)}
                         </select>
                     </div>
                     <div id="uscita-altro-box" class="hidden">
@@ -7837,7 +7937,11 @@
         // ============================================================
 
         function giorniDellAnno(anno) {
-            return new Date(parseInt(anno, 10), 1, 29).getDate() === 29 ? 366 : 365;
+            const k = String(anno);
+            if (GIORNI_ANNO.has(k)) return GIORNI_ANNO.get(k);
+            const n = new Date(parseInt(anno, 10), 1, 29).getDate() === 29 ? 366 : 365;
+            GIORNI_ANNO.set(k, n);
+            return n;
         }
 
         // Quanto pesa una singola voce in una singola giornata. La voce vale solo
@@ -7880,25 +7984,40 @@
 
         // Budget maturato da una voce fra due date comprese
         function budgetVocePeriodo(v, da, a) {
+            const giorniPerMese = {};
             let tot = 0, giorni = 0;
             perOgniGiorno(da, a, (iso) => {
-                const q = quotaVoceGiorno(v, iso);
+                const ym = iso.slice(0, 7);
+                const gg = giorniPerMese[ym] || (giorniPerMese[ym] = giorniDelMese(ym));
+                const q = quotaVoceGiorno(v, iso, gg);
                 if (q > 0) giorni++;
                 tot += q;
             });
             return { totale: Math.round(tot * 100) / 100, giorni };
         }
 
+        // L'elenco delle voci e i giorni del mese non cambiano dentro il giro:
+        // chiederli una volta per ognuno dei 365 giorni era il conto piu' caro
+        // dell'app.
         function budgetPeriodo(da, a) {
+            const voci = elencoVociFisse();
+            if (!voci.length) return 0;
+            const giorniPerMese = {};
             let tot = 0;
-            perOgniGiorno(da, a, (iso) => { tot += budgetDelGiorno(iso); });
+            perOgniGiorno(da, a, (iso) => {
+                const ym = iso.slice(0, 7);
+                const gg = giorniPerMese[ym] || (giorniPerMese[ym] = giorniDelMese(ym));
+                for (let i = 0; i < voci.length; i++) tot += quotaVoceGiorno(voci[i], iso, gg);
+            });
             return Math.round(tot * 100) / 100;
         }
 
-        function budgetAnno(anno) { return budgetPeriodo(`${anno}-01-01`, `${anno}-12-31`); }
+        function budgetAnno(anno) { return memo('budgetAnno:' + anno, () => budgetPeriodo(`${anno}-01-01`, `${anno}-12-31`)); }
         function budgetMese(ym) {
-            const gg = giorniDelMese(ym);
-            return budgetPeriodo(`${ym}-01`, `${ym}-${String(gg).padStart(2, '0')}`);
+            return memo('budgetMese:' + ym, () => {
+                const gg = giorniDelMese(ym);
+                return budgetPeriodo(`${ym}-01`, `${ym}-${String(gg).padStart(2, '0')}`);
+            });
         }
 
         function salvaVociFisse() {
@@ -8332,6 +8451,10 @@
         //  speso davvero, e di quanto il preventivo ha sbagliato.
         // ============================================================
         function conguaglioAnno(anno) {
+            return memo('conguaglio:' + anno, () => conguaglioAnnoCalcola(anno));
+        }
+
+        function conguaglioAnnoCalcola(anno) {
             const oggi = oggiISO();
             const inCorso = String(anno) === oggi.slice(0, 4);
             const da = `${anno}-01-01`;
