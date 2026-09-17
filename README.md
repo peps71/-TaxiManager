@@ -68,6 +68,32 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Conto» al posto di «Fattura» (versione 104)
+
+Fra i metodi di pagamento c'era **Fattura / Convenzione**, che era il documento e non il modo
+di pagare. Al suo posto c'è **Conto**: la corsa che il cliente non salda al momento — albergo,
+agenzia, ditta in convenzione. Si segna sul conto e si incassa dopo.
+
+- **`famigliaMetodo()` riconosce «conto», «fattura» e «convenzione» e li porta tutti nella
+  famiglia Conto:** i movimenti già registrati con il vecchio nome continuano a valere e
+  finiscono nello stesso mucchio. Nessuna conversione, nessun dato toccato.
+- «Conto» è **tracciato** (si incassa per bonifico o assegno, una prova resta), quindi entra
+  nella base delle tasse come gli altri metodi tracciati.
+- Compare dappertutto con il nome nuovo: tendine, pannello «Filtra per metodo», corrispettivi,
+  riepiloghi per metodo, foglio per il commercialista.
+- **Un tasto «Conto» nei due pannelli veloci**, a tutta riga: sulle corse (quella dell'albergo
+  si segna in due tocchi come le altre) e sulle spese (quando è il fornitore a segnartela sul
+  conto).
+- **La tendina non perde più un metodo che non è più in elenco.** Aprendo la modifica di un
+  movimento vecchio a «Fattura», il menu mostrava la prima voce e al primo salvataggio il
+  metodo sarebbe cambiato da solo. Adesso il valore che c'è scritto sul movimento viene
+  aggiunto in coda all'elenco, marcato *«come l'avevi segnato»*.
+- Nel raggruppamento delle spese per pagamento «POS / Fattura» si chiama **«Tracciato»**.
+
+`testConto` (nuovo) verifica le famiglie dei nove metodi, il salvataggio dal tasto, che i
+vecchi «Fattura» finiscano nel mucchio Conto (200 + 150 = 350 €), che la tendina non perda il
+valore vecchio, e che «Conto» compaia nei conteggi e nel foglio del commercialista.
+
 ## «Su ogni 100 €»: stessa base sopra e sotto la linea (versione 103)
 
 La casella diceva **«Su ogni 100 € incassati»** e faceva `tasse ÷ tutti gli incassi`. Ma dalla
