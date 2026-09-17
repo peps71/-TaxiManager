@@ -68,6 +68,22 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Su ogni 100 €»: stessa base sopra e sotto la linea (versione 103)
+
+La casella diceva **«Su ogni 100 € incassati»** e faceva `tasse ÷ tutti gli incassi`. Ma dalla
+v99 le tasse si contano sui **soli incassi tracciati**: sopra la linea i contanti non c'erano,
+sotto sì. Ne usciva un numero **meno della metà del vero** — con 5.809,79 € di tasse su
+56.316,90 € di incassi totali veniva 10,32 €, mentre sui 28.982,20 € tracciati il peso reale
+è 20,05 €.
+
+Adesso il rapporto sta sui tracciati da tutte e due le parti, e la casella si chiama
+**«Su ogni 100 € tracciati»**: dice quanto pesa il fisco su cento euro di quelli che entrano
+nella base imponibile.
+
+`testTracciate` lo verifica confrontando il numero a video con `tasse ÷ entrateTracciate`, e
+stampa anche quanto sarebbe venuto con il vecchio conto, così la differenza resta sotto gli
+occhi.
+
 ## L'iPad: barra laterale più stretta, colonne che si aprono al momento giusto (versione 102)
 
 Su iPad in verticale la barra laterale da 256px lasciava al contenuto poco più di metà
