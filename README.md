@@ -68,6 +68,30 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'iPad: barra laterale più stretta, colonne che si aprono al momento giusto (versione 102)
+
+Su iPad in verticale la barra laterale da 256px lasciava al contenuto poco più di metà
+schermo, e il report — che da 768px in su si apre su due colonne — ci stava dentro a fatica:
+i due riquadri «Deducibili / Non deducibili» si strozzavano e l'importo usciva dal bordo.
+
+- **Barra laterale `w-52` sul tablet, `w-64` dal desktop** (era 256px sempre), con logo,
+  spaziature e voci un filo più compatti. Il contenuto guadagna 48px.
+- **Le due colonne del report si aprono da `lg` (1024px), non da `md` (768px):** su iPad
+  verticale i blocchi restano larghi e leggibili, uno sotto l'altro.
+- **I cinque indicatori di performance** passano a cinque colonne solo da `xl`: a 1024px
+  «0,00 €/km» veniva tagliato a metà.
+- **I due riquadri della deducibilità sono diventati due righe**, etichetta a sinistra e
+  importo a destra: in riga ci stanno a qualunque larghezza.
+- Nel dettaglio incassi per pagamento il pallino colorato non si stacca più dalla sua voce
+  quando il testo va a capo, e gli importi non si stringono. «POS / Carta di Credito» è
+  diventato «POS / Carta», «Fattura / Convenzione» è «Fattura».
+
+**Il controllo automatico adesso guarda anche il tablet.** `sbordo.mjs` provava solo 320,
+375 e 390px: da questa versione prova anche 768, 820, 1024 e 1280, su tutte e nove le
+schermate, e dice quale testo è tagliato invece di contarli soltanto. Ignora i testi accorciati
+apposta con i puntini — quelli sono una scelta, non un difetto. Entra nella suite: un'impaginazione
+che si rompe sul tablet adesso si vede prima di arrivare sul telefono di chi lavora.
+
 ## Impaginazione del foglio per il commercialista (versione 101)
 
 Le quattro caselle della sintesi provavano a stare **orizzontali sul telefono** per
