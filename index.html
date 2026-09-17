@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 104;
+        const VERSIONE_APP = 105;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -5053,9 +5053,6 @@
                         </button>
                         <button onclick="corsaLampo('App/Nexi')" class="tasto-metodo bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
                             ${ICONE_METODO.app} App / Voucher
-                        </button>
-                        <button onclick="corsaLampo('Conto')" class="tasto-metodo col-span-2 bg-sky-600 hover:bg-sky-700 text-white shadow-sm transition-colors" title="Il cliente non paga adesso: albergo, agenzia, ditta in convenzione">
-                            ${ICONE_METODO.conto} Conto
                         </button>
                     </div>
                     <button onclick="toggleCorsaForm()" class="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-2 self-start">

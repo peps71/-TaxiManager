@@ -68,7 +68,7 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
-## «Conto» al posto di «Fattura» (versione 104)
+## «Conto» al posto di «Fattura» (versioni 104-105)
 
 Fra i metodi di pagamento c'era **Fattura / Convenzione**, che era il documento e non il modo
 di pagare. Al suo posto c'è **Conto**: la corsa che il cliente non salda al momento — albergo,
@@ -81,9 +81,9 @@ agenzia, ditta in convenzione. Si segna sul conto e si incassa dopo.
   nella base delle tasse come gli altri metodi tracciati.
 - Compare dappertutto con il nome nuovo: tendine, pannello «Filtra per metodo», corrispettivi,
   riepiloghi per metodo, foglio per il commercialista.
-- **Un tasto «Conto» nei due pannelli veloci**, a tutta riga: sulle corse (quella dell'albergo
-  si segna in due tocchi come le altre) e sulle spese (quando è il fornitore a segnartela sul
-  conto).
+- **Un tasto «Conto» nel pannello veloce della spesa**, a tutta riga: quando è il fornitore a
+  segnartela sul conto. Sulle corse il tasto non c'è (v105): «Conto» resta scegliibile dal
+  modulo completo, come prima era «Fattura».
 - **La tendina non perde più un metodo che non è più in elenco.** Aprendo la modifica di un
   movimento vecchio a «Fattura», il menu mostrava la prima voce e al primo salvataggio il
   metodo sarebbe cambiato da solo. Adesso il valore che c'è scritto sul movimento viene
