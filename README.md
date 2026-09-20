@@ -68,6 +68,29 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Un tasto per modificare, e «Aggiungi spesa» ben visibile (versione 106)
+
+Due cose segnalate dalla guida:
+
+**1. La riga di una corsa si apriva in modifica toccandola in qualunque punto.** Con il
+telefono nel supporto e mezzo guanto è un tocco che parte da solo, e ti ritrovi il modulo
+aperto senza sapere perché. Adesso **la riga non è più un pulsante**: per modificare c'è una
+**matita a destra**, bersaglio 44×44, da centrare apposta.
+
+Per farcela stare, la riga è passata **su due righe**: sopra quello che conta — la
+descrizione e l'importo — sotto, in piccolo, l'ora e il metodo. In una riga sola, con la
+matita in fondo, su un telefono stretto la descrizione spariva del tutto e la matita usciva
+dal bordo: misurato a 320px, il pulsante finiva 122px oltre il margine. Adesso sta dentro a
+320, 375 e 390px, e il testo non si accavalla.
+
+**2. «Segna una spesa» → «Aggiungi spesa», e rosso pieno.** Era un contorno rosso su bianco,
+che accanto ai quattro tasti pieni dei pagamenti sembrava un ripensamento. Adesso è pieno,
+bianco su rosso, corpo più grande: la spesa si segna quanto una corsa.
+
+`testMatita` (nuovo) verifica che toccare la riga non apra più niente, che la matita apra la
+modifica sia sulla corsa sia sulla spesa, che il tasto sia davvero rosso pieno e che la
+matita resti dentro la riga con un bersaglio da 44×44.
+
 ## «Conto» al posto di «Fattura» (versioni 104-105)
 
 Fra i metodi di pagamento c'era **Fattura / Convenzione**, che era il documento e non il modo
