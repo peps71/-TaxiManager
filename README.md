@@ -68,6 +68,19 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Torna alle corse» diventa un tasto (versione 107)
+
+Era una scritta sottolineata in fondo al pannello della spesa, sotto altre due righe di
+testo: la via d'uscita, e non si trovava. Adesso è **un tasto verde pieno a tutta riga**, con
+la freccia indietro — verde come le corse a cui riporta, e alto 52px come gli altri comandi
+della schermata.
+
+Il collegamento *«Nota, data diversa o spesa ricorrente»* resta una scritta, sulla sua riga:
+è un'alternativa per casi rari, non la strada principale.
+
+`testMatita` verifica anche questo: che il tasto sia verde pieno, alto almeno 44px, e che
+riporti davvero al pannello delle corse.
+
 ## Un tasto per modificare, e «Aggiungi spesa» ben visibile (versione 106)
 
 Due cose segnalate dalla guida:
