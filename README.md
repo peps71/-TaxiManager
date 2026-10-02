@@ -68,6 +68,69 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Backup controllato, indirizzi chiusi, un disegno invece di sei (versione 113)
+
+### Un file di backup non puo' piu' far eseguire niente
+
+L'identificativo di una riga finisce dentro un `onclick="deleteRecord('...')"`. Quelli
+dell'app sono cifre e il trattino delle serie, ma **un file di backup e' un file come un
+altro**: se dentro ci fosse un id con un apice, quell'apice chiuderebbe la stringa e quello
+che segue verrebbe eseguito. Due difese, non una:
+
+1. **All'importazione** si accetta solo quello che un id nostro puo' davvero contenere
+   (`/^[A-Za-z0-9_-]{1,64}$/`) e il resto si scarta, come si faceva gia' con la data.
+2. **Al disegno**, tutti e 24 i punti dove un id entra in un `onclick` passano da `escJs()`.
+
+Provato con un backup confezionato ad arte: le righe malformate vengono scartate, niente
+viene eseguito, e l'apice nell'HTML esce protetto invece che nudo.
+
+### L'app puo' parlare solo con Google e Firebase
+
+Una **Content-Security-Policy** chiude gli indirizzi: se un giorno finisse qui del codice che
+non ci deve stare, non avrebbe nessun posto dove mandare i dati. Provato con due server
+locali: con la protezione attiva, un'origine estranea ma raggiungibile viene **rifiutata**;
+disattivandola, la stessa richiesta passa — quindi e' la protezione che lavora, non la rete.
+
+Da sola non basta, e va detto: `'unsafe-inline'` deve restare, perche' i pulsanti dell'app
+usano `onclick="..."` e i copioni stanno dentro `index.html`. La difesa vera contro un backup
+confezionato male e' il controllo sull'identificativo; questa e' la seconda, e serve soprattutto
+**nel verso dell'uscita**.
+
+**La mette un copione invece di essere scritta fissa nel file, e c'e' un interruttore.**
+L'elenco degli indirizzi di Google e Firebase cambia nel tempo, e un indirizzo dimenticato
+non da' un errore chiaro: smette di funzionare l'accesso con Google, e con quello la
+sincronizzazione. Scritta fissa non ci sarebbe rimedio dal telefono. Cosi' invece in
+**«Cloud & Sync» c'e' «Protezione sugli indirizzi»** con il tasto per disattivarla
+(`taxi_csp = 'no'`): l'app torna come prima della 113 e i dati non si toccano. Se il Cloud non
+si raggiunge, dopo otto secondi un avviso lo dice e indica dove guardare.
+
+`frame-ancestors` non c'e': il browser la ignora quando arriva da un `<meta>`, e va messa come
+intestazione HTTP da chi ospita l'app.
+
+### Sei pacchetti dal Cloud, un disegno
+
+All'accesso arrivano sei pacchetti, uno per archivio (movimenti, turni, scadenze, veicoli,
+voci di budget, scheda), e ognuno chiedeva il **suo** disegno completo: sei volte la stessa
+schermata, l'ultima buona e le altre cinque buttate. Adesso le richieste si accodano
+(`renderDifferito`) e si disegna una volta sola, al primo fotogramma utile. Chi chiama
+`renderContent()` a mano — un tasto, un salvataggio — continua a disegnare subito: li'
+l'attesa si vedrebbe.
+
+```
+  sei pacchetti accodati : 1 disegno
+  come prima (uno a uno) : 6 disegni
+```
+
+**Quello che ho deciso di NON toccare:** l'eco di una scrittura dal Cloud ricostruisce l'array
+da capo invece di applicare la singola modifica. Si potrebbe fare meglio con
+`snapshot.docChanges()` e `hasPendingWrites`, e si guadagnerebbero una quindicina di
+millisecondi. Non vale il rischio: quello e' il percorso dei dati, ed e' l'unica cosa che non
+deve rompersi mai. Con l'ordinamento della 111 quel percorso costa ormai poco.
+
+Ultime due pulizie: il titolo della pagina diceva ancora «TaxiManager Pro V28», una versione
+di tre anni fa; e `appId` non va piu' a cercare una variabile `__app_id` che non esiste in
+nessun posto dove quest'app girera' mai.
+
 ## L'app si apre subito, la versione nuova aspetta il tuo via (versione 112)
 
 ### Prima la copia salvata, non la rete

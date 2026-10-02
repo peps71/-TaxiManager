@@ -4,6 +4,57 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
+    <!-- ============================================================
+         DA DOVE PUO' ARRIVARE QUALCOSA, E DOVE PUO' ANDARE
+         Queste righe dicono al browser quali indirizzi l'app ha il diritto di
+         contattare. Servono soprattutto nel verso dell'uscita: se un giorno
+         finisse qui del codice che non ci deve stare - una riga nascosta in un
+         file di backup, per esempio - non avrebbe nessun posto dove mandare i
+         dati, perche' gli unici indirizzi permessi sono Google e Firebase.
+         Da sola non basta: 'unsafe-inline' deve restare, perche' i pulsanti
+         dell'app usano onclick="..." e i copioni stanno dentro questo file.
+         La difesa vera contro un backup confezionato male e' il controllo
+         sull'identificativo (vedi applicaBackup); questa e' la seconda.
+
+         PERCHE' LA METTE UN COPIONE E NON E' SCRITTA FISSA NEL FILE
+         L'elenco degli indirizzi di Firebase e di Google cambia nel tempo, e
+         un indirizzo dimenticato non da' un errore chiaro: smette di
+         funzionare l'accesso con Google, e con quello la sincronizzazione.
+         Scritta fissa non ci sarebbe rimedio dal telefono. Messa da qui, c'e'
+         un interruttore: il tasto in Gestione (o la striscia che compare se il
+         Cloud non si raggiunge) scrive taxi_csp = 'no', e al riavvio la
+         protezione non viene applicata. L'app torna come prima, i dati non si
+         toccano. Questo copione e' il primo della pagina: quello che si
+         carica dopo e' tutto sotto protezione.
+         ============================================================ -->
+    <script>
+        (function () {
+            try { if (localStorage.getItem('taxi_csp') === 'no') return; } catch (e) { /* niente localStorage: si protegge */ }
+            // frame-ancestors non si puo' dare da qui (il browser la ignora in
+            // un <meta>): quella va messa come intestazione HTTP dal sito che
+            // ospita l'app, se un giorno servira'.
+            var regole = [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data: blob: https://*.googleusercontent.com",
+                "font-src 'self' data:",
+                "connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.cloudfunctions.net",
+                "frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com",
+                "worker-src 'self'",
+                "manifest-src 'self'",
+                "object-src 'none'",
+                "base-uri 'self'",
+                "form-action 'none'"
+            ].join('; ');
+            var m = document.createElement('meta');
+            m.setAttribute('http-equiv', 'Content-Security-Policy');
+            m.setAttribute('content', regole);
+            document.head.appendChild(m);
+            window.cspAttiva = true;
+        })();
+    </script>
+
     <!-- PWA: installazione su telefono -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#facc15">
@@ -14,7 +65,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
     <link rel="apple-touch-icon" href="./apple-touch-icon-180.png">
-    <title>TaxiManager Pro V28</title>
+    <title>TaxiManager</title>
     <!-- ============================================================
          TAILWIND, DENTRO IL FILE
          Prima arrivava da cdn.tailwindcss.com: su un telefono nuovo, o con la
@@ -332,8 +383,14 @@
                  getRedirectResult, signOut, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, deleteDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Se siamo qui, i tre moduli di Firebase si sono scaricati: lo si segna,
+        // perche' chi sta fuori non ha altro modo di saperlo. Senza questo
+        // segno l'app non poteva distinguere «Cloud spento perche' non hai
+        // fatto l'accesso» da «Cloud spento perche' il codice non e' arrivato».
+        window.moduloFirebaseVivo = true;
+
         // Costanti di sistema per Firebase
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'taximanager-2026';
+        const appId = 'taximanager-2026';
         const firebaseConfig = {
             apiKey: "AIzaSyBEwQksNARpGev_yI8Z0sDhqET7tU6sfic",
             authDomain: "taximanager-5ac5b.firebaseapp.com",
@@ -412,8 +469,7 @@
                         window.isCloudSyncing = false;
                         window.cloudUtente = null;
                     }
-                    window.renderNav();
-                    if (!formConDatiNonSalvati()) window.renderContent();
+                    if (!formConDatiNonSalvati()) window.renderDifferito();
                 });
             } catch (err) {
                 console.warn("Impossibile connettersi al Cloud, uso memoria locale:", err);
@@ -541,8 +597,7 @@
                     } else if (!d.metadata.fromCache && window.profiloCompilato && window.profiloCompilato()) {
                         window.saveProfiloToCloud(window.profilo);
                     }
-                    window.renderNav();
-                    if (!formConDatiNonSalvati()) window.renderContent();
+                    if (!formConDatiNonSalvati()) window.renderDifferito();
                 },
                 (error) => console.error('Errore Sync Profilo:', error)));
 
@@ -565,9 +620,8 @@
                     // le voci col vecchio nome del finanziamento
                     if (typeof controllaNomeFinanziamento === 'function') controllaNomeFinanziamento();
                 }
-                window.renderNav();
-                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
-                window.renderContent();
+                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
+                window.renderDifferito();
             }, (error) => console.error("Errore Sync Movimenti:", error)));
 
             annullaAscolti.push(onSnapshot(shiftsCol, (snapshot) => {
@@ -587,9 +641,8 @@
                     // Un dispositivo non ancora aggiornato puo' rimandare indietro dei "Riposo"
                     if (typeof controllaRiposiDaConvertire === 'function') controllaRiposiDaConvertire();
                 }
-                window.renderNav();
-                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
-                window.renderContent();
+                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
+                window.renderDifferito();
             }, (error) => console.error("Errore Sync Turni:", error)));
 
             // Scadenze: a differenza di corse e turni, qui si applica anche uno snapshot vuoto,
@@ -620,9 +673,8 @@
                 cloudScadenze.sort((a, b) => String(a.data).localeCompare(String(b.data)));
                 window.scadenze = cloudScadenze;
                 window.scriviLocale('taxi_scadenze', cloudScadenze);
-                window.renderNav();
-                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
-                window.renderContent();
+                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
+                window.renderDifferito();
             }, (error) => console.error("Errore Sync Scadenze:", error)));
 
             // Parco auto: stesso trattamento delle scadenze. Uno snapshot vuoto si
@@ -650,9 +702,8 @@
 
                 window.veicoli = cloudVeicoli;
                 window.scriviLocale('taxi_veicoli', cloudVeicoli);
-                window.renderNav();
-                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
-                window.renderContent();
+                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
+                window.renderDifferito();
             }, (error) => console.error("Errore Sync Parco Auto:", error)));
 
             // Voci di costo fisso: stesso trattamento del parco auto
@@ -681,7 +732,7 @@
                 window.vociFisse = cloudVoci;
                 window.scriviLocale('taxi_voci_fisse', cloudVoci);
                 if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
-                window.renderContent();
+                window.renderDifferito();
             }, (error) => console.error("Errore Sync Voci Fisse:", error)));
         }
 
@@ -1032,7 +1083,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 112;
+        const VERSIONE_APP = 113;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1685,7 +1736,7 @@
                         <div class="flex flex-wrap gap-2" role="group" aria-label="Colore del turno">
                             ${COLORI_TURNO.map(c => {
                                 const scelto = (p.colore || '') === c.id;
-                                return `<button type="button" onclick="scegliColoreTurno('${c.id}')"
+                                return `<button type="button" onclick="scegliColoreTurno('${escJs(c.id)}')"
                                         aria-pressed="${scelto}"
                                         class="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-sm transition-all ${scelto ? 'ring-2 ring-offset-2 ring-gray-900' : 'opacity-70 hover:opacity-100'}"
                                         style="background:${c.fondo};color:${c.testo};border:2px solid ${c.bordo}">
@@ -3168,7 +3219,7 @@
 
             if (navContainer) {
                 const voce = (t, grande) => `
-                    <button onclick="switchTab('${t.id}')" class="flex items-center gap-3 w-full p-3 rounded-lg font-bold transition-all text-left ${window.activeTab === t.id ? 'bg-gray-900 text-yellow-400 shadow-md' : 'hover:bg-yellow-500 text-gray-800'}">
+                    <button onclick="switchTab('${escJs(t.id)}')" class="flex items-center gap-3 w-full p-3 rounded-lg font-bold transition-all text-left ${window.activeTab === t.id ? 'bg-gray-900 text-yellow-400 shadow-md' : 'hover:bg-yellow-500 text-gray-800'}">
                         ${t.icona}<span class="${grande ? '' : 'text-sm'}">${t.label}</span>
                     </button>`;
                 navContainer.innerHTML =
@@ -3183,7 +3234,7 @@
                 // trattino sotto la scritta. Il trattino a un centimetro dal
                 // bordo dello schermo non si vedeva, la pastiglia si'.
                 barraBasso.innerHTML = SCHEDE_PRINCIPALI.map(t => `
-                    <button onclick="switchTab('${t.id}')"
+                    <button onclick="switchTab('${escJs(t.id)}')"
                             aria-current="${attiva === t.id ? 'page' : 'false'}"
                             class="flex-1 flex flex-col items-center justify-center gap-1 py-2 px-1 min-h-[58px] text-xs transition-colors ${attiva === t.id ? 'text-gray-900 font-black' : 'text-gray-400 font-bold'}">
                         <span class="flex items-center justify-center w-10 h-[26px] rounded-full transition-colors ${attiva === t.id ? 'bg-yellow-400' : ''}">${t.icona}</span>
@@ -3471,7 +3522,7 @@
             return `
                 <div class="flex gap-1 bg-gray-800 p-1 rounded-xl no-print" role="group" aria-label="Periodo da vedere">
                     ${PERIODI_DASH.map(x => `
-                        <button onclick="cambiaPeriodoDash('${x.id}')"
+                        <button onclick="cambiaPeriodoDash('${escJs(x.id)}')"
                                 aria-current="${attivo === x.id ? 'true' : 'false'}"
                                 class="flex-1 px-4 py-2 rounded-lg text-sm transition-colors ${attivo === x.id ? 'bg-yellow-400 text-gray-900 font-black' : 'text-white/55 font-bold hover:text-white'}">
                             ${x.label}
@@ -4241,6 +4292,49 @@
             }
         }
 
+        // ============================================================
+        //  L'INTERRUTTORE DELLA PROTEZIONE SUGLI INDIRIZZI
+        //  La protezione dice al browser che l'app puo' parlare solo con
+        //  Google e Firebase. L'elenco degli indirizzi di quei servizi cambia
+        //  nel tempo, e un indirizzo dimenticato non da' un errore chiaro:
+        //  smette di funzionare l'accesso con Google. Questo e' il rimedio
+        //  dal telefono, senza toccare il file e senza perdere niente.
+        // ============================================================
+        function protezioneIndirizziAttiva() {
+            try { return localStorage.getItem('taxi_csp') !== 'no'; } catch (err) { return true; }
+        }
+
+        function alternaProtezioneIndirizzi() {
+            const accesa = protezioneIndirizziAttiva();
+            if (accesa && !confirm('Togliere la protezione sugli indirizzi?\n\nFallo solo se l\'accesso con Google ha smesso di funzionare dopo un aggiornamento. I tuoi dati non si toccano, e la puoi riaccendere da qui.')) return;
+            try { localStorage.setItem('taxi_csp', accesa ? 'no' : 'si'); } catch (err) { /* pazienza */ }
+            showToast(accesa ? 'Protezione disattivata: riavvio...' : 'Protezione riaccesa: riavvio...');
+            setTimeout(() => window.location.reload(), 600);
+        }
+
+        function bloccoProtezioneIndirizzi() {
+            const accesa = protezioneIndirizziAttiva();
+            return `
+                <div class="pt-3 border-t border-gray-100">
+                    <p class="etichetta block">Protezione sugli indirizzi</p>
+                    <p class="text-sm font-bold ${accesa ? 'text-green-700' : 'text-orange-600'} mt-1">
+                        ${accesa ? 'Attiva' : 'Disattivata'}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1 leading-relaxed">
+                        Quando è attiva, l'app può parlare solo con Google e Firebase: se un giorno finisse qui
+                        del codice che non ci deve stare, non avrebbe nessun posto dove mandare i tuoi dati.
+                    </p>
+                    <button onclick="alternaProtezioneIndirizzi()" class="mt-2.5 ${accesa ? 'bg-gray-100 hover:bg-gray-200 text-gray-800' : 'bg-gray-900 hover:bg-gray-800 text-yellow-400'} font-bold py-2 px-4 rounded-xl text-sm">
+                        ${accesa ? 'Disattiva' : 'Riattiva'}
+                    </button>
+                    <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+                        ${accesa
+                            ? 'Toccala solo se l\'accesso con Google smette di funzionare dopo un aggiornamento: è il rimedio, e i dati non si toccano.'
+                            : 'Senza protezione l\'app funziona come prima della versione 113. Riattivala appena l\'accesso con Google torna a funzionare.'}
+                    </p>
+                </div>`;
+        }
+
         // Forza il passaggio alla versione nuova senza chiudere l'app: si chiede
         // al telefono di ricontrollare, e se ce n'e' una in attesa le si dice di
         // prendere il comando subito.
@@ -4889,7 +4983,7 @@
         function barraLinguette() {
             const vista = vistaCorseTurni();
             const linguetta = (id, testo) => `
-                <button onclick="setVistaGiornata('${id}')" aria-current="${vista === id ? 'page' : 'false'}"
+                <button onclick="setVistaGiornata('${escJs(id)}')" aria-current="${vista === id ? 'page' : 'false'}"
                         class="px-1 pb-2 text-base transition-colors border-b-[3px] ${vista === id ? 'font-black text-gray-900 border-yellow-400' : 'font-bold text-gray-500 border-transparent hover:text-gray-900'}">${testo}</button>`;
             // Due linguette sottolineate invece di due pillole dentro una scheda:
             // si capisce lo stesso dove si e', e la pagina comincia 40px piu' su.
@@ -5048,10 +5142,10 @@
                         </div>
                         <span class="flex gap-1 ml-auto">
                             ${isRiposo(t) ? '' : `
-                                <button onclick="apriModificaTurno('${t.id}')" class="${kmMancanti(t) ? 'text-gray-900 bg-yellow-400 hover:bg-yellow-500' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'} text-xs font-bold px-2.5 py-1.5 rounded">
+                                <button onclick="apriModificaTurno('${escJs(t.id)}')" class="${kmMancanti(t) ? 'text-gray-900 bg-yellow-400 hover:bg-yellow-500' : 'text-gray-600 bg-gray-100 hover:bg-gray-200'} text-xs font-bold px-2.5 py-1.5 rounded">
                                     ${kmMancanti(t) ? '+ Aggiungi km' : 'Modifica'}
                                 </button>`}
-                            <button onclick="deleteShift('${t.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1.5 rounded">Elimina</button>
+                            <button onclick="deleteShift('${escJs(t.id)}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1.5 rounded">Elimina</button>
                         </span>
                     </div>
                     ${editing ? `
@@ -5070,7 +5164,7 @@
                                 <input type="number" id="km-fine-${t.id}" value="${t.kmFine || ''}" placeholder="fine" class="w-24 p-2.5 border rounded-lg text-sm outline-none" />
                             </div>
                             <div class="flex gap-2 w-full sm:w-auto sm:ml-auto">
-                                <button onclick="salvaModificaTurno('${t.id}')" class="flex-1 sm:flex-none bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold px-4 py-2.5 rounded-lg">Salva modifiche</button>
+                                <button onclick="salvaModificaTurno('${escJs(t.id)}')" class="flex-1 sm:flex-none bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold px-4 py-2.5 rounded-lg">Salva modifiche</button>
                                 <button onclick="annullaModificaTurno()" class="flex-1 sm:flex-none bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-bold px-4 py-2.5 rounded-lg">Annulla</button>
                             </div>
                         </div>` : ''}
@@ -5331,9 +5425,9 @@
                         <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'ENTRATA')}</select>
                         <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
                         <div class="flex gap-2 ml-auto">
-                            <button onclick="salvaModificaRecord('${r.id}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
+                            <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
                             <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
-                            <button onclick="deleteRecord('${r.id}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
+                            <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
                         </div>
                     </div>
                 </div>
@@ -5353,7 +5447,7 @@
                             <span class="${metodoBadgeClass(r.metodo)} shrink min-w-0 truncate px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(r.metodo)}">${esc(metodoBreve(r.metodo))}</span>
                         </span>
                     </span>
-                    <button onclick="apriModificaRecord('${r.id}')" title="Modifica questa corsa" aria-label="Modifica la corsa delle ${esc(r.ora || '')} da ${formatCurrency(r.importo)}"
+                    <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa corsa" aria-label="Modifica la corsa delle ${esc(r.ora || '')} da ${formatCurrency(r.importo)}"
                             class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
                 </div>`;
 
@@ -5372,9 +5466,9 @@
                         <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select>
                         <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
                         <div class="flex gap-2 ml-auto">
-                            <button onclick="salvaModificaRecord('${r.id}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
+                            <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
                             <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
-                            <button onclick="deleteRecord('${r.id}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
+                            <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
                         </div>
                     </div>
                 </div>
@@ -5392,7 +5486,7 @@
                             ${copertaDalBudget(r) ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Voce a budget: non pesa su questa giornata, e\' spalmata su tutto l\'anno">a budget</span>' : ''}
                         </span>
                     </span>
-                    <button onclick="apriModificaRecord('${r.id}')" title="Modifica questa spesa" aria-label="Modifica la spesa ${esc(r.categoria)} da ${formatCurrency(r.importo)}"
+                    <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa spesa" aria-label="Modifica la spesa ${esc(r.categoria)} da ${formatCurrency(r.importo)}"
                             class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
                 </div>`;
 
@@ -5964,8 +6058,8 @@
                         })()}
 
                         <div class="flex flex-wrap gap-1.5 pt-1 border-t border-gray-800">
-                            ${t ? `<button onclick="iniziaSpostamento('${t.id}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-white hover:bg-gray-100 text-gray-900">Sposta ad altro giorno</button>` : ''}
-                            ${t ? `<button onclick="deleteShift('${t.id}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white">Elimina</button>` : ''}
+                            ${t ? `<button onclick="iniziaSpostamento('${escJs(t.id)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-white hover:bg-gray-100 text-gray-900">Sposta ad altro giorno</button>` : ''}
+                            ${t ? `<button onclick="deleteShift('${escJs(t.id)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white">Elimina</button>` : ''}
                             <button onclick="apriNellElenco('${iso}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">Apri nelle giornate</button>
                         </div>
                         <p class="text-xs text-gray-500 leading-tight">I km si aggiungono qui sopra, quando li sai. Per un orario diverso da questi usa "+ Registra Turno".</p>
@@ -6146,7 +6240,7 @@
                         <div class="flex gap-2 w-max">
                             ${SCHEDE_SECONDARIE.map(t => {
                                 const qui = t.id === idAttivo || t.id === genitore;
-                                return `<button onclick="switchTab('${t.id}')" aria-current="${qui ? 'page' : 'false'}"
+                                return `<button onclick="switchTab('${escJs(t.id)}')" aria-current="${qui ? 'page' : 'false'}"
                                         class="px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-colors ${qui ? 'bg-gray-900 text-yellow-400' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'}">${t.label}</button>`;
                             }).join('')}
                         </div>
@@ -6183,7 +6277,7 @@
 
                     <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-100">
                         ${SCHEDE_SECONDARIE.map(t => `
-                            <button onclick="switchTab('${t.id}')" class="w-full flex items-center gap-3.5 p-4 text-left hover:bg-gray-50 transition-colors">
+                            <button onclick="switchTab('${escJs(t.id)}')" class="w-full flex items-center gap-3.5 p-4 text-left hover:bg-gray-50 transition-colors">
                                 <span class="shrink-0 w-10 h-10 rounded-xl ${COLORE_REPARTO[t.id] || 'bg-gray-100 text-gray-600'} flex items-center justify-center">${t.icona}</span>
                                 <span class="min-w-0 flex-1">
                                     <span class="block font-bold text-[15px] text-gray-900">${t.label}</span>
@@ -6237,6 +6331,27 @@
                 memoDisegno.clear();
             }
         }
+
+        // ============================================================
+        //  SEI AVVISI, UN DISEGNO
+        //  All'accesso arrivano sei pacchetti dal Cloud, uno per archivio
+        //  (movimenti, turni, scadenze, veicoli, voci di budget, scheda), e
+        //  ognuno chiedeva il suo disegno completo: sei volte la stessa
+        //  schermata, l'ultima buona e le altre cinque buttate. Qui le
+        //  richieste si accodano e si fa un disegno solo, al primo fotogramma
+        //  utile. Chi chiama renderContent() a mano - un tasto, un
+        //  salvataggio - continua a disegnare subito: li' l'attesa si vede.
+        // ============================================================
+        let disegnoInCoda = 0;
+        function renderDifferito() {
+            if (disegnoInCoda) return;
+            disegnoInCoda = requestAnimationFrame(() => {
+                disegnoInCoda = 0;
+                renderNav();
+                renderContent();
+            });
+        }
+        window.renderDifferito = renderDifferito;
 
         function disegnaContenuto() {
             const main = document.getElementById('main-container');
@@ -6513,7 +6628,7 @@
                                                 <td class="p-3"><select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="w-full p-1.5 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select></td>
                                                 <td class="p-3"><input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-1.5 border rounded-lg text-sm text-right outline-none" /></td>
                                                 <td class="p-3 text-center whitespace-nowrap">
-                                                    <button onclick="salvaModificaRecord('${r.id}')" class="text-white bg-gray-900 hover:bg-gray-800 text-xs font-bold px-3 py-1.5 rounded mr-1">Salva</button>
+                                                    <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="text-white bg-gray-900 hover:bg-gray-800 text-xs font-bold px-3 py-1.5 rounded mr-1">Salva</button>
                                                     <button onclick="annullaModificaRecord()" class="text-gray-600 text-xs font-bold bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded">Annulla</button>
                                                 </td>
                                             </tr>
@@ -6529,8 +6644,8 @@
                                                 <td class="p-4 text-sm"><span class="${metodoBadgeClass(r.metodo)} px-2.5 py-1 rounded-md text-xs font-bold">${esc(r.metodo)}</span></td>
                                                 <td class="p-4 text-right text-base font-black text-red-600">-${formatCurrency(r.importo)}</td>
                                                 <td class="p-4 text-center whitespace-nowrap">
-                                                    <button onclick="apriModificaRecord('${r.id}')" class="text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1 rounded mr-1">Modifica</button>
-                                                    <button onclick="deleteRecord('${r.id}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>
+                                                    <button onclick="apriModificaRecord('${escJs(r.id)}')" class="text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1 rounded mr-1">Modifica</button>
+                                                    <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>
                                                     ${r.serie ? `<button onclick="eliminaSerieSpese('${escJs(r.serie)}')" title="Elimina tutti i movimenti di questa serie" class="ml-1 text-purple-700 hover:text-purple-900 text-xs font-bold bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded">Serie</button>` : ''}
                                                 </td>
                                             </tr>
@@ -7157,20 +7272,20 @@
                                     <div class="divide-y divide-gray-100">
                                         ${(mostraFatteScadenze() ? voci : voci.filter(v => !v.fatta)).map(v => `
                                             <div class="px-4 py-2.5 flex flex-wrap items-center gap-2 ${v.fatta ? 'bg-gray-50' : ''}">
-                                                <button onclick="spuntaOccorrenza('${v.id}', '${v.teorica}')" title="${v.fatta ? 'Segna come da fare' : 'Segna come fatta'}"
+                                                <button onclick="spuntaOccorrenza('${escJs(v.id)}', '${v.teorica}')" title="${v.fatta ? 'Segna come da fare' : 'Segna come fatta'}"
                                                     class="w-6 h-6 rounded-md border-2 flex-shrink-0 text-xs font-black flex items-center justify-center ${v.fatta ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 bg-white hover:border-green-400'}">${v.fatta ? '✓' : ''}</button>
                                                 <div class="min-w-0 flex-1 basis-32">
                                                     <p class="font-bold text-sm truncate ${v.fatta ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(v.nome)}</p>
                                                     ${v.cadenza ? `<p class="text-xs font-black uppercase tracking-wider text-purple-500">${esc(v.cadenza.etichetta)}</p>` : ''}
                                                 </div>
-                                                <input type="date" value="${v.data}" onchange="spostaOccorrenza('${v.id}', '${v.teorica}', this.value)" aria-label="Quando l'hai fatta"
+                                                <input type="date" value="${v.data}" onchange="spostaOccorrenza('${escJs(v.id)}', '${v.teorica}', this.value)" aria-label="Quando l'hai fatta"
                                                     title="Quest'anno cade in un altro giorno? Cambia solo questa data."
                                                     class="p-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-yellow-400" />
                                                 ${v.fatta ? '' : `
                                                     <span class="text-xs font-black px-2 py-1 rounded-full ${v.scaduta ? 'bg-red-100 text-red-800' : (v.giorniMancanti <= 30 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-500')}">
                                                         ${v.scaduta ? 'scaduta' : (v.giorniMancanti === 0 ? 'oggi' : `tra ${v.giorniMancanti} gg`)}
                                                     </span>`}
-                                                <button onclick="deleteScadenza('${v.id}')" title="Elimina la scadenza${v.cadenza ? ' e tutte le sue date' : ''}" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>
+                                                <button onclick="deleteScadenza('${escJs(v.id)}')" title="Elimina la scadenza${v.cadenza ? ' e tutte le sue date' : ''}" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>
                                             </div>
                                         `).join('')}
                                     </div>
@@ -7510,6 +7625,8 @@
                                     non si toccano.
                                 </p>
                             </div>
+
+                            ${bloccoProtezioneIndirizzi()}
                         </div>
 
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -8930,15 +9047,24 @@
         async function applicaBackup(data) {
             if (!data || typeof data !== 'object') throw new Error('formato non riconosciuto');
 
-            const valida = (x) => !!x && x.id !== undefined && x.id !== null
+            // L'IDENTIFICATIVO SI CONTROLLA
+            // L'id di una riga finisce dentro un onclick="deleteRecord('...')".
+            // I nostri sono cifre e il trattino delle serie, ma un file di
+            // backup e' un file come un altro: se dentro ci fosse un id con un
+            // apice, quell'apice chiuderebbe la stringa e quello che segue
+            // verrebbe eseguito. Qui si accetta solo quello che un id nostro
+            // puo' davvero contenere, e il resto si scarta.
+            const idBuono = (v) => v !== undefined && v !== null
+                && /^[A-Za-z0-9_-]{1,64}$/.test(String(v));
+            const valida = (x) => !!x && idBuono(x.id)
                 && /^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''));
             const records = (Array.isArray(data.records) ? data.records : []).filter(valida);
             const shifts = (Array.isArray(data.shifts) ? data.shifts : []).filter(valida);
             const scadenze = (Array.isArray(data.scadenze) ? data.scadenze : []).filter(valida);
             const veicoli = (Array.isArray(data.veicoli) ? data.veicoli : [])
-                .filter(v => v && v.id !== undefined && v.id !== null && String(v.modello || '').trim());
+                .filter(v => v && idBuono(v.id) && String(v.modello || '').trim());
             const vociImportate = (Array.isArray(data.vociFisse) ? data.vociFisse : [])
-                .filter(v => v && String(v.slug || '').trim() && String(v.nome || '').trim());
+                .filter(v => v && idBuono(v.slug) && String(v.nome || '').trim());
             const scartati = (Array.isArray(data.records) ? data.records.length : 0) - records.length
                 + (Array.isArray(data.shifts) ? data.shifts.length : 0) - shifts.length;
 
@@ -10154,10 +10280,35 @@
             renderContent();
         }
 
+        // ============================================================
+        //  SE IL CLOUD NON SI RAGGIUNGE, DILLO E DI' COSA FARE
+        //  Il codice di Firebase arriva da gstatic.com. Se non arriva, al
+        //  suo posto resta il blocco di riserva e l'app lavora in locale:
+        //  giusto, ma muto. E se la causa fosse la protezione sugli
+        //  indirizzi (un indirizzo di Google cambiato, non previsto in
+        //  quell'elenco), restare muti vorrebbe dire lasciare il Cloud
+        //  spento senza che si capisca perche'. Qui lo si dice, e si offre
+        //  l'interruttore - una volta sola, e solo se la protezione e'
+        //  davvero accesa.
+        //  Otto secondi: il codice di Firebase su una linea lenta ci mette
+        //  qualche secondo, e un avviso che compare per poi smentirsi da
+        //  solo e' peggio di nessun avviso.
+        // ============================================================
+        function controllaCloudRaggiungibile() {
+            if (!window.cspAttiva) return;            // protezione gia' spenta: niente da proporre
+            if (window.moduloFirebaseVivo) return;    // il Cloud c'e': tutto bene
+            const barra = document.getElementById('avviso-versione');
+            // La striscia della versione nuova ha la precedenza: se c'e' quella,
+            // si rimanda invece di accavallare due avvisi.
+            if (barra && !barra.classList.contains('hidden')) return;
+            showToast('\u26a0\ufe0f Cloud non raggiungibile: l\'app lavora in locale. Vedi \u00abCloud & Sync\u00bb.');
+        }
+
         window.onload = function() {
             renderNav();
             renderContent();
             controllaNomeFinanziamento();
+            setTimeout(controllaCloudRaggiungibile, 8000);
         };
     </script>
 
