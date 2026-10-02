@@ -1104,7 +1104,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 121;
+        const VERSIONE_APP = 122;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -9959,7 +9959,18 @@
 
             const annata = annataDelGiorno(v, g) || periodoDaScadenza(v, g);
             if (!annata) return quotaVocePrevista(v, g, giorniMese);
-            return annata.totale / annata.giorni;
+            // IL BUDGET E' IL PAVIMENTO, NON IL SOFFITTO
+            // Il pagamento vero comanda quando SUPERA la previsione, non
+            // quando sta sotto. Prima comandava sempre, e questo tirava giu'
+            // la giornata senza motivo: una voce da 4.800 € l'anno con 2.523 €
+            // pagati a ottobre faceva 6,91 al giorno invece di 13,15 - ma quei
+            // soldi li devi tirare fuori lo stesso, e di qui a dicembre
+            // arrivano. Peggio ancora con le rate: pagata la prima di due, la
+            // giornata dimezzava fino all'arrivo della seconda.
+            // Se poi a fine anno il budget risulta piu' alto del dovuto, a
+            // dirlo c'e' il conguaglio: e' il suo mestiere.
+            const previstoPeriodo = parseFloat(v.importo || 0) || 0;
+            return Math.max(previstoPeriodo, annata.totale) / annata.giorni;
         }
 
         // UNA SPESA CHE SI ACCUMULA (il carburante)
@@ -9969,6 +9980,10 @@
         // stesso. Dal giorno in cui la superi comanda la spesa vera, divisa per
         // i giorni che hai davvero percorso: la previsione, da li' in poi, e'
         // dimostrata sbagliata.
+        // Stessa regola, per una spesa che non ha una bolletta: il confronto si
+        // fa fra quello che hai speso dall'inizio dell'anno e quello che il
+        // budget aveva previsto per lo stesso tratto. Finche' stai sotto vale
+        // il budget, dal giorno in cui lo superi comanda la spesa vera.
         function quotaVoceConsumo(v, iso, giorniMese) {
             const g = String(iso || '');
             const anno = g.slice(0, 4);
@@ -10616,11 +10631,17 @@
                                 previsione che matura ogni giorno, e serve a sapere quanto devi incassare oggi.
                             </p>
                             <p class="text-xs text-gray-500 leading-relaxed mt-1.5 max-w-2xl">
-                                <strong>La previsione vale finché non arriva il conto.</strong> Quando registri il
-                                pagamento vero — l'assicurazione rinnovata a 1.500 invece dei 1.387 che avevi previsto —
-                                da quel giorno è quella cifra a pesare sulle giornate, per tutto il periodo che copre.
-                                Non devi correggere niente a mano: quello che hai scritto qui resta la tua previsione,
-                                ed è con quella che il <strong>conguaglio</strong>, qui sotto, ti dice di quanto hai sforato.
+                                <strong>Quello che scrivi qui è il pavimento.</strong> La giornata pesa almeno quanto hai
+                                previsto, tutto l'anno: se hai messo 4.800 € di tasse e a ottobre ne hai pagati 2.523, la
+                                giornata continua a portare la quota dei 4.800 — quei soldi li devi tirare fuori lo stesso,
+                                e di qui a dicembre arrivano.
+                            </p>
+                            <p class="text-xs text-gray-500 leading-relaxed mt-1.5 max-w-2xl">
+                                <strong>Quando il conto vero supera la previsione, comanda lui.</strong> L'assicurazione
+                                rinnovata a 1.500 invece dei 1.387 previsti: da quel giorno la giornata pesa 1.500, per
+                                tutto il periodo che copre. Non devi correggere niente a mano. E se a fine anno il budget
+                                risulta più alto del dovuto, a dirtelo c'è il <strong>conguaglio</strong>, qui sotto: è il
+                                suo mestiere.
                             </p>
                         </div>
                         <div class="text-right">

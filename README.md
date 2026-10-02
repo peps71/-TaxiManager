@@ -68,6 +68,53 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il budget e' il pavimento, non il soffitto (versione 122)
+
+*«Non capisco perche' c'e' tanto divario fra la spesa giornaliera a budget e quella reale. Io
+vorrei che fosse piu' o meno la stessa cifra; poi se supero, dal giorno in cui si supera aumenta
+anche la spesa fissa giornaliera. Se invece il budget e' superiore, a fine anno ci sara' il
+conguaglio.»*
+
+Aveva ragione, ed era un difetto della 116. Il pagamento vero comandava **sempre** — anche
+quando era piu' basso della previsione. Rifatto il conto con i suoi numeri:
+
+```
+  voce                    tipo        budget/giorno   reale/giorno   differenza
+  Manutenzione           consumo         5,48          6,12          +0,64
+  Spese banca            scadenza        1,37          1,02          -0,35
+  Radio taxi             scadenza        8,63          7,19          -1,44
+  Ristoro                consumo         1,69          2,24          +0,55
+  Tasse e Contributi     scadenza       13,15          6,91          -6,24
+                                      ------------------------------------
+  TOTALE                                30,32         23,49          -6,83
+```
+
+Quasi tutto il divario veniva da una voce sola: 4.800 € l'anno di tasse e contributi, di cui a
+ottobre ne risultavano pagati 2.523 — e la giornata scendeva a 6,91 invece di 13,15. Ma quei
+soldi vanno tirati fuori lo stesso: di qui a dicembre arrivano. Le voci «a consumo» si
+comportavano gia' bene (salgono quando superi, mai sotto); erano quelle «a scadenza» a tirare
+giu' il numero.
+
+Peggio ancora con le rate: pagata la prima di due semestrali, la giornata **dimezzava** fino
+all'arrivo della seconda.
+
+### La regola, adesso una sola per tutte le voci
+
+> La giornata pesa **almeno** quanto hai previsto. Il conto vero comanda solo quando **supera**
+> la previsione. Se a fine anno il budget risulta piu' alto del dovuto, a dirlo c'e' il
+> conguaglio.
+
+```
+  budget 4.800, pagati 2.523  →  resta a 13,15 al giorno (il budget)
+  budget 4.800, pagati 6.000  →  sale a 16,44 al giorno (la spesa vera)
+  budget 1.387, prima rata di 750  →  resta a 3,80 (non dimezza piu')
+  budget 1.387, pagata 1.500       →  sale a 4,11 (come nella 116)
+```
+
+Il conguaglio non cambia: continua a confrontare la **previsione scritta** con il **speso
+davvero**, ed e' li' che si vede se il budget era largo o stretto. Erano cinquantanove controlli
+automatici, adesso sono sessantadue.
+
 ## Controllo di coerenza, e la media che contava i giorni che non c'erano (versione 121)
 
 Un giro completo a cercare contraddizioni: lo stesso numero, detto da parti diverse dell'app,
