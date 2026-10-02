@@ -68,6 +68,53 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una funzione per scheda, invece di una da millequattrocento righe (versione 114)
+
+`disegnaContenuto` era una sola funzione di **1.414 righe**: la catena di «se la scheda e'
+questa, allora tutto questo HTML», dieci rami uno dietro l'altro. Per cambiare una riga della
+scheda Scadenze bisognava scorrere la scheda Uscite, quella delle Spese e quella del
+Commercialista.
+
+Adesso ogni scheda ha la sua funzione, con il nome dell'etichetta che si legge nell'app:
+
+| Scheda, come la vedi | Funzione |
+| --- | --- |
+| Oggi | `renderSchedaOggi` |
+| Andamento | `renderSchedaAndamento` |
+| Gestione | `renderAltro` (c'era gia') |
+| Uscite | `renderSchedaUscite` |
+| Spese e tasse | `renderSchedaSpeseETasse` |
+| Scadenze | `renderSchedaScadenze` |
+| Le mie auto | `renderSchedaAuto` |
+| Rendimento | `renderSchedaRendimento` |
+| Commercialista | `renderSchedaCommercialista` |
+| Backup e impostazioni | `renderSchedaBackup` |
+
+E la catena di `if`/`else` e' diventata una tabella (`DISEGNO_SCHEDE`), quindi il guscio e'
+passato da 1.414 righe a **41**: legge dove si stava guardando, sceglie la funzione, disegna.
+
+### Come so che non ho rotto niente
+
+Un rimaneggiamento di questa taglia non si prova a occhio. Prima di toccare niente ho salvato
+l'**HTML esatto** di tutte e quattordici le viste (le dieci schede, i tre periodi di Andamento,
+il calendario, piu' le due barre di navigazione) con dati fissi: 280 KB. Dopo, l'ho rifatto e
+confrontato.
+
+```
+  uguali a meno degli spazi: True
+  peso prima/dopo: 285.780 → 281.368 byte (4.412 byte di rientri in meno)
+```
+
+L'unica differenza sono i rientri dentro i testi HTML, perche' il codice e' sceso di un
+livello di annidamento. Negli elementi dove lo spazio conterebbe — `<pre>`, `white-space: pre`
+— l'app non ne ha nemmeno uno (controllato), quindi a video non cambia un pixel. Anzi, la
+pagina pesa 4 KB in meno.
+
+**Quello che NON ho spezzato:** `renderSezioneGiornate` resta a 596 righe ed e' adesso la
+funzione piu' lunga dell'app. Dentro ha cinque funzioni annidate che usano lo stato della
+schermata (il giorno scelto, il filtro metodo, il mese): tirarle fuori vuol dire passarsi quello
+stato a mano, ed e' un lavoro diverso, con un rischio diverso. Si fa a parte, se serve.
+
 ## Backup controllato, indirizzi chiusi, un disegno invece di sei (versione 113)
 
 ### Un file di backup non puo' piu' far eseguire niente
