@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 109;
+        const VERSIONE_APP = 110;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1494,6 +1494,13 @@
         //  sessione in corso e per quelle dopo: se lo lasci scoperto resta
         //  scoperto, perche' nasconderlo di nuovo a tradimento sarebbe peggio
         //  che lasciarlo in chiaro.
+        //  Si copre il totale, e solo quello. Prima si coprivano tutti gli
+        //  importi della scheda - Spese, Ti resta, A corsa, All'ora - per una
+        //  ragione buona in teoria: «ti resta» e «a corsa» rifanno il totale,
+        //  uno per differenza e l'altro moltiplicando per le corse. Ma la
+        //  scheda diventava una fila di asterischi e non diceva piu' niente a
+        //  chi la guarda, che e' il padrone dei numeri. Il tasto serve a non
+        //  far leggere il totale a chi passa, non a cifrare la contabilita'.
         // ============================================================
         const MASCHERA_INCASSO = '\u2217\u2217\u2217\u2217\u2217';
 
@@ -1501,19 +1508,6 @@
             window.incassoVisibile = !window.incassoVisibile;
             try { localStorage.setItem('taxi_incasso_visibile', window.incassoVisibile ? 'si' : 'no'); } catch (err) { /* pazienza */ }
             renderContent();
-        }
-
-        // Gli importi piccoli della scheda: coperti insieme al totale. Coprire
-        // solo il numero grande non serviva a niente - «ti resta» e «a corsa»
-        // lo dicono lo stesso, uno per differenza e l'altro moltiplicando per
-        // le corse. Quello che resta in chiaro non parla di soldi: la data, le
-        // corse, i turni, le ore, i chilometri.
-        const MASCHERA_CORTA = '\u2217\u2217\u2217';
-        function soldiCoperti(valore) {
-            return window.incassoVisibile ? soldi(valore) : MASCHERA_CORTA;
-        }
-        function euroCoperto(valore) {
-            return window.incassoVisibile ? formatCurrency(valore) : MASCHERA_CORTA;
         }
 
         // La cifra grande, coperta o in chiaro.
@@ -3419,15 +3413,15 @@
                     <div class="flex border-t border-white/10 pt-3.5">
                         <div class="flex-1 min-w-0"${spiegaSpese ? ` title="${esc(spiegaSpese)}"` : ''}>
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
-                            <p class="text-[17px] font-black ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${d.uscite ? '−' + soldiCoperti(d.uscite) : '—'}</p>
+                            <p class="text-[17px] font-black ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${d.uscite ? '−' + soldi(d.uscite) : '—'}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Ti resta</p>
-                            <p class="text-[17px] font-black ${resta >= 0 ? 'text-white' : 'text-red-400'} mt-0.5 truncate">${soldiCoperti(resta)}</p>
+                            <p class="text-[17px] font-black ${resta >= 0 ? 'text-white' : 'text-red-400'} mt-0.5 truncate">${soldi(resta)}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">A corsa</p>
-                            <p class="text-[17px] font-black ${d.nCorse ? 'text-yellow-400' : 'text-white/30'} mt-0.5 truncate">${d.nCorse ? soldiCoperti(d.mediaCorsa) : '—'}</p>
+                            <p class="text-[17px] font-black ${d.nCorse ? 'text-yellow-400' : 'text-white/30'} mt-0.5 truncate">${d.nCorse ? soldi(d.mediaCorsa) : '—'}</p>
                         </div>
                     </div>
                 </div>`;
@@ -5498,7 +5492,7 @@
                             ${occhioIncasso(true)}
                         </p>
                         <p class="text-xs font-medium text-white/50 mt-1.5">
-                            incassato${metodo !== 'ALL' ? ' in ' + NOMI_METODO[metodo] : ''} · ${corseFiltrate.length} ${corseFiltrate.length === 1 ? 'corsa' : 'corse'}${corseFiltrate.length ? ' · ' + euroCoperto(mediaCorsa) + ' a corsa' : ''}
+                            incassato${metodo !== 'ALL' ? ' in ' + NOMI_METODO[metodo] : ''} · ${corseFiltrate.length} ${corseFiltrate.length === 1 ? 'corsa' : 'corse'}${corseFiltrate.length ? ' · ' + formatCurrency(mediaCorsa) + ' a corsa' : ''}
                         </p>
                         ${turniLavorati.length ? `
                             <p class="text-xs font-medium text-white/35 mt-0.5">
@@ -5506,26 +5500,26 @@
                             </p>` : ''}
                         ${spalm && spalm.pagateOggiABudget > 0 ? `
                             <p class="text-[11px] font-medium text-white/35 mt-1.5 leading-relaxed">
-                                ${euroCoperto(spalm.pagateOggiABudget)} pagati oggi sono già a budget: non pesano su questa giornata, sono spalmati su tutto l'anno.
+                                ${formatCurrency(spalm.pagateOggiABudget)} pagati oggi sono già a budget: non pesano su questa giornata, sono spalmati su tutto l'anno.
                             </p>` : ''}
 
                         <div class="flex mt-4 pt-3.5 border-t border-white/10">
                             <div class="flex-1 min-w-0" ${spalm ? `title="Spese del giorno ${formatCurrency(spalm.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalm.quotaBudget)}"` : ''}>
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
-                                <p class="text-[17px] font-black ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${totSpese > 0 ? '−' + soldiCoperti(totSpese) : '—'}</p>
+                                <p class="text-[17px] font-black ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${totSpese > 0 ? '−' + soldi(totSpese) : '—'}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Ti resta</p>
-                                <p class="text-[17px] font-black text-white mt-0.5 truncate">${soldiCoperti(totCorse - totSpese)}</p>
+                                <p class="text-[17px] font-black text-white mt-0.5 truncate">${soldi(totCorse - totSpese)}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">All'ora</p>
                                 ${eo.vivo ? `
                                     <p id="euro-ora-vivo" class="mt-0.5" title="Incasso diviso le ore che hai fatto finora in questo turno">
-                                        <span class="block text-[17px] font-black text-yellow-400 truncate">${eo.troppoPresto ? '—' : soldiCoperti(euroOra)}</span>
+                                        <span class="block text-[17px] font-black text-yellow-400 truncate">${eo.troppoPresto ? '—' : soldi(euroOra)}</span>
                                         <span class="block text-[10.5px] font-medium text-white/35 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>
                                     </p>`
-                                  : `<p class="text-[17px] font-black ${oreTot > 0 ? 'text-yellow-400' : 'text-white/30'} mt-0.5 truncate" title="Incasso del periodo diviso le ore dei turni">${oreTot > 0 ? soldiCoperti(euroOra) : '—'}</p>`}
+                                  : `<p class="text-[17px] font-black ${oreTot > 0 ? 'text-yellow-400' : 'text-white/30'} mt-0.5 truncate" title="Incasso del periodo diviso le ore dei turni">${oreTot > 0 ? soldi(euroOra) : '—'}</p>`}
                             </div>
                         </div>
                     </div>
@@ -9069,7 +9063,7 @@
                 if (!formConDatiNonSalvatiLocale()) renderContent();
                 return;
             }
-            el.innerHTML = `<span class="block text-[17px] font-black text-yellow-400 truncate">${eo.troppoPresto ? '—' : soldiCoperti(eo.valore)}</span>`
+            el.innerHTML = `<span class="block text-[17px] font-black text-yellow-400 truncate">${eo.troppoPresto ? '—' : soldi(eo.valore)}</span>`
                 + `<span class="block text-[10.5px] font-medium text-white/35 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>`;
         }
 

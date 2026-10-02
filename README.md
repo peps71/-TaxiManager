@@ -68,6 +68,26 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Coperto il totale, e solo quello (versione 110)
+
+Nella 108 avevo coperto **tutti** gli importi della scheda scura — Spese, Ti resta, A corsa,
+All'ora — e non era quello che serviva. La ragione c'era: *«ti resta»* rifà il totale per
+differenza e *«a corsa»* moltiplicando per le corse, quindi coprire solo il numero grande non
+lo rende illeggibile a chi sa fare due conti. Ma così la scheda diventava una fila di
+asterischi e **non diceva più niente a chi la guarda**, che è il padrone dei numeri.
+
+Il tasto con l'occhio serve a non far leggere il totale a chi passa accanto al telefono nel
+supporto, non a cifrare la contabilità. Quindi:
+
+| | Con l'occhio chiuso |
+| --- | --- |
+| Il totale incassato (il numero grande) | coperto, cinque asterischi |
+| Spese, Ti resta, A corsa, All'ora | **in chiaro** |
+| Data, corse, turni, ore, chilometri | in chiaro |
+
+Vale nei due posti dove c'è la scheda scura: **Oggi** e la testata dei periodi in
+**Andamento**. La scelta si ricorda come prima (`taxi_incasso_visibile`).
+
 ## Le spese a budget, spalmate su tutto l'anno (versione 109)
 
 L'assicurazione si paga una volta l'anno, ma pesa tutti i giorni. Messa tutta sul giorno in
