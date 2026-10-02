@@ -68,6 +68,26 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'incasso coperto, e l'occhio per scoprirlo (versione 108)
+
+Il totale del giorno stava in chiaro, grande, in cima allo schermo: con il telefono nel
+supporto lo legge anche chi sta dietro. **Adesso nasce coperto** — cinque asterischi della
+stessa misura, così la scheda non cambia forma — e si scopre con il **tasto a forma di occhio**
+accanto alla cifra (bersaglio 44×44).
+
+**Coperto vuol dire coperto davvero.** Nascondere solo il numero grande non serviva a niente:
+*«ti resta»* lo dice per differenza e *«a corsa»* moltiplicando per le corse. Quindi, quando è
+coperto, si coprono tutti gli importi della scheda — il totale, la media a corsa, Spese, Ti
+resta, All'ora. Resta in chiaro quello che non parla di soldi: la data, il numero di corse, i
+turni, le ore, i chilometri.
+
+Vale nei due posti dove c'è la scheda scura: **Oggi** e la testata dei periodi in
+**Andamento**.
+
+**La scelta si ricorda** (`taxi_incasso_visibile`): se lo lasci scoperto resta scoperto anche
+alla riapertura. Ricoprirlo a tradimento, quando ti sei abituato a vederlo, sarebbe peggio che
+lasciarlo in chiaro.
+
 ## «Torna alle corse» diventa un tasto (versione 107)
 
 Era una scritta sottolineata in fondo al pannello della spesa, sotto altre due righe di
