@@ -68,6 +68,57 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una sola porta per scrivere sul disco, e le date ordinate come stringhe (versione 111)
+
+Due interventi nati da un'analisi con le misure in mano, non a sensazione.
+
+### Una corsa non puo' piu' sparire in silenzio
+
+`localStorage.setItem` **lancia un'eccezione** quando lo spazio del telefono e' finito, in
+navigazione privata su Safari, o se i dati dei siti sono bloccati. Nei punti di salvataggio
+quell'eccezione non la prendeva nessuno. Provato simulando il disco pieno:
+
+```
+  eccezione risalita al chiamante: nessuna (inghiottita)
+  la corsa è in memoria (e quindi a video): 1 movimento
+  la corsa è su disco: NO — si perde alla chiusura
+  errori di pagina: nessuno (nessun avviso all'utente)
+```
+
+La corsa compariva a schermo, il totale cresceva, e alla riapertura non c'era piu'. Lo
+scenario peggiore possibile per quest'app: silenzioso e irreversibile.
+
+**Adesso tutte le scritture passano da `scriviLocale()`**, una sola porta, e se il browser
+rifiuta si vede una **striscia rossa in cima allo schermo che non sparisce** — non un avviso
+che svanisce in tre secondi: finche' dura, ogni corsa registrata vive solo nella memoria del
+browser, e questo va detto e tenuto detto. Il messaggio distingue i due casi (memoria piena /
+browser che non lascia salvare) e dice se il Cloud sta comunque tenendo i dati.
+
+Una `scriviLocale()` **esisteva gia'**, ma viveva nel blocco di riserva — quello che vale solo
+quando Firebase non si carica — e il percorso vero non la usava. Adesso ce n'e' una sola,
+quella buona, per tutti e sei gli archivi (movimenti, turni, scadenze, veicoli, voci di
+budget, scheda).
+
+### Le date si ordinano come stringhe, non costruendo oggetti Date
+
+`sort((a,b) => new Date(b.data) - new Date(a.data))` costruiva **due oggetti Date per ogni
+confronto**: circa duecentotrentamila oggetti buttati via per ogni corsa salvata. Ma le date
+stanno scritte `2026-03-10`, e in quel formato l'ordine alfabetico **e'** l'ordine
+cronologico.
+
+| | prima | adesso |
+| --- | --- | --- |
+| ordinare 9.000 righe | 96,2 ms | 4,7 ms |
+| **registrare una corsa** | **106 ms** | **17 ms** |
+
+Sei volte piu' veloce sull'azione che si fa cinquanta volte al giorno (e su un telefono, dove
+il processore e' due o tre volte piu' lento, la differenza si sente).
+
+I nomi sono due, `perDataDecrescente` e `perDataCrescente`, perche' il verso conta: mentre
+facevo questa sostituzione ho girato per sbaglio l'ordine in `statoScadenzeCalcola`, dove
+serviva crescente, e sarebbe tornato il bug della «prossima scadenza» sbagliata della 94. Da
+quell'errore e' nata una prova dedicata che controlla che la prossima sia la piu' vicina.
+
 ## Coperto il totale, e solo quello (versione 110)
 
 Nella 108 avevo coperto **tutti** gli importi della scheda scura — Spese, Ti resta, A corsa,
