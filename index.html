@@ -1011,7 +1011,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 108;
+        const VERSIONE_APP = 109;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3393,7 +3393,7 @@
         // spostarsi, e IL numero - uno solo, grande davvero, con sotto le due
         // righe che dicono cosa ne resta. Prima il numero piu' importante della
         // schermata aveva lo stesso corpo di altri sedici.
-        function testataPeriodo(sottotitolo, navigatore, d, note) {
+        function testataPeriodo(sottotitolo, navigatore, d, note, spiegaSpese) {
             const resta = d.saldo;
             // La stessa scheda scura della giornata, qui in cima al riepilogo:
             // il numero grande bianco, il simbolo piu' tenue, e sotto le caselle
@@ -3417,7 +3417,7 @@
                         </p>
                     </div>
                     <div class="flex border-t border-white/10 pt-3.5">
-                        <div class="flex-1 min-w-0">
+                        <div class="flex-1 min-w-0"${spiegaSpese ? ` title="${esc(spiegaSpese)}"` : ''}>
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
                             <p class="text-[17px] font-black ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${d.uscite ? '−' + soldiCoperti(d.uscite) : '—'}</p>
                         </div>
@@ -4038,6 +4038,31 @@
             return { altre, voci, giorni, inCorso, quota: giorni ? altre / giorni : 0 };
         }
 
+        // ============================================================
+        //  LE SPESE DI UNA GIORNATA, SPALMATE
+        //  L'assicurazione si paga una volta l'anno, ma pesa tutti i giorni.
+        //  Messa tutta sul giorno in cui esce dal conto, quella giornata
+        //  sembra chiusa in perdita e le altre trecentosessantaquattro
+        //  sembrano piu' ricche di quello che sono.
+        //  Qui la giornata porta: le spese vere che il budget NON copre
+        //  (il pieno, il lavaggio, il parcheggio - quelle del giorno sono
+        //  del giorno) piu' la quota di quel giorno dei costi a budget.
+        //  La rata vera resta dov'e', nel registro: e' la traccia di quando
+        //  l'hai pagata, e i totali di mese e anno continuano a contarla.
+        // ============================================================
+        function speseGiornataSpalmate(iso, listaUscite) {
+            const fuoriBudget = (listaUscite || []).filter(r => !copertaDalBudget(r));
+            return {
+                vere: totaleImporti(listaUscite || []),
+                fuoriBudget: totaleImporti(fuoriBudget),
+                quotaBudget: budgetDelGiorno(iso),
+                get totale() { return this.fuoriBudget + this.quotaBudget; },
+                // Quanto e' stato pagato oggi di cose che il budget copre gia':
+                // serve solo a dirlo, quando capita.
+                pagateOggiABudget: totaleImporti((listaUscite || []).filter(copertaDalBudget))
+            };
+        }
+
         // Quanto pesa davvero una giornata: il budget dei costi fissi di quel
         // giorno piu' la media delle altre spese del mese.
         function quotaDelGiorno(iso) {
@@ -4472,7 +4497,15 @@
 
         function renderRiepilogoGiornaliero() {
             const g = giornoSelezionato();
-            const d = aggrega(g);
+            const dVero = aggrega(g);
+            // Le spese della testata si mostrano spalmate, come nella scheda di
+            // «Oggi»: lo stesso giorno non puo' dire due numeri diversi in due
+            // schermate. Il dettaglio qui sotto resta quello vero, riga per riga.
+            const spalmG = speseGiornataSpalmate(g, dVero.listaUscite);
+            const d = Object.assign({}, dVero, {
+                uscite: spalmG.totale,
+                saldo: dVero.incassi - spalmG.totale
+            });
             // Nessuna corsa e nessun turno = giornata di riposo. Se non è stata
             // registrata esplicitamente la deduco, ma solo per i giorni già passati:
             // un giorno futuro è semplicemente ancora da compilare.
@@ -4492,7 +4525,7 @@
                             </label>
                             <button onclick="scorriGiorno(1)" title="Giorno successivo" aria-label="Giorno successivo" class="tasto-icona w-9 h-9 rounded-xl eroe-campo text-yellow-400 flex items-center justify-center text-lg">›</button>
                             <button onclick="setDashGiorno(ultimoGiornoConDati())" title="Vai all'ultima giornata registrata" class="px-2 text-[11px] font-bold text-white/55 hover:text-white underline underline-offset-2">Ultimo</button>
-                        `, d)}
+                        `, d, null, `Spese del giorno ${formatCurrency(spalmG.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalmG.quotaBudget)}`)}
 
                     ${riposo ? `
                         <div class="p-8 text-center bg-blue-50/50">
@@ -4513,8 +4546,12 @@
                     ` : `
                         <div class="p-5 space-y-5">
                             ${d.ore ? `<p class="text-sm font-bold text-gray-500">${formatCurrency(d.mediaOra)} all'ora · ${oreScritte(d.ore)} h di turno</p>` : ''}
+                            ${spalmG.pagateOggiABudget > 0 ? `
+                                <p class="text-xs font-medium text-gray-400 leading-relaxed">
+                                    ${formatCurrency(spalmG.pagateOggiABudget)} pagati in questa data sono già a budget: non pesano su questa giornata, sono spalmati su tutto l'anno.
+                                </p>` : ''}
 
-                            ${bloccoQuotaSpese(g, d.incassi, d.uscite)}
+                            ${bloccoQuotaSpese(g, d.incassi, dVero.uscite)}
 
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                 <div class="space-y-3">
@@ -4969,7 +5006,13 @@
             // vedere: segnare il pieno e non vederlo comparire da nessuna parte
             // sarebbe un salto nel buio.
             const spesePeriodo = (window.dailyRecords || []).filter(r => r.tipo === 'USCITA' && nelPeriodo(r.data));
-            const totSpese = spesePeriodo.reduce((a, r) => a + (parseFloat(r.importo || 0) || 0), 0);
+            const totSpeseVere = spesePeriodo.reduce((a, r) => a + (parseFloat(r.importo || 0) || 0), 0);
+            // Guardando una giornata sola le spese si mostrano spalmate: la rata
+            // dell'assicurazione non deve far sembrare in perdita il giorno in cui
+            // esce dal conto. Su un mese o su un anno restano quelle vere, perche'
+            // li' il confronto con il budget si fa nel conguaglio.
+            const spalm = giorno ? speseGiornataSpalmate(giorno, spesePeriodo) : null;
+            const totSpese = spalm ? spalm.totale : totSpeseVere;
 
             // Ripartizione del periodo, calcolata prima del filtro metodo: serve a
             // far vedere quanto pesa ogni voce prima di selezionarla.
@@ -5255,6 +5298,7 @@
                             ${r.ora ? `<span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
                             <span class="${metodoBadgeClass(r.metodo)} shrink min-w-0 truncate px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(r.metodo)}">${esc(metodoBreve(r.metodo))}</span>
                             ${r.fattura ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Con fattura">fatt.</span>' : ''}
+                            ${copertaDalBudget(r) ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Voce a budget: non pesa su questa giornata, e\' spalmata su tutto l\'anno">a budget</span>' : ''}
                         </span>
                     </span>
                     <button onclick="apriModificaRecord('${r.id}')" title="Modifica questa spesa" aria-label="Modifica la spesa ${esc(r.categoria)} da ${formatCurrency(r.importo)}"
@@ -5273,6 +5317,11 @@
                 const lavorati = (g.turni || []).filter(x => !isRiposo(x));
                 const oreGiorno = lavorati.reduce((a, x) => a + (parseFloat(x.ore || 0) || 0), 0);
                 const kmGiorno = lavorati.reduce((a, x) => a + (parseFloat(x.kmTot || 0) || 0), 0);
+                // Quanto di quello che e' uscito in questa data e' una voce a
+                // budget: il totale resta quello vero - questo e' il registro, e
+                // il registro dice quando hai pagato - ma la riga lo dichiara,
+                // cosi' una rata grossa non si legge come una giornata andata male.
+                const speseABudget = totaleImporti((g.spese || []).filter(copertaDalBudget));
                 const sottotitolo = !t ? 'turno non registrato'
                     : lavorati.length > 1
                         ? `${lavorati.length} turni · ${oreScritte(oreGiorno)} h${kmGiorno ? ' · ' + kmGiorno + ' km' : ''}`
@@ -5330,7 +5379,7 @@
                                 <p class="text-[11px] font-bold text-gray-400 leading-tight">
                                     ${g.corse.length} ${g.corse.length === 1 ? 'corsa' : 'corse'}${g.pos > 0 ? ' · POS ' + soldi(g.pos) : ''}
                                 </p>
-                                ${g.speso > 0 ? `<p class="text-[11px] font-bold text-red-500 leading-tight">spese −${soldi(g.speso)}</p>` : ''}
+                                ${g.speso > 0 ? `<p class="text-[11px] font-bold text-red-500 leading-tight">spese −${soldi(g.speso)}${speseABudget > 0 ? `<span class="font-medium text-gray-400"> · ${soldi(speseABudget)} a budget</span>` : ''}</p>` : ''}
                             </div>
                             <span class="text-gray-300 font-black text-lg leading-none">${aperta ? '▾' : '▸'}</span>
                         </button>
@@ -5455,9 +5504,13 @@
                             <p class="text-xs font-medium text-white/35 mt-0.5">
                                 ${turniLavorati.length} ${turniLavorati.length === 1 ? 'turno' : 'turni'} · ${oreScritte(oreTot)} h${kmTot ? ' · ' + numeroIT(kmTot) + ' km' : ''}
                             </p>` : ''}
+                        ${spalm && spalm.pagateOggiABudget > 0 ? `
+                            <p class="text-[11px] font-medium text-white/35 mt-1.5 leading-relaxed">
+                                ${euroCoperto(spalm.pagateOggiABudget)} pagati oggi sono già a budget: non pesano su questa giornata, sono spalmati su tutto l'anno.
+                            </p>` : ''}
 
                         <div class="flex mt-4 pt-3.5 border-t border-white/10">
-                            <div class="flex-1 min-w-0">
+                            <div class="flex-1 min-w-0" ${spalm ? `title="Spese del giorno ${formatCurrency(spalm.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalm.quotaBudget)}"` : ''}>
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
                                 <p class="text-[17px] font-black ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${totSpese > 0 ? '−' + soldiCoperti(totSpese) : '—'}</p>
                             </div>

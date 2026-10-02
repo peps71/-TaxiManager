@@ -68,6 +68,41 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le spese a budget, spalmate su tutto l'anno (versione 109)
+
+L'assicurazione si paga una volta l'anno, ma pesa tutti i giorni. Messa tutta sul giorno in
+cui esce dal conto, **quella giornata sembrava chiusa in perdita** e le altre
+trecentosessantaquattro sembravano più ricche di quello che sono.
+
+**Adesso una giornata porta due cose:** le spese vere che il budget *non* copre — il pieno, il
+lavaggio, il parcheggio, quelle del giorno sono del giorno — più la **quota di quel giorno**
+dei costi a budget. Una voce annuale si divide per i giorni dell'anno, una mensile per i
+giorni del mese, una giornaliera vale com'è: è lo stesso conto che già faceva il riquadro
+*«Quanto costa questa giornata»*, portato dentro il numero delle Spese.
+
+Un esempio con l'assicurazione a 1.825 € l'anno: il giorno in cui parte il bonifico la
+testata dice **−5,00 €**, non −1.825,00 €. E i 5,00 € li dice anche in tutti gli altri 364
+giorni.
+
+**La rata vera non si perde.** Resta dov'è, nel registro, nel giorno in cui l'hai pagata: è la
+traccia del pagamento, serve al commercialista e serve al conguaglio fra preventivo e
+consuntivo. Quello che cambia è solo *a quale giornata la si fa pesare*.
+
+Dove si vede:
+
+| Dove | Cosa mostra |
+| --- | --- |
+| **Oggi**, scheda scura con un giorno selezionato | spese spalmate, con il dettaglio nel suggerimento: *spese del giorno + quota a budget* |
+| **Andamento → Giorno**, testata | lo stesso numero: la stessa data non può dire due cifre diverse in due schermate |
+| **Oggi** e **Andamento → Giorno**, sotto l'incasso | quando in quella data hai pagato voci a budget, una riga lo dice: *«… pagati oggi sono già a budget»* |
+| Riga della spesa nel registro | il marchio **a budget** accanto a *fatt.* |
+| Riga della giornata nell'elenco | *spese −1.825,00 · 1.825,00 a budget* — il totale resta quello vero, il registro dice quando hai pagato |
+
+**Mese e anno non cambiano.** Lì le spese restano quelle vere: su una finestra lunga il
+confronto con il budget si fa nel conguaglio, e spalmare non servirebbe a niente. Non cambiano
+nemmeno le deducibili, l'utile, le tasse e l'IVA: quelli contano i movimenti veri, con la
+regola del tracciato (versioni 96-99).
+
 ## L'incasso coperto, e l'occhio per scoprirlo (versione 108)
 
 Il totale del giorno stava in chiaro, grande, in cima allo schermo: con il telefono nel
