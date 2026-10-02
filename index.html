@@ -1104,7 +1104,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 120;
+        const VERSIONE_APP = 121;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4090,12 +4090,22 @@
 
         // Giornate in cui si e' davvero lavorato in quel mese: nei riposi le
         // spese corrono lo stesso, ma non c'e' nessun incasso a coprirle.
+        // I giorni in cui hai davvero lavorato, nel mese. Come per le spese, si
+        // guarda solo fino a oggi: un turno segnato in calendario per la
+        // settimana prossima non e' un giorno lavorato, e contandolo
+        // abbassava la quota per giornata di un lavoro non ancora fatto.
         function giorniLavoratiDelMese(ym) {
+            const oggi = oggiISO();
+            const limite = String(ym) === oggi.slice(0, 7)
+                ? oggi
+                : `${ym}-${String(giorniDelMese(ym)).padStart(2, '0')}`;
             const giorni = new Set();
             (window.shifts || []).forEach(t => {
-                if (!t.data || String(t.data).slice(0, 7) !== String(ym)) return;
+                const d = String(t.data || '');
+                if (!d || d.slice(0, 7) !== String(ym)) return;
+                if (d > limite) return;
                 if (isRiposo(t)) return;
-                giorni.add(String(t.data));
+                giorni.add(d);
             });
             return giorni.size;
         }
@@ -4221,16 +4231,28 @@
         // per trentuno le farebbe sembrare la meta' di quello che sono.
         function mediaAltreSpese(ym) {
             const gg = giorniDelMese(ym);
+            const oggi = oggiISO();
+            const inCorso = String(ym) === oggi.slice(0, 7);
+            // LA SOMMA E IL DIVISORE DEVONO GUARDARE LA STESSA FINESTRA
+            // Il divisore erano i giorni gia' passati, ma la somma prendeva
+            // tutto il mese - comprese le spese con data futura, che l'app
+            // stessa crea quando si fa una serie ricorrente in anticipo.
+            // Risultato: il 2 del mese, con otto rate gia' scritte per i
+            // giorni dopo, la media diceva 310 € al giorno invece di 62.
+            // Adesso si contano solo le spese gia' uscite dal conto, che e'
+            // la stessa regola del conguaglio: una spesa in una data futura
+            // si conta quando arriva.
+            const limite = inCorso ? oggi : `${ym}-${String(gg).padStart(2, '0')}`;
             let altre = 0, voci = 0;
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
-                if (String(r.data || '').slice(0, 7) !== String(ym)) return;
+                const d = String(r.data || '');
+                if (d.slice(0, 7) !== String(ym)) return;
+                if (d > limite) return;
                 if (copertaDalBudget(r)) return;
                 altre += parseFloat(r.importo || 0);
                 voci++;
             });
-            const oggi = oggiISO();
-            const inCorso = String(ym) === oggi.slice(0, 7);
             const giorni = inCorso ? Math.min(gg, Math.max(1, Number(oggi.slice(8, 10)))) : gg;
             return { altre, voci, giorni, inCorso, quota: giorni ? altre / giorni : 0 };
         }

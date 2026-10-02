@@ -68,6 +68,63 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Controllo di coerenza, e la media che contava i giorni che non c'erano (versione 121)
+
+Un giro completo a cercare contraddizioni: lo stesso numero, detto da parti diverse dell'app,
+deve essere lo stesso. Non si controlla che i conti siano giusti in assoluto — si controlla che
+**non si contraddicano**.
+
+### 43 controlli sui conti, 17 su quello che compare a video
+
+Sessanta identita' che devono valere sempre, su un archivio di due anni e 1.872 corse:
+
+- gli incassi dell'anno contati in **quattro modi** (`aggrega`, il grafico annuale, i dodici
+  grafici mensili, i dodici `aggrega` mensili) e contro la somma grezza del registro;
+- le ripartizioni che devono ricomporre il totale: i cinque metodi di incasso, le categorie di
+  spesa, tracciato + contanti, deducibili + non deducibili;
+- `getStats` contro il registro, e `utileFiscaleAnno` contro `getStats` — due strade diverse
+  per lo stesso numero;
+- tasse = INPS + IRPEF + addizionali; imponibile = utile − contributi; netto = cassa − tasse;
+- budget dell'anno = somma delle voci = somma dei dodici mesi; budget **reale** = somma dei 365
+  giorni;
+- il conguaglio: totali = somma delle righe, speso = somma dei movimenti elencati, il conteggio
+  dichiarato = i movimenti che si vedono aprendo la riga;
+- la giornata: vere = fuori budget + pagate a budget; spalmate = fuori budget + quota.
+
+E poi i numeri **letti a video**, perche' i conti possono tornare e una schermata mostrare lo
+stesso la variabile sbagliata: gli stessi importi devono comparire in Andamento, in Spese e
+tasse, nel Commercialista, in Rendimento, e lo stesso mese deve coincidere fra due schermate
+diverse.
+
+**Esito: nessuna contraddizione.** Tre segnalazioni erano aspettative sbagliate della prova, non
+dell'app: «Spese e tasse» non stampa il totale degli incassi (lo divide in tracciati e contanti,
+che e' la divisione che conta per il fisco) ne' l'utile di cassa (mostra il netto), e il registro
+spese parte filtrato sul giorno. Le somme tornano tutte: 40.236 + 10.164 = 50.400.
+
+### Ma una incoerenza vera c'era
+
+Nel riquadro «quanto costa questa giornata» si leggeva: *«251,80 €: 3,80 € di budget più 248,00 €
+di media delle spese fuori budget»*. Duecentoquarantotto euro al giorno di media non torna con
+7.339 € di spese in un anno.
+
+`mediaAltreSpese` **sommava tutto il mese ma divideva per i giorni gia' passati**. Il 2 del mese,
+con otto rate gia' scritte per i giorni successivi, la media diceva **310 € al giorno invece di
+62**: cinque volte tanto.
+
+Non e' un caso di laboratorio: le spese con data futura le crea l'app stessa, quando si fa una
+serie ricorrente in anticipo. E il conguaglio quelle le esclude di proposito — *«si conta quando
+arriva»* — quindi le due parti dell'app seguivano due regole diverse sullo stesso dato.
+
+Adesso somma e divisore guardano la stessa finestra, con la regola del conguaglio. Stessa cura a
+`giorniLavoratiDelMese`: un turno segnato in calendario per la settimana prossima non e' un
+giorno lavorato, e contandolo abbassava la quota per giornata di un lavoro non ancora fatto.
+
+Ho cercato lo stesso difetto in tutte le altre medie dell'app: non c'e'. `mediaCorsa`,
+`mediaOra`, `mediaGiorno`, `mediaMese` e l'euro-ora prendono numeratore e divisore dallo stesso
+insieme di movimenti.
+
+I tre controlli nuovi girano a ogni rilascio.
+
 ## Da dove viene una spesa fuori budget (versione 120)
 
 Aprendo la riga «fuori budget» della 119 si vede *quali* sono le spese. Manca pero' la cosa che
