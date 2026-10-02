@@ -68,6 +68,35 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le rate fisse INPS nel budget, se le vuoi (versione 117)
+
+Le **quattro rate del minimale** (4 × 1.130,34 = 4.521,36 € l'anno) si pagano **anche a utile
+zero**. Non dipendono da quanto guadagni, quindi sono un costo del lavorare esattamente come
+la licenza o il radio taxi — e fino alla 116 non stavano da nessuna parte: né nel budget, né
+nell'accantonamento. Il pareggio giornaliero era sottostimato di **12,39 €**.
+
+**Non fanno doppione con l'accantonamento sul margine**, e non è un'impressione: l'aliquota che
+la scheda della giornata applica al margine è *marginale* — dice quanto costa l'euro guadagnato
+in più. Raddoppiando la rata fissa nel calcolo, le tasse totali salgono ma quell'aliquota resta
+**43,0%**, identica al decimale. Il 24% sull'eccedenza oltre il minimale, quello sì, segue il
+guadagno ed è già lì dentro: nel budget non ci va.
+
+### Si propone, non si aggiunge di nascosto
+
+L'elenco del budget è dell'utente, e una voce da 4.521 € comparsa da sola sposterebbe il
+pareggio di dodici euro al giorno senza che si capisca perché. Quindi nella scheda **Budget dei
+costi fissi** compare un riquadro che spiega il conto e lascia decidere: **«Aggiungila al
+budget»** o **«No, lascia così»**. La scheda si apre da sola quando il riquadro c'è, altrimenti
+resterebbe nascosto in un pieghevole chiuso.
+
+Il riquadro **non compare** a chi ha già una voce sua che parla di contributi (si guarda largo:
+*INPS*, *contributi*, *previdenza*), e dopo un «no» non torna più.
+
+L'importo non è scritto a mano nel codice: si legge da **rata × numero di rate** delle
+impostazioni fiscali, così se cambi la rata il conto proposto cambia con te. Una volta
+aggiunta è una voce come le altre — la modifichi, la togli, e quando registri le rate vere è
+il pagamento a comandare, come tutte le voci dalla 116 in poi.
+
 ## La previsione vale finché non arriva il conto (versione 116)
 
 Fin qui una voce di budget era una previsione e basta: scrivevi 1.387 € di assicurazione e la
