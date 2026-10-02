@@ -1104,7 +1104,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 119;
+        const VERSIONE_APP = 120;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -10967,10 +10967,21 @@
                                             ${r.extra ? `
                                                 <p class="text-xs text-gray-600 leading-relaxed mb-2">
                                                     Queste spese sono scritte come costi fissi ma <strong>non corrispondono a nessuna voce
-                                                    del tuo budget</strong>: o la voce l'hai tolta, o la scrivevano le versioni vecchie
-                                                    dell'app. Contano nelle spese dell'anno e nelle tasse, ma non hanno un budget con cui
-                                                    confrontarsi. Se è una spesa che torna, aggiungi la voce; se non serve più, eliminala
-                                                    da «Tutte le spese, riga per riga».
+                                                    del tuo budget</strong>. Contano nelle spese dell'anno e nelle tasse, ma non hanno un
+                                                    budget con cui confrontarsi. <strong>Prima di cancellarle guarda il marchio:</strong>
+                                                </p>
+                                                <p class="text-xs text-gray-600 leading-relaxed mb-2">
+                                                    <span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">generata dall'app</span>
+                                                    non è un pagamento: l'hanno scritta le versioni vecchie, che mettevano i costi fissi
+                                                    nel registro un mese alla volta. Se la stessa spesa l'hai registrata anche a mano,
+                                                    questa la conta due volte e <strong>va tolta</strong>: si fa da
+                                                    «Backup e impostazioni → Costi fissi scritti come movimenti», che le elimina in blocco.
+                                                </p>
+                                                <p class="text-xs text-gray-600 leading-relaxed mb-2">
+                                                    <span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">registrata da te</span>
+                                                    è un pagamento vero: <strong>non cancellarla</strong>, sparirebbe dalle spese dell'anno
+                                                    e dalla stima delle tasse. Se è già coperta da una voce del budget con un altro nome,
+                                                    correggi la categoria della spesa perché combaci con quella voce.
                                                 </p>` : ''}
                                             <div class="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white">
                                                 <!-- Due righe e non una: su un telefono, con data, metodo e importo
@@ -10981,9 +10992,12 @@
                                                         <p class="text-xs font-bold text-gray-800 leading-relaxed">
                                                             ${esc(m.categoria)}${m.nota ? ` <span class="font-normal text-gray-400">· ${esc(m.nota)}</span>` : ''}
                                                         </p>
-                                                        <p class="flex items-center gap-2 mt-0.5">
+                                                        <p class="flex flex-wrap items-center gap-2 mt-0.5">
                                                             <span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(m.data)}</span>
                                                             <span class="${metodoBadgeClass(m.metodo)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(metodoBreve(m.metodo))}</span>
+                                                            ${r.extra ? (generataDallApp(m)
+                                                                ? '<span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">generata dall\'app</span>'
+                                                                : '<span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">registrata da te</span>') : ''}
                                                             <span class="ml-auto text-xs font-black text-red-600 whitespace-nowrap">−${formatCurrency(m.importo)}</span>
                                                         </p>
                                                     </div>`).join('')}

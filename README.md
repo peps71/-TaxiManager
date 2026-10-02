@@ -68,6 +68,25 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Da dove viene una spesa fuori budget (versione 120)
+
+Aprendo la riga «fuori budget» della 119 si vede *quali* sono le spese. Manca pero' la cosa che
+decide che farne, e che e' una distinzione grossa:
+
+| | |
+| --- | --- |
+| **generata dall'app** | non e' un pagamento. L'hanno scritta le versioni vecchie, che mettevano i costi fissi nel registro un mese alla volta. Se la stessa spesa e' registrata anche a mano, questa la **conta due volte** e va tolta. |
+| **registrata da te** | e' un pagamento vero. **Non va cancellata**: sparirebbe dalle spese dell'anno e dalla stima delle tasse. |
+
+Adesso ogni movimento della riga fuori budget porta il suo marchio, e la spiegazione dice cosa
+fare in un caso e nell'altro. Le generate dall'app si tolgono in blocco da **«Backup e
+impostazioni → Costi fissi scritti come movimenti»**, che gia' c'era; quelle vere, se sono gia'
+coperte da una voce di budget che si chiama in un altro modo, si sistemano correggendo la
+categoria della spesa perche' combaci con la voce.
+
+La differenza fra le due la fa l'identificativo: quelle scritte dall'app cominciano per
+`fissi-`. Non e' una stima, e' un fatto.
+
 ## Le righe del conguaglio si aprono (versione 119)
 
 La riga **«Altre spese fisse registrate — fuori budget»** diceva *«2 movimenti, l'ultimo il
