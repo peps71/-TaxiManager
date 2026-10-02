@@ -68,6 +68,72 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le tasse e i contributi entrano nel budget (versione 118)
+
+Tre cose, nate da una segnalazione: *«ci sono gia' spese tasse e contributi, ma non li vedo nel
+budget. Sono spese fisse.»* Aveva ragione, ed era un difetto introdotto dalla 117.
+
+### 1. Il legame fra una spesa e la sua voce guarda anche il dettaglio
+
+Le spese si scrivono **«Famiglia - Dettaglio»**: `Tasse e Contributi - INPS`,
+`Tasse e Contributi - INAIL 2025`. Per legarle al budget l'app guardava il pezzo *prima* del
+trattino («Tasse e Contributi») e, in seconda battuta, la categoria base — che per quel nome e'
+«Altro». Quindi **chi tiene una voce di budget per ogni tributo**, chiamandola «INPS», non
+agganciava niente: quelle spese restavano fuori dal budget e dal conguaglio pur essendo costi
+fissi in piena regola.
+
+E la voce che la 117 proponeva si chiamava «Contributi INPS (rate fisse)»: **non si sarebbe
+agganciata a nessuno dei movimenti reali.** Difetto mio, e non di poco conto.
+
+Adesso si prova anche il dettaglio dopo il trattino. L'ordine conta: prima la famiglia, poi il
+dettaglio, poi la categoria base — se esistono tutte e due le voci comanda la piu' generale.
+
+| La tua voce di budget si chiama | Aggancia |
+| --- | --- |
+| `Tasse e Contributi` | tutte: INPS, INAIL, Camera di Commercio |
+| `INPS` | solo le due INPS |
+| tutte e due | la famiglia prende tutto, il dettaglio niente |
+
+### 2. L'app guarda le tue spese e propone
+
+La proposta della 117 parlava solo di INPS, con una cifra presa dalle impostazioni fiscali.
+Adesso guarda i **movimenti veri degli ultimi due anni**, raggruppa per il nome con cui il
+budget li cercherebbe, e propone quelli che tornano negli anni senza avere una voce che li
+raccolga — con l'importo che e' **la media di quello che hai speso davvero**.
+
+Due anni e non uno, perche' una voce annuale dentro una finestra di dodici mesi puo' comparire
+una volta sola e sembrare un caso isolato. E si propone solo cio' che torna (due anni diversi,
+o almeno tre movimenti) e che pesa (da 100 € in su): una spesa una tantum da venti euro non e'
+un costo fisso, e proporla sarebbe rumore.
+
+Resta la regola della 117: **si propone, non si aggiunge di nascosto**, e ogni «No» si ricorda
+voce per voce. L'INPS continua ad avere il suo posto, con la cifra ufficiale invece che con una
+media, ma solo se non e' gia' uscita fra le spese vere.
+
+### 3. Una voce puo' avere la sua scadenza
+
+Campo nuovo **«Quando scade»** sulle voci a scadenza: il giorno e il mese in cui la paghi
+(l'anno non conta, si ripete). Serve a due cose:
+
+- la spesa matura **dal rinnovo al rinnovo** invece che dal 1° gennaio — per una polizza di
+  ottobre, l'anno solare non vuol dire niente. Vale anche prima che il primo pagamento sia
+  registrato: finora li' si ripiegava sull'anno solare;
+- la riga della voce avvisa: **«Scade fra 8 giorni, il 10/10/2026»**, in arancione, e in rosso
+  se la data e' passata senza che tu abbia registrato il pagamento. L'avviso sparisce da solo
+  quando il periodo in corso risulta pagato — dirlo di una cosa gia' pagata sarebbe rumore.
+
+### E le diciture
+
+«Una bolletta ogni tanto» e «Un po' alla volta» erano chiare ma non professionali. Adesso:
+
+| | |
+| --- | --- |
+| **A scadenza — importo stabilito** | assicurazione, bollo, INPS, finanziamento |
+| **A consumo — spesa variabile** | carburante, lavaggio, ristoro |
+
+Il vecchio valore `accumulo` resta riconosciuto, perche' puo' essere gia' salvato da chi ha
+usato la 116 o la 117.
+
 ## Le rate fisse INPS nel budget, se le vuoi (versione 117)
 
 Le **quattro rate del minimale** (4 × 1.130,34 = 4.521,36 € l'anno) si pagano **anche a utile

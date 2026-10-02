@@ -1083,7 +1083,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 117;
+        const VERSIONE_APP = 118;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4093,6 +4093,19 @@
             return resto.replace(/\s*\([^()]*\)\s*$/, '').trim();
         }
 
+        // Il pezzo DOPO il trattino: in "Tasse e Contributi - INAIL 2025" e'
+        // "INAIL 2025". Le note fra parentesi in coda si tolgono, come fa
+        // nomeSpesaDiRecord con la famiglia: "(Pago PA (pagato il 12/06))" e'
+        // un appunto, non il nome del tributo.
+        function dettaglioSpesaDiRecord(r) {
+            const t = String(r && r.categoria || '').trim();
+            if (!t) return '';
+            const resto = /^costi fissi\b/i.test(t) ? t.replace(/^costi fissi\s*[-\u2013:]?\s*/i, '') : t;
+            const i = resto.indexOf(' - ');
+            if (i < 0) return '';
+            return resto.slice(i + 3).replace(/\s*\([^()]*\)\s*$/, '').trim();
+        }
+
         // Chiave di confronto fra due nomi: senza accenti, senza maiuscole e senza
         // punteggiatura. Diversa dallo slug, che invece taglia a 24 caratteri per
         // stare in un identificativo: qui il taglio farebbe combaciare due voci
@@ -4141,7 +4154,23 @@
             const diretta = cerca(chiaveNome(nomeSpesaDiRecord(r)));
             if (diretta) return diretta;
 
-            // 2. la categoria a cui l'app riconduce la spesa. "Carburante /
+            // 2. il dettaglio dopo il trattino. Una spesa si scrive
+            //    "Famiglia - Dettaglio": "Tasse e Contributi - INPS",
+            //    "Tasse e Contributi - INAIL 2025". Chi tiene una voce di
+            //    budget per ogni tributo la chiama "INPS", non "Tasse e
+            //    Contributi", e senza questo passaggio quelle spese non si
+            //    agganciavano a niente: restavano fuori dal budget e dal
+            //    conguaglio, pur essendo costi fissi in piena regola.
+            //    Si guarda dopo la famiglia, non prima: se esistono tutte e
+            //    due le voci comanda quella piu' generale, che e' quella che
+            //    l'utente ha scritto per prima.
+            const dettaglio = dettaglioSpesaDiRecord(r);
+            if (dettaglio) {
+                const perDettaglio = cerca(chiaveNome(dettaglio));
+                if (perDettaglio) return perDettaglio;
+            }
+
+            // 3. la categoria a cui l'app riconduce la spesa. "Carburante /
             //    Diesel - Q8" e "Carburante - Eni" sono la stessa cosa, e il
             //    budget parla di carburante: senza questo passaggio una voce di
             //    budget non trovava i suoi movimenti solo perche' la categoria
@@ -9704,12 +9733,16 @@
         //                         giornata: quanto mi costa OGGI davvero.
         // ============================================================
 
-        // Com'e' fatta una voce: una bolletta che arriva ogni tanto (assicurazione,
-        // bollo, finanziamento) o una spesa che si accumula un po' alla volta
-        // (carburante). Le due cose non si comportano allo stesso modo e non si
-        // possono indovinare dal nome, quindi lo dice la voce.
+        // Com'e' fatta una voce: un importo stabilito che si paga a date fisse
+        // (assicurazione, bollo, INPS, finanziamento) oppure una spesa variabile
+        // che matura con l'uso (carburante, lavaggio). Le due cose non si
+        // comportano allo stesso modo e non si possono indovinare dal nome,
+        // quindi lo dice la voce.
+        // 'accumulo' e' il nome che questo tipo aveva nelle versioni 116 e 117:
+        // si continua a riconoscerlo, perche' puo' essere gia' salvato.
         function tipoVoce(v) {
-            return (v && v.tipo === 'accumulo') ? 'accumulo' : 'bolletta';
+            const t = v && v.tipo;
+            return (t === 'consumo' || t === 'accumulo') ? 'consumo' : 'scadenza';
         }
 
         // Quanti giorni copre un pagamento di questa voce
@@ -9786,7 +9819,7 @@
             if (annateCache.has(chiave)) return annateCache.get(chiave);
 
             const annate = [];
-            if (tipoVoce(v) !== 'accumulo' && v.unita !== 'giorno') {
+            if (tipoVoce(v) !== 'consumo' && v.unita !== 'giorno') {
                 pagamentiVoce(v).forEach(pg => {
                     const corrente = annate.length ? annate[annate.length - 1] : null;
                     if (corrente && pg.data <= corrente.ultimoGiorno) {
@@ -9806,10 +9839,37 @@
             return annate;
         }
 
+        // L'ULTIMA SCADENZA PRIMA DI UNA DATA
+        // La scadenza si scrive una volta - "il 10 ottobre" - e si ripete ogni
+        // anno (o ogni mese). Qui si trova l'occorrenza che apre il periodo in
+        // cui cade il giorno chiesto: per il 2 ottobre 2026, con scadenza al 10
+        // ottobre, il periodo in corso e' quello aperto il 10 ottobre 2025.
+        function scadenzaPrimaDi(v, iso) {
+            const sc = String(v && v.scadenza || '');
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(sc)) return '';
+            const g = String(iso);
+            if (v.unita === 'mese') {
+                const giorno = sc.slice(8, 10);
+                const ym = g.slice(0, 7);
+                const quiMese = `${ym}-${String(Math.min(parseInt(giorno, 10), giorniDelMese(ym))).padStart(2, '0')}`;
+                if (quiMese <= g) return quiMese;
+                const [y, m] = ym.split('-').map(Number);
+                const primaYm = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+                return `${primaYm}-${String(Math.min(parseInt(giorno, 10), giorniDelMese(primaYm))).padStart(2, '0')}`;
+            }
+            const mmdd = sc.slice(5);
+            const anno = parseInt(g.slice(0, 4), 10);
+            const quiAnno = `${anno}-${mmdd}`;
+            return quiAnno <= g ? quiAnno : `${anno - 1}-${mmdd}`;
+        }
+
         // L'annata che copre una certa data, o - passata l'ultima senza che tu
         // abbia ancora registrato il rinnovo - l'ultima che c'e' stata: il prezzo
         // dell'assicurazione non torna quello di due anni fa solo perche' la
         // polizza e' scaduta.
+        // Senza nessun pagamento registrato, ma con la scadenza scritta, si usa
+        // quella: la spesa matura dal rinnovo al rinnovo e non dal 1° gennaio,
+        // che per una polizza di ottobre non vuol dire niente.
         function annataDelGiorno(v, iso) {
             const annate = annateVoce(v);
             if (!annate.length) return null;
@@ -9819,6 +9879,16 @@
             }
             const ultima = annate[annate.length - 1];
             return g > ultima.ultimoGiorno ? ultima : null;   // prima della prima: previsione
+        }
+
+        // Il periodo disegnato dalla sola scadenza, quando di pagamenti veri non
+        // ce ne sono ancora: stessa forma di un'annata, ma con l'importo previsto.
+        function periodoDaScadenza(v, iso) {
+            const da = scadenzaPrimaDi(v, iso);
+            if (!da) return null;
+            const giorni = giorniCopertiDaUnPagamento(v, da);
+            return { da, ultimoGiorno: isoPiuGiorni(da, giorni - 1), giorni,
+                     totale: parseFloat(v.importo || 0) || 0, rate: 0, previsto: true };
         }
 
         // LA PREVISIONE: solo quello che hai scritto tu nel budget.
@@ -9842,9 +9912,9 @@
             if (v.dataInizio && g < v.dataInizio) return 0;
             if (v.dataFine && g > v.dataFine) return 0;
 
-            if (tipoVoce(v) === 'accumulo') return quotaVoceAccumulo(v, g, giorniMese);
+            if (tipoVoce(v) === 'consumo') return quotaVoceConsumo(v, g, giorniMese);
 
-            const annata = annataDelGiorno(v, g);
+            const annata = annataDelGiorno(v, g) || periodoDaScadenza(v, g);
             if (!annata) return quotaVocePrevista(v, g, giorniMese);
             return annata.totale / annata.giorni;
         }
@@ -9856,7 +9926,7 @@
         // stesso. Dal giorno in cui la superi comanda la spesa vera, divisa per
         // i giorni che hai davvero percorso: la previsione, da li' in poi, e'
         // dimostrata sbagliata.
-        function quotaVoceAccumulo(v, iso, giorniMese) {
+        function quotaVoceConsumo(v, iso, giorniMese) {
             const g = String(iso || '');
             const anno = g.slice(0, 4);
             const trascorsi = giorniDaInizioAnno(g);
@@ -10043,7 +10113,9 @@
                 const unita = leggi('cf-unita-');
                 if (unita !== null) v.unita = unita;
                 const tipo = leggi('cf-tipo-');
-                if (tipo !== null) v.tipo = (tipo === 'accumulo') ? 'accumulo' : 'bolletta';
+                if (tipo !== null) v.tipo = (tipo === 'consumo' || tipo === 'accumulo') ? 'consumo' : 'scadenza';
+                const scadenza = leggi('cf-scad-');
+                if (scadenza !== null) v.scadenza = scadenza;
                 const dal = leggi('cf-dal-');
                 if (dal !== null) v.dataInizio = dal;
                 const al = leggi('cf-al-');
@@ -10149,7 +10221,7 @@
             if (Math.abs(reale - previsto) < 0.005) {
                 return { daPrevisione: true, quota: previsto, testo: 'la tua previsione' };
             }
-            if (tipoVoce(v) === 'accumulo') {
+            if (tipoVoce(v) === 'consumo') {
                 const anno = oggi.slice(0, 4);
                 const speso = pagamentiVoce(v)
                     .filter(x => x.data.slice(0, 4) === anno && x.data <= oggi)
@@ -10157,8 +10229,12 @@
                 return { daPrevisione: false, quota: reale,
                          testo: `hai già superato la previsione: ${formatCurrency(speso)} spesi nel ${anno}` };
             }
-            const annata = annataDelGiorno(v, oggi);
+            const annata = annataDelGiorno(v, oggi) || periodoDaScadenza(v, oggi);
             if (!annata) return { daPrevisione: true, quota: previsto, testo: 'la tua previsione' };
+            if (annata.previsto) {
+                return { daPrevisione: false, quota: reale,
+                         testo: `previsione ripartita dalla scadenza del ${ggMmAaaa(annata.da)}, fino al ${ggMmAaaa(annata.ultimoGiorno)}` };
+            }
             const scaduta = oggi > annata.ultimoGiorno;
             return { daPrevisione: false, quota: reale,
                      testo: `${formatCurrency(annata.totale)} pagati${annata.rate > 1 ? ` in ${annata.rate} rate` : ''} il ${ggMmAaaa(annata.da)}`
@@ -10166,11 +10242,34 @@
                                        : `, coprono fino al ${ggMmAaaa(annata.ultimoGiorno)}`) };
         }
 
+        // LA SCADENZA CHE SI AVVICINA
+        // Serve solo se il periodo in corso non l'hai ancora pagato: dire
+        // «scade fra otto giorni» di una cosa gia' pagata sarebbe rumore.
+        function avvisoScadenzaVoce(v) {
+            if (tipoVoce(v) !== 'scadenza') return null;
+            const oggi = oggiISO();
+            const periodo = periodoDaScadenza(v, oggi);
+            if (!periodo) return null;
+            const annata = annataDelGiorno(v, oggi);
+            if (annata && oggi >= annata.da && oggi <= annata.ultimoGiorno) return null;   // gia' pagata
+            const prossima = isoPiuGiorni(periodo.ultimoGiorno, 1);
+            const giorni = giorniFraDate(oggi, prossima);
+            if (giorni > 45) return null;
+            return { data: prossima, giorni };
+        }
+
+        function giorniFraDate(da, a) {
+            const [y1, m1, g1] = String(da).split('-').map(Number);
+            const [y2, m2, g2] = String(a).split('-').map(Number);
+            return Math.round((Date.UTC(y2, m2 - 1, g2) - Date.UTC(y1, m1 - 1, g1)) / 86400000);
+        }
+
         function rigaVoceFissaChiusa(v, anno) {
             const imp = parseFloat(v.importo || 0);
             const unita = v.unita === 'anno' ? 'anno' : (v.unita === 'mese' ? 'mese' : 'giorno');
             const alGiorno = pesoGiornalieroVoce(v, anno);
             const oggi = comandaOggiVoce(v);
+            const scadenza = avvisoScadenzaVoce(v);
             return `
                 <div class="flex flex-wrap items-center justify-between gap-3 border border-gray-200 rounded-xl px-4 py-3 bg-gray-50/60">
                     <div class="min-w-0">
@@ -10181,6 +10280,14 @@
                         ${oggi && !oggi.daPrevisione ? `
                             <p class="text-xs font-bold text-indigo-700 mt-0.5 leading-relaxed">
                                 Oggi pesa ${formatCurrency(oggi.quota)} al giorno <span class="font-medium text-indigo-400">· ${esc(oggi.testo)}</span>
+                            </p>` : ''}
+                        ${scadenza ? `
+                            <p class="text-xs font-bold ${scadenza.giorni < 0 ? 'text-red-600' : 'text-orange-600'} mt-0.5 leading-relaxed">
+                                ${scadenza.giorni < 0
+                                    ? `Scaduta il ${ggMmAaaa(scadenza.data)} e non l'hai ancora registrata`
+                                    : scadenza.giorni === 0
+                                        ? 'Scade oggi'
+                                        : `Scade fra ${scadenza.giorni} ${scadenza.giorni === 1 ? 'giorno' : 'giorni'}, il ${ggMmAaaa(scadenza.data)}`}
                             </p>` : ''}
                     </div>
                     <div class="flex-shrink-0 flex gap-2">
@@ -10224,15 +10331,27 @@
                     <label class="block">
                         ${etichetta('Come la paghi')}
                         <select id="cf-tipo-${esc(v.slug)}" class="w-full p-2.5 border rounded-lg outline-none font-bold bg-white">
-                            <option value="bolletta" ${tipoVoce(v) === 'bolletta' ? 'selected' : ''}>Una bolletta ogni tanto</option>
-                            <option value="accumulo" ${tipoVoce(v) === 'accumulo' ? 'selected' : ''}>Un po' alla volta</option>
+                            <option value="scadenza" ${tipoVoce(v) === 'scadenza' ? 'selected' : ''}>A scadenza — importo stabilito</option>
+                            <option value="consumo" ${tipoVoce(v) === 'consumo' ? 'selected' : ''}>A consumo — spesa variabile</option>
                         </select>
                         <span class="block text-[11px] font-medium text-gray-400 mt-1 leading-relaxed">
-                            ${tipoVoce(v) === 'accumulo'
-                                ? 'Come il carburante: finché stai dentro la previsione vale la previsione, dal giorno in cui la superi comanda quello che hai speso davvero.'
-                                : 'Come l\'assicurazione o il bollo: quando registri il pagamento, quella cifra comanda per tutto il periodo che copre.'}
+                            ${tipoVoce(v) === 'consumo'
+                                ? 'Carburante, lavaggio, ristoro: non c\'è un importo stabilito. Finché la spesa vera resta sotto la previsione vale la previsione; dal giorno in cui la supera comanda quello che hai speso.'
+                                : 'Assicurazione, bollo, INPS, finanziamento: l\'importo è stabilito e si paga a date fisse. Quando registri il pagamento, quella cifra comanda per tutto il periodo che copre.'}
                         </span>
                     </label>
+
+                    ${tipoVoce(v) === 'scadenza' ? `
+                        <label class="block">
+                            ${etichetta(v.unita === 'mese' ? 'Giorno del mese in cui scade' : 'Quando scade')}
+                            <input type="date" id="cf-scad-${esc(v.slug)}" value="${val(v.scadenza)}"
+                                   class="w-full p-2.5 border rounded-lg outline-none text-sm bg-white" />
+                            <span class="block text-[11px] font-medium text-gray-400 mt-1 leading-relaxed">
+                                ${v.unita === 'mese'
+                                    ? 'Conta solo il giorno del mese: serve a far partire il periodo dalla data giusta.'
+                                    : 'Il giorno e il mese in cui la paghi: l\'anno non conta, si ripete. Serve a far maturare la spesa dal rinnovo al rinnovo invece che dal 1° gennaio, e a dirti quando sta per scadere.'}
+                            </span>
+                        </label>` : ''}
 
                     <div class="grid grid-cols-2 gap-2">
                         <label class="block">
@@ -10265,19 +10384,24 @@
         }
 
         // ============================================================
-        //  LE RATE FISSE INPS SONO UN COSTO FISSO
-        //  Le quattro rate del minimale si pagano anche a utile zero: non
-        //  dipendono da quanto guadagni, quindi sono un costo del lavorare
-        //  esattamente come la licenza o il radio taxi. Il 24% sull'eccedenza
-        //  oltre il minimale e' un'altra cosa - quello segue il guadagno, ed e'
-        //  gia' dentro la percentuale che la scheda della giornata ti accantona
-        //  sul margine. Verificato: raddoppiando la rata fissa l'aliquota di
-        //  accantonamento non si muove di un decimale, perche' e' marginale.
-        //  Quindi metterle a budget NON fa doppione.
-        //  Non le si aggiunge di nascosto: l'elenco del budget e' suo, e una
-        //  voce da 4.521 € comparsa da sola sposterebbe il pareggio di dodici
-        //  euro al giorno senza che si capisca perche'. Si propone, una volta.
+        //  QUELLO CHE PAGHI OGNI ANNO E NON E' A BUDGET
+        //  Il budget si compila a mano, e quello che non ci scrivi non c'e'.
+        //  Ma le spese che si ripetono le hai gia' registrate tutte: l'INPS,
+        //  l'INAIL, la camera di commercio, la banca. Se una di quelle torna
+        //  ogni anno e nel budget non c'e' una voce che la raccolga, allora
+        //  il pareggio della giornata e' piu' basso del vero - e non per una
+        //  scelta, ma per una dimenticanza.
+        //  Qui si guardano i movimenti veri e si propone. Non si aggiunge di
+        //  nascosto: l'elenco del budget e' suo, e una voce comparsa da sola
+        //  sposterebbe il pareggio senza che si capisca perche'.
         // ============================================================
+
+        // Le rate fisse INPS: si pagano anche a utile zero, quindi sono un
+        // costo del lavorare come la licenza. Il 24% sull'eccedenza oltre il
+        // minimale e' un'altra cosa - quello segue il guadagno ed e' gia'
+        // dentro la percentuale che la giornata accantona sul margine.
+        // Verificato: raddoppiando la rata fissa, quell'aliquota non si muove
+        // di un decimale, perche' e' marginale. Niente doppione.
         function rateFisseInpsAnno() {
             const f = window.fiscalSettings || {};
             const rata = parseFloat(f.inpsRata);
@@ -10287,68 +10411,141 @@
             return Math.round(rata * quante * 100) / 100;
         }
 
-        // Una voce che parla gia' di contributi c'e' o no? Si guarda largo:
-        // «INPS», «contributi», «gestione separata» - chi se l'e' gia' messa a
-        // modo suo non deve vedersi proporre un doppione.
-        function esisteVoceContributi() {
-            return elencoVociFisse().some(v => /inps|contribut|previdenz/i.test(String(v.nome || '')));
+        // I candidati: raggruppa le spese degli ultimi due anni per il nome con
+        // cui il budget le cercherebbe, e tiene quelle che il budget non copre.
+        // Due anni, non uno: una voce annuale dentro una finestra di dodici mesi
+        // puo' comparire una volta sola e sembrare un caso isolato.
+        function speseFuoriBudget() {
+            const oggi = oggiISO();
+            const da = isoPiuGiorni(oggi, -730);
+            const per = new Map();
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                const d = String(r.data || '');
+                if (d < da || d > oggi) return;
+                const imp = parseFloat(r.importo || 0) || 0;
+                if (!(imp > 0)) return;
+                if (voceBudgetDiRecord(r)) return;              // gia' coperta
+                if (categoriaBase(r.categoria) === 'Costi fissi') return;
+                const nome = nomeSpesaDiRecord(r) || String(r.categoria || '').trim();
+                if (!nome) return;
+                const k = chiaveNome(nome);
+                if (!per.has(k)) per.set(k, { nome, movimenti: 0, totale: 0, anni: new Set(), ultima: '' });
+                const v = per.get(k);
+                v.movimenti++;
+                v.totale += imp;
+                v.anni.add(d.slice(0, 4));
+                if (d > v.ultima) v.ultima = d;
+            });
+            // Ne vale la pena solo se torna negli anni e pesa: una spesa una
+            // tantum da venti euro non e' un costo fisso, e proporla sarebbe
+            // rumore.
+            return Array.from(per.values())
+                .filter(v => v.anni.size >= 2 || v.movimenti >= 3)
+                .filter(v => v.totale >= 100)
+                .map(v => Object.assign(v, { allAnno: Math.round((v.totale / Math.max(1, v.anni.size)) * 100) / 100 }))
+                .sort((a, b) => b.allAnno - a.allAnno)
+                .slice(0, 6);
         }
 
-        function propostaInpsDaMostrare() {
-            try { if (localStorage.getItem('taxi_inps_proposto') === 'no') return false; } catch (err) { /* pazienza */ }
-            return rateFisseInpsAnno() > 0 && !esisteVoceContributi();
+        function propostaBudgetRifiutata(chiave) {
+            try {
+                const viste = JSON.parse(localStorage.getItem('taxi_budget_proposte_no') || '[]');
+                return Array.isArray(viste) && viste.includes(chiave);
+            } catch (err) { return false; }
         }
 
-        function rifiutaPropostaInps() {
-            try { localStorage.setItem('taxi_inps_proposto', 'no'); } catch (err) { /* pazienza */ }
-            showToast('Va bene: non te lo richiedo più. Puoi sempre aggiungerla a mano.');
+        function rifiutaPropostaBudget(chiave) {
+            try {
+                const viste = JSON.parse(localStorage.getItem('taxi_budget_proposte_no') || '[]');
+                const elenco = Array.isArray(viste) ? viste : [];
+                if (!elenco.includes(chiave)) elenco.push(chiave);
+                localStorage.setItem('taxi_budget_proposte_no', JSON.stringify(elenco));
+            } catch (err) { /* pazienza */ }
             renderContent();
         }
 
-        function aggiungiVoceInps() {
-            const totale = rateFisseInpsAnno();
-            if (!(totale > 0)) return;
+        function proposteBudget() {
+            const fuori = speseFuoriBudget().filter(v => !propostaBudgetRifiutata(chiaveNome(v.nome)));
+            const elenco = fuori.map(v => ({
+                chiave: chiaveNome(v.nome),
+                nome: v.nome,
+                importo: v.allAnno,
+                perche: `${v.movimenti} ${v.movimenti === 1 ? 'movimento' : 'movimenti'} in ${v.anni.size} ${v.anni.size === 1 ? 'anno' : 'anni'} · ultima il ${ggMmAaaa(v.ultima)}`
+            }));
+            // E l'INPS: se non e' gia' uscita fra le spese vere e nel budget non
+            // c'e' niente che parli di contributi, si propone con la cifra
+            // ufficiale invece che con una media.
+            const inps = rateFisseInpsAnno();
+            const parlaDiContributi = (t) => /inps|contribut|previdenz/i.test(String(t || ''));
+            if (inps > 0
+                && !elencoVociFisse().some(v => parlaDiContributi(v.nome))
+                && !elenco.some(x => parlaDiContributi(x.nome))
+                && !propostaBudgetRifiutata('inps-rate-fisse')) {
+                const f = window.fiscalSettings || {};
+                elenco.push({
+                    chiave: 'inps-rate-fisse',
+                    nome: 'Contributi INPS',
+                    importo: inps,
+                    perche: `${f.inpsNumeroRate} rate da ${formatCurrency(f.inpsRata)}: si pagano anche a utile zero`
+                });
+            }
+            return elenco;
+        }
+
+        function aggiungiVoceDaProposta(chiave) {
+            const p = proposteBudget().find(x => x.chiave === chiave);
+            if (!p) return;
             const elenco = leggiVociFisse();
             elenco.push({
-                slug: slugVoce('contributi-inps-' + Date.now().toString().slice(-5)),
-                nome: 'Contributi INPS (rate fisse)',
-                importo: totale, unita: 'anno', tipo: 'bolletta',
-                dataInizio: '', dataFine: ''
+                slug: slugVoce(p.nome + '-' + Date.now().toString().slice(-5)),
+                nome: p.nome,
+                importo: p.importo, unita: 'anno', tipo: 'scadenza',
+                scadenza: '', dataInizio: '', dataFine: ''
             });
             window.vociFisse = elenco;
             salvaVociFisse();
             if (window.saveVoceFissaToCloud) window.saveVoceFissaToCloud(elenco[elenco.length - 1]);
-            try { localStorage.setItem('taxi_inps_proposto', 'no'); } catch (err) { /* pazienza */ }
-            showToast(`Aggiunta: ${formatCurrency(totale)} all'anno di rate fisse INPS.`);
+            showToast(`«${p.nome}» aggiunta al budget: ${formatCurrency(p.importo)} all'anno.`);
             renderContent();
         }
 
-        function bloccoPropostaInps() {
-            if (!propostaInpsDaMostrare()) return '';
-            const f = window.fiscalSettings || {};
-            const totale = rateFisseInpsAnno();
-            const alGiorno = totale / 365;
+        function bloccoProposteBudget() {
+            const proposte = proposteBudget();
+            if (!proposte.length) return '';
+            const totale = proposte.reduce((a, x) => a + x.importo, 0);
             return `
-                <div class="border-2 border-indigo-200 bg-indigo-50/60 rounded-xl p-4 space-y-2.5">
-                    <p class="text-sm font-black text-indigo-900">Nel budget mancano le rate fisse INPS</p>
-                    <p class="text-xs text-indigo-800 leading-relaxed">
-                        Le <strong>${f.inpsNumeroRate} rate da ${formatCurrency(f.inpsRata)}</strong> del minimale si pagano
-                        anche a utile zero: non dipendono da quanto guadagni, quindi sono un costo del lavorare come la
-                        licenza o il radio taxi. Sono <strong>${formatCurrency(totale)} all'anno</strong>, cioè
-                        <strong>${formatCurrency(alGiorno)} al giorno</strong> che oggi mancano dal tuo pareggio.
-                    </p>
-                    <p class="text-xs text-indigo-700 leading-relaxed">
-                        Non fa doppione con l'accantonamento sul margine: quello riguarda il 24% sull'eccedenza oltre il
-                        minimale, che segue il guadagno. Le rate fisse no.
-                    </p>
-                    <div class="flex flex-wrap gap-2 pt-0.5">
-                        <button onclick="aggiungiVoceInps()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Aggiungila al budget</button>
-                        <button onclick="rifiutaPropostaInps()" class="bg-white hover:bg-gray-50 text-gray-700 font-bold py-2 px-4 rounded-xl text-sm border border-gray-200">No, lascia così</button>
+                <div class="border-2 border-indigo-200 bg-indigo-50/60 rounded-xl p-4 space-y-3">
+                    <div>
+                        <p class="text-sm font-black text-indigo-900">Paghi queste cose, ma non sono nel budget</p>
+                        <p class="text-xs text-indigo-800 leading-relaxed mt-1">
+                            Le hai già registrate come spese e tornano negli anni: sono costi fissi, ma finché non stanno
+                            qui non pesano sulla giornata, e il tuo pareggio è più basso del vero di circa
+                            <strong>${formatCurrency(totale / 365)} al giorno</strong>.
+                        </p>
                     </div>
+                    <div class="space-y-2">
+                        ${proposte.map(x => `
+                            <div class="bg-white border border-indigo-100 rounded-xl px-3 py-2.5 flex items-center gap-2.5">
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-sm font-black text-gray-900 truncate">${esc(x.nome)}</span>
+                                    <span class="block text-[11px] font-bold text-gray-500">${formatCurrency(x.importo)} all'anno · ${formatCurrency(x.importo / 365)} al giorno</span>
+                                    <span class="block text-[11px] font-medium text-gray-400">${esc(x.perche)}</span>
+                                </span>
+                                <span class="shrink-0 flex flex-col gap-1">
+                                    <button onclick="aggiungiVoceDaProposta('${escJs(x.chiave)}')" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap">Aggiungi</button>
+                                    <button onclick="rifiutaPropostaBudget('${escJs(x.chiave)}')" class="text-gray-500 hover:text-gray-800 text-[11px] font-bold px-3 py-1 rounded-lg whitespace-nowrap">No</button>
+                                </span>
+                            </div>`).join('')}
+                    </div>
+                    <p class="text-[11px] font-medium text-indigo-500 leading-relaxed">
+                        L'importo proposto è la media di quello che hai speso davvero. Una volta aggiunta è una voce come
+                        le altre: la correggi, le metti la scadenza, e quando registri il pagamento vero è quello a comandare.
+                    </p>
                 </div>`;
         }
 
-        // Il riquadro del budget: l'elenco delle voci e quanto pesano in tutto
+        // Il riquadro del budget        // Il riquadro del budget: l'elenco delle voci e quanto pesano in tutto
         function sezioneBudgetFissi() {
             const anno = annoAttivo();
             const voci = elencoVociFisse();
@@ -10366,7 +10563,7 @@
             const scostaDallaPrevisione = Math.abs(realeNellAnno - nellAnno) >= 1;
 
             return `
-                <details class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || propostaInpsDaMostrare() ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
+                <details class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || proposteBudget().length ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
                     <summary class="flex flex-wrap items-start justify-between gap-3 cursor-pointer select-none">
                         <div>
                             <h3 class="text-lg font-black text-gray-900">Budget dei costi fissi</h3>
@@ -10395,7 +10592,7 @@
                         </div>
                     </summary>
 
-                    ${bloccoPropostaInps()}
+                    ${bloccoProposteBudget()}
 
                     <div class="space-y-2">
                         ${voci.map(rigaVoceFissa).join('') || '<p class="text-sm text-gray-400">Nessuna voce: aggiungine una qui sotto.</p>'}
