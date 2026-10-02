@@ -1083,7 +1083,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 114;
+        const VERSIONE_APP = 115;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1175,8 +1175,8 @@
                 || /quota/i.test(String(err && err.message || '')));
             testo.textContent = pieno
                 ? (window.isCloudSyncing
-                    ? 'Memoria del telefono piena: quello che registri va sul Cloud ma non resta su questo dispositivo.'
-                    : 'Memoria del telefono piena: quello che registri ADESSO NON SI SALVA. Fai subito un backup da «Gestione».')
+                    ? 'Memoria del telefono piena: quello che registri va sul Cloud ma non resta su questo dispositivo. Libera spazio da «Gestione → Backup e impostazioni → Spazio».'
+                    : 'Memoria del telefono piena: quello che registri ADESSO NON SI SALVA. Fai subito un backup, poi libera spazio da «Gestione → Backup e impostazioni → Spazio».')
                 : 'Questo browser non mi lascia salvare i dati (navigazione privata, o dati dei siti bloccati). Quello che registri si perde alla chiusura.';
             barra.classList.remove('hidden');
             aggiornaSpazioStrisce();
@@ -7619,6 +7619,8 @@
                         ${bloccoProtezioneIndirizzi()}
                     </div>
 
+                    ${bloccoSpazio()}
+
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         ${moduloProfiloHTML(
                             'La tua scheda',
@@ -9048,6 +9050,171 @@
             const blob = new Blob([JSON.stringify(datiDaSalvare(), null, 2)], { type: 'application/json' });
             scaricaFile(blob, `TaxiManager_Backup_${new Date().toISOString().split('T')[0]}.json`);
             showToast('Backup scaricato!');
+        }
+
+        // ============================================================
+        //  LO SPAZIO, E COME LIBERARLO
+        //  I dati stanno in localStorage, che ha un tetto: fra i 5 e i 10 MB
+        //  a seconda del browser. Tre anni di lavoro pesano circa 1,1 MB, e
+        //  il muro arriverebbe verso il decimo o dodicesimo anno - con quel
+        //  muro che e' il problema numero uno di questa app, perche' e'
+        //  silenzioso (vedi la 111). Qui si vede quanto si sta usando, e si
+        //  puo' archiviare un anno vecchio: prima il file, poi la cancellazione.
+        // ============================================================
+
+        // Un conto approssimato ma onesto: il tetto vero non lo dichiara
+        // nessun browser, quindi si mostra quello piu' basso fra quelli in
+        // giro - meglio allarmarsi un anno prima che un giorno dopo.
+        const TETTO_LOCALE_KB = 5120;
+
+        function spazioUsatoKB() {
+            let totale = 0;
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    totale += k.length + (localStorage.getItem(k) || '').length;
+                }
+            } catch (err) { return null; }
+            return Math.round(totale / 1024);
+        }
+
+        // Gli anni presenti nell'archivio, dal piu' vecchio, con quanto
+        // occupano. L'anno in corso e quello prima non si archiviano: servono
+        // per le tasse e per i confronti, e sono quelli che si guardano.
+        function anniArchiviabili() {
+            const corrente = Number(oggiISO().slice(0, 4));
+            const per = {};
+            const conta = (elenco, campo) => (elenco || []).forEach(x => {
+                const a = String(x.data || '').slice(0, 4);
+                if (!/^\d{4}$/.test(a)) return;
+                if (!per[a]) per[a] = { anno: a, movimenti: 0, turni: 0, peso: 0 };
+                per[a][campo]++;
+                per[a].peso += JSON.stringify(x).length;
+            });
+            conta(window.dailyRecords, 'movimenti');
+            conta(window.shifts, 'turni');
+            return Object.values(per)
+                .map(x => Object.assign(x, { pesoKB: Math.round(x.peso / 1024), vecchio: Number(x.anno) < corrente - 1 }))
+                .sort((x, y) => x.anno.localeCompare(y.anno));
+        }
+
+        // Il file di un anno solo: gli stessi campi del backup intero, cosi'
+        // si rimette con lo stesso tasto «Importa backup» di sempre.
+        function scaricaAnno(anno) {
+            const a = String(anno);
+            const dentro = (x) => String(x.data || '').slice(0, 4) === a;
+            const pacco = {
+                versione: 3,
+                archivioAnno: a,
+                records: (window.dailyRecords || []).filter(dentro),
+                shifts: (window.shifts || []).filter(dentro),
+                scadenze: [], veicoli: [], vociFisse: [],
+                impostazioniFiscali: window.fiscalSettings,
+                profilo: window.profilo || null,
+                date: new Date().toISOString()
+            };
+            scaricaFile(new Blob([JSON.stringify(pacco, null, 2)], { type: 'application/json' }),
+                        `TaxiManager_Archivio_${a}.json`);
+            return pacco;
+        }
+
+        // Archiviare vuol dire: scarica il file, poi togli quell'anno da qui.
+        // E dal Cloud, perche' se restasse li' il primo pacchetto di
+        // sincronizzazione lo riporterebbe indietro: la cartella sul Cloud e'
+        // la verita', questo telefono ne e' solo una copia. Quindi e'
+        // definitivo su tutti i dispositivi, e va detto in questi termini.
+        async function archiviaAnno(anno) {
+            const a = String(anno);
+            const dentro = (x) => String(x.data || '').slice(0, 4) === a;
+            const movimenti = (window.dailyRecords || []).filter(dentro);
+            const turni = (window.shifts || []).filter(dentro);
+            if (!movimenti.length && !turni.length) { showToast(`Nel ${a} non c'è niente da archiviare.`); return; }
+
+            if (!confirm(`Archiviare il ${a}?\n\n1. Si scarica subito il file TaxiManager_Archivio_${a}.json con ${movimenti.length} movimenti e ${turni.length} turni.\n2. Poi quell'anno viene tolto da questo dispositivo E DALLA TUA CARTELLA SUL CLOUD: sparisce da tutti i tuoi dispositivi.\n\nSi rimette quando vuoi con «Importa backup», ma solo se tieni quel file.`)) return;
+
+            scaricaAnno(a);
+            // Un attimo perche' il file arrivi davvero nei Download prima di
+            // chiedere la conferma: confermare «sì l'ho salvato» mentre il
+            // download non e' ancora partito sarebbe una conferma a vuoto.
+            await new Promise(r => setTimeout(r, 1500));
+            if (!confirm(`Hai il file TaxiManager_Archivio_${a}.json fra i tuoi download?\n\nControlla adesso. Da qui in avanti quell'anno esiste solo lì.`)) {
+                showToast('Archiviazione annullata: non ho cancellato niente.');
+                return;
+            }
+
+            showToast(`Tolgo il ${a}...`);
+            if (movimenti.length && typeof window.deleteRecordsFromCloud === 'function') {
+                await window.deleteRecordsFromCloud(movimenti.map(r => r.id));
+            }
+            for (const t of turni) {
+                if (typeof window.deleteShiftFromCloud === 'function') await window.deleteShiftFromCloud(t.id);
+            }
+            showToast(`${a} archiviato: ${movimenti.length} movimenti e ${turni.length} turni tolti da qui.`);
+            renderNav();
+            renderContent();
+        }
+
+        function bloccoSpazio() {
+            const usato = spazioUsatoKB();
+            if (usato === null) return '';
+            const perc = Math.min(100, Math.round((usato / TETTO_LOCALE_KB) * 100));
+            const anni = anniArchiviabili();
+            const vecchi = anni.filter(x => x.vecchio);
+            const colore = perc >= 85 ? 'bg-red-500' : perc >= 60 ? 'bg-orange-500' : 'bg-green-500';
+            return `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">Spazio su questo dispositivo</h3>
+                        <p class="text-xs text-gray-500 mt-1 leading-relaxed">
+                            I dati stanno nella memoria che il browser riserva a questa app. Quando finisce, quello che
+                            registri non si salva più — e te lo dice una striscia rossa in cima allo schermo.
+                        </p>
+                    </div>
+
+                    <div>
+                        <div class="flex items-baseline justify-between gap-2">
+                            <p class="text-sm font-black text-gray-900">${numeroIT(usato)} KB usati</p>
+                            <p class="text-xs font-bold text-gray-400">circa il ${perc}% di ${numeroIT(TETTO_LOCALE_KB)} KB</p>
+                        </div>
+                        <div class="mt-1.5 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full ${colore} rounded-full" style="width:${Math.max(2, perc)}%"></div>
+                        </div>
+                        <p class="text-[11px] font-medium text-gray-400 mt-1.5 leading-relaxed">
+                            Il tetto esatto non lo dichiara nessun browser: qui si usa il più basso fra quelli in giro,
+                            così l'avviso arriva prima e non dopo.
+                        </p>
+                    </div>
+
+                    ${anni.length ? `
+                        <div class="border-t border-gray-100 pt-3.5">
+                            <p class="etichetta block mb-2">Cosa c'è, anno per anno</p>
+                            <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                ${anni.map(x => `
+                                    <div class="px-3 py-2.5 flex items-center gap-3">
+                                        <span class="min-w-0 flex-1">
+                                            <span class="block text-sm font-black text-gray-900">${esc(x.anno)}</span>
+                                            <span class="block text-[11px] font-bold text-gray-400">${x.movimenti} mov · ${x.turni} turni · ${numeroIT(x.pesoKB)} KB</span>
+                                        </span>
+                                        ${x.vecchio ? `
+                                            <button onclick="archiviaAnno('${escJs(x.anno)}')"
+                                                    class="shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap">
+                                                Archivia
+                                            </button>`
+                                          : '<span class="shrink-0 text-[11px] font-bold text-gray-300 whitespace-nowrap">si tiene</span>'}
+                                    </div>`).join('')}
+                            </div>
+                            ${vecchi.length ? `
+                                <p class="text-xs text-gray-500 mt-2.5 leading-relaxed">
+                                    <strong>Archiviare</strong> vuol dire: scarichi il file di quell'anno, e poi quell'anno viene tolto
+                                    da qui <strong>e dalla tua cartella sul Cloud</strong> — quindi da tutti i tuoi dispositivi. Si rimette
+                                    quando vuoi con «Importa backup», ma solo se tieni quel file. L'anno in corso e quello prima non si
+                                    archiviano: servono per le tasse e sono quelli che guardi.
+                                </p>`
+                              : `<p class="text-xs text-gray-400 mt-2.5 leading-relaxed">
+                                    Non c'è ancora niente da archiviare: si archiviano solo gli anni più vecchi dei due che stai usando.
+                                </p>`}
+                        </div>` : ''}
+                </div>`;
         }
 
         // Esporta i movimenti dell'anno attivo in CSV, pensato per essere aperto in

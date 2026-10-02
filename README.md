@@ -68,6 +68,40 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Lo spazio, e come liberarlo (versione 115)
+
+I dati stanno nella memoria che il browser riserva all'app, e quella memoria ha un tetto: fra
+i 5 e i 10 MB a seconda del browser. Tre anni di lavoro pesano circa 1,1 MB, quindi il muro
+arriverebbe verso il decimo o dodicesimo anno — e quel muro e' il problema piu' serio di
+quest'app, perche' e' silenzioso (per questo c'e' la striscia rossa della 111).
+
+In **«Gestione → Backup e impostazioni»** c'e' adesso **Spazio su questo dispositivo**:
+
+- quanto si sta usando, con la barra che diventa arancione al 60% e rossa all'85%;
+- cosa c'e' dentro, **anno per anno**: movimenti, turni, quanti KB;
+- e per ogni anno vecchio, il tasto **Archivia**.
+
+Il tetto mostrato e' il piu' basso fra quelli in giro (5.120 KB), non il piu' alto: meglio
+allarmarsi un anno prima che un giorno dopo.
+
+### Cosa fa «Archivia», detto per intero
+
+1. Scarica subito `TaxiManager_Archivio_<anno>.json` con i movimenti e i turni di quell'anno.
+2. Aspetta, e poi **ti chiede se il file c'e' davvero**. Se rispondi di no, non cancella niente.
+3. Solo allora toglie quell'anno da questo dispositivo **e dalla tua cartella sul Cloud**.
+
+Il terzo punto non e' una scelta: la cartella sul Cloud e' la verita' e il telefono ne e' una
+copia, quindi cancellare solo qui non servirebbe a niente — il primo pacchetto di
+sincronizzazione riporterebbe tutto indietro. Vuol dire che l'anno sparisce da **tutti** i
+dispositivi, e questo va detto in questi termini, non con un «liberi spazio».
+
+Si rimette quando vuoi con lo stesso «Importa backup» di sempre: il file ha la stessa forma di
+un backup intero. Provato: si archivia, l'anno sparisce da memoria e disco, gli altri restano
+intatti, e reimportando il file si torna esattamente al punto di prima.
+
+**L'anno in corso e quello precedente non si archiviano**, e il tasto li' non compare: servono
+per le tasse, per il conguaglio e per i confronti, e sono quelli che si guardano davvero.
+
 ## Una funzione per scheda, invece di una da millequattrocento righe (versione 114)
 
 `disegnaContenuto` era una sola funzione di **1.414 righe**: la catena di «se la scheda e'
