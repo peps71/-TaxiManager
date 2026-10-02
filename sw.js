@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v111';
+const VERSIONE = 'taximanager-v112';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -18,10 +18,15 @@ const FILE_APP = [
   './favicon.ico'
 ];
 
-// Secondi di attesa massimi per la rete quando si apre l'app: oltre questi
-// si mostra subito la copia salvata. Con una linea agganciata ma lentissima
-// (garage, sottopasso, zona senza campo) l'app si apriva dopo mezzo minuto.
-const ATTESA_RETE_MS = 3000;
+// L'APERTURA NON ASPETTA LA RETE
+// Prima si chiedeva la rete e si attendeva fino a 3 secondi prima di mostrare
+// la copia salvata. Risultato: in garage, in un sottopasso, in una zona senza
+// campo, si guardava il vuoto per tre secondi - mentre sul telefono c'era una
+// copia perfetta, pronta. Adesso la copia salvata si da' SUBITO, e il
+// controllo della versione nuova corre in sottofondo (lo chiede la pagina con
+// registration.update(), all'avvio e ogni volta che l'app torna in primo
+// piano). Quando una versione nuova e' pronta non entra di prepotenza: si
+// mette in attesa, la pagina lo dice con una striscia, e tocca all'utente.
 
 // Pagina mostrata solo se manca sia la rete sia la copia salvata: succede
 // se qualcuno apre l'app prima che l'installazione abbia finito.
@@ -46,8 +51,11 @@ self.addEventListener('install', (evento) => {
           console.warn('[SW] file non messo in cache:', file, err);
         }))
       ))
-      .then(() => self.skipWaiting())
   );
+  // Niente skipWaiting qui: la versione nuova resta in attesa e prende il
+  // comando solo quando la pagina glielo dice (AGGIORNA_SUBITO, dal tasto
+  // «Carica adesso»). Prendendolo da sola, l'app si ricaricava sotto le mani
+  // di chi stava battendo una corsa.
 });
 
 // Attivazione: cancello le cache delle versioni precedenti
@@ -91,22 +99,15 @@ function daSalvare(risposta) {
   return risposta.status === 0 && risposta.type === 'opaque';
 }
 
+// Il clone va fatto subito, prima di qualsiasi await: dopo che la risposta e'
+// stata letta non si puo' piu' clonare. Si restituisce la promessa perche' chi
+// chiama la passa a evento.waitUntil: senza, il browser puo' spegnere il
+// service worker a meta' scrittura e la copia resta tronca.
 function salvaInCache(richiesta, risposta) {
   const copia = risposta.clone();
-  caches.open(VERSIONE)
+  return caches.open(VERSIONE)
     .then((cache) => cache.put(richiesta, copia))
     .catch(() => { /* cache piena o richiesta non salvabile: pazienza */ });
-}
-
-// Rete con tempo massimo di attesa: scaduto quello si va avanti con la cache.
-function reteConScadenza(richiesta, ms) {
-  return new Promise((risolvi, rifiuta) => {
-    const scaduta = setTimeout(() => rifiuta(new Error('rete troppo lenta')), ms);
-    fetch(richiesta).then(
-      (r) => { clearTimeout(scaduta); risolvi(r); },
-      (e) => { clearTimeout(scaduta); rifiuta(e); }
-    );
-  });
 }
 
 self.addEventListener('fetch', (evento) => {
@@ -117,24 +118,21 @@ self.addEventListener('fetch', (evento) => {
   if (!richiesta.url.startsWith('http')) return;
   if (daNonIntercettare(richiesta.url)) return;
 
-  // Navigazione (apertura dell'app): prima la rete, se manca o è troppo lenta
-  // uso la copia salvata. In cache va solo una risposta valida: prima ci finiva
-  // anche una pagina di errore del server, che poi restava lì per sempre.
+  // Navigazione (apertura dell'app): la copia salvata, subito.
+  // In cache l'app ci va al momento dell'installazione di questa versione, che
+  // e' l'unico posto che la scrive: cosi' quello che si apre e' sempre la
+  // copia coerente con questo service worker, mai un misto fra due versioni.
+  // Senza copia salvata (primissimo avvio, o installazione interrotta) si
+  // prende la rete, e senza nemmeno quella la paginetta qui sopra.
   if (richiesta.mode === 'navigate') {
     evento.respondWith(
-      reteConScadenza(richiesta, ATTESA_RETE_MS)
-        .then((risposta) => {
-          if (risposta && risposta.ok && risposta.type === 'basic') {
-            salvaInCache('./index.html', risposta);
-          }
-          return risposta;
-        })
-        .catch(() => caches.match('./index.html').then((salvata) =>
-          salvata || new Response(PAGINA_OFFLINE, {
-            status: 200,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' }
-          })
-        ))
+      caches.match('./index.html')
+        .then((salvata) => salvata || fetch(richiesta))
+        .catch(() => fetch(richiesta))
+        .catch(() => new Response(PAGINA_OFFLINE, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        }))
     );
     return;
   }
@@ -144,7 +142,7 @@ self.addEventListener('fetch', (evento) => {
     caches.match(richiesta).then((salvata) => {
       const dallaRete = fetch(richiesta)
         .then((risposta) => {
-          if (daSalvare(risposta)) salvaInCache(richiesta, risposta);
+          if (daSalvare(risposta)) evento.waitUntil(salvaInCache(richiesta, risposta));
           return risposta;
         })
         // Niente rete e niente copia salvata: si risponde comunque qualcosa,

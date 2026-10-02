@@ -230,14 +230,9 @@
            sono grandi, colorati e soli sulla riga. */
         .tasto-metodo { font-weight: 650; }
 
-        /* Quando il telefono rifiuta di salvare, la striscia rossa sta in
-           cima a tutto: il contenuto scende di quel tanto, cosi' non ci
-           finisce sotto l'intestazione. */
-        body.con-avviso-disco { padding-top: 2.75rem; }
-
         /* Stili specifici per la Stampa / Esportazione PDF */
         @media print {
-            aside, #toast, #avviso-disco, .no-print { display: none !important; }
+            aside, #toast, #strisce, .no-print { display: none !important; }
             body { background: white !important; color: #000 !important; font-size: 12pt; }
             main { padding: 0 !important; margin: 0 !important; width: 100% !important; background: white !important; }
             .print-card { border: 1px solid #e5e7eb !important; box-shadow: none !important; border-radius: 8px !important; }
@@ -266,14 +261,26 @@
         </button>
     </header>
 
-    <!-- Striscia d'allarme: il telefono ha rifiutato di salvare.
-         Non e' un messaggio di passaggio come il toast: resta li' finche'
-         la situazione non si sistema, perche' finche' dura ogni corsa che
-         registri vive solo nella memoria del browser. -->
-    <div id="avviso-disco" class="hidden fixed top-0 left-0 right-0 z-[60] bg-red-600 text-white px-4 py-2.5 no-print">
-        <p class="max-w-3xl mx-auto text-sm font-black leading-tight">
-            <span id="avviso-disco-testo">Il telefono non riesce a salvare i dati.</span>
-        </p>
+    <!-- LE STRISCE IN CIMA
+         Due avvisi che non sono messaggi di passaggio come il toast: restano
+         finche' la situazione non cambia. Stanno in un contenitore solo e lo
+         spazio che prendono si MISURA (vedi aggiornaSpazioStrisce): con due
+         strisce aperte una altezza indovinata a mano sarebbe sbagliata. -->
+    <div id="strisce" class="fixed top-0 left-0 right-0 z-[60] no-print">
+        <!-- Il telefono ha rifiutato di salvare: finche' dura, ogni corsa che
+             registri vive solo nella memoria del browser. -->
+        <div id="avviso-disco" class="hidden bg-red-600 text-white px-4 py-2.5">
+            <p class="max-w-3xl mx-auto text-sm font-black leading-tight">
+                <span id="avviso-disco-testo">Il telefono non riesce a salvare i dati.</span>
+            </p>
+        </div>
+        <!-- C'e' una versione nuova pronta, e aspetta che tu dica quando. -->
+        <div id="avviso-versione" class="hidden bg-gray-900 text-yellow-400 px-4 py-2">
+            <div class="max-w-3xl mx-auto flex items-center justify-between gap-3">
+                <p class="text-sm font-black leading-tight min-w-0 truncate"><span id="avviso-versione-testo">C'è una versione nuova pronta.</span></p>
+                <button onclick="aggiornaApp()" class="shrink-0 bg-yellow-400 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg hover:bg-yellow-300 transition-colors">Carica adesso</button>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notifica -->
@@ -1025,7 +1032,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 111;
+        const VERSIONE_APP = 112;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1091,6 +1098,17 @@
         }
         window.scriviLocale = scriviLocale;
 
+        // Quanto spazio prendono le strisce aperte: si misura, non si indovina.
+        // Con due strisce insieme un'altezza scritta a mano nel CSS sarebbe
+        // sbagliata, e il contenuto finirebbe sotto l'intestazione.
+        function aggiornaSpazioStrisce() {
+            const cassa = document.getElementById('strisce');
+            if (!cassa) return;
+            const alto = cassa.getBoundingClientRect().height;
+            document.body.style.paddingTop = alto > 0 ? alto + 'px' : '';
+        }
+        window.addEventListener('resize', aggiornaSpazioStrisce);
+
         function mostraAvvisoDisco(rotto, err) {
             window.discoRotto = !!rotto;
             const barra = document.getElementById('avviso-disco');
@@ -1098,7 +1116,7 @@
             if (!barra || !testo) return;
             if (!rotto) {
                 barra.classList.add('hidden');
-                document.body.classList.remove('con-avviso-disco');
+                aggiornaSpazioStrisce();
                 return;
             }
             const pieno = err && (err.name === 'QuotaExceededError'
@@ -1110,9 +1128,21 @@
                     : 'Memoria del telefono piena: quello che registri ADESSO NON SI SALVA. Fai subito un backup da «Gestione».')
                 : 'Questo browser non mi lascia salvare i dati (navigazione privata, o dati dei siti bloccati). Quello che registri si perde alla chiusura.';
             barra.classList.remove('hidden');
-            document.body.classList.add('con-avviso-disco');
+            aggiornaSpazioStrisce();
         }
         window.mostraAvvisoDisco = mostraAvvisoDisco;
+
+        // La versione nuova e' scaricata e aspetta: lo si dice con una striscia
+        // che resta, non con un avviso che sparisce in tre secondi mentre stai
+        // registrando una corsa.
+        function mostraAvvisoVersione(pronta) {
+            window.versionePronta = !!pronta;
+            const barra = document.getElementById('avviso-versione');
+            if (!barra) return;
+            barra.classList.toggle('hidden', !pronta);
+            aggiornaSpazioStrisce();
+        }
+        window.mostraAvvisoVersione = mostraAvvisoVersione;
 
         // ============================================================
         //  L'ORDINE DELLE DATE SI FA SULLE STRINGHE
@@ -10139,21 +10169,28 @@
                     .then(function (reg) {
                         window.registrazioneSW = reg;
 
-                        // Quando esce una versione nuova il telefono la scarica da solo,
-                        // ma la schermata aperta resta quella vecchia finche' non si
-                        // riapre l'app: senza un avviso non c'e' modo di accorgersene.
-                        reg.addEventListener('updatefound', function () {
-                            const nuovo = reg.installing;
-                            if (!nuovo) return;
-                            nuovo.addEventListener('statechange', function () {
-                                if (nuovo.state === 'installed' && navigator.serviceWorker.controller) {
-                                    if (window.showToast) {
-                                        window.showToast('⬆️ Nuova versione pronta: apri Cloud & Sync e tocca «Aggiorna adesso».');
-                                    }
-                                    if (window.renderContent) window.renderContent();
+                        // Una versione nuova scaricata resta IN ATTESA: non prende il
+                        // comando da sola. Lo si dice con la striscia in cima, che
+                        // resta finche' non la tocchi - un avviso che sparisce in tre
+                        // secondi, mentre stai battendo una corsa, non lo vedi.
+                        function guarda(lavoratore) {
+                            if (!lavoratore) return;
+                            if (lavoratore.state === 'installed' && navigator.serviceWorker.controller) {
+                                if (window.mostraAvvisoVersione) window.mostraAvvisoVersione(true);
+                                return;
+                            }
+                            lavoratore.addEventListener('statechange', function () {
+                                if (lavoratore.state === 'installed' && navigator.serviceWorker.controller) {
+                                    if (window.mostraAvvisoVersione) window.mostraAvvisoVersione(true);
                                 }
                             });
-                        });
+                        }
+                        // Una versione puo' essere gia' in attesa da prima che questa
+                        // pagina si aprisse: va guardata anche quella, se no la
+                        // striscia non compare mai piu'.
+                        guarda(reg.waiting);
+                        guarda(reg.installing);
+                        reg.addEventListener('updatefound', function () { guarda(reg.installing); });
 
                         // Il controllo della versione nuova va chiesto: sull'app
                         // aggiunta alla schermata Home il telefono lo fa di rado, e

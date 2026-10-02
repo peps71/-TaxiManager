@@ -68,6 +68,45 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'app si apre subito, la versione nuova aspetta il tuo via (versione 112)
+
+### Prima la copia salvata, non la rete
+
+L'apertura era **rete-prima** con un'attesa fino a 3 secondi. In garage, in un sottopasso, in
+una zona senza campo, si guardava il vuoto per tre secondi — mentre sul telefono c'era una
+copia perfetta dell'app, pronta. Adesso la copia salvata si da' subito. Misurato su un server
+vero, con il service worker in funzione:
+
+```
+  con la rete a 4 secondi di ritardo l'app si apre in 288 ms
+  pagine HTML chieste alla rete per aprirsi: 0
+  senza rete per niente: si apre in 357 ms
+```
+
+In cache l'app ci va **al momento dell'installazione di una versione**, che e' l'unico posto
+che la scrive: cosi' quello che si apre e' sempre la copia coerente con quel service worker,
+mai un misto fra due versioni. Il controllo della versione nuova corre in sottofondo, lo
+chiede la pagina all'avvio e ogni volta che l'app torna in primo piano.
+
+### La versione nuova non entra di prepotenza
+
+Prima il service worker chiamava `skipWaiting()` appena finito di installare: la versione
+nuova prendeva il comando da sola e la pagina si ricaricava — **anche mentre stavi battendo
+una corsa**. Adesso si mette in attesa, e lo dice con una striscia nera in cima che resta
+finche' non la tocchi, con il tasto **«Carica adesso»**. Un avviso che sparisce in tre secondi
+non lo vedi, se in quel momento stai guardando il tassametro.
+
+### Le strisce in cima
+
+Sono due, e stanno in un contenitore solo: quella rossa della 111 (il telefono non riesce a
+salvare) e quella nera della versione nuova. Lo spazio che prendono si **misura**
+(`aggiornaSpazioStrisce`), non si scrive a mano nel CSS: con due strisce aperte insieme
+un'altezza indovinata sarebbe sbagliata e il contenuto finirebbe sotto l'intestazione.
+
+Altra cosa sistemata: la scrittura in cache in sottofondo ora passa da `evento.waitUntil`.
+Senza, il browser poteva spegnere il service worker a meta' scrittura e lasciare in cache una
+copia tronca.
+
 ## Una sola porta per scrivere sul disco, e le date ordinate come stringhe (versione 111)
 
 Due interventi nati da un'analisi con le misure in mano, non a sensazione.
