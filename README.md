@@ -68,6 +68,75 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La previsione vale finché non arriva il conto (versione 116)
+
+Fin qui una voce di budget era una previsione e basta: scrivevi 1.387 € di assicurazione e la
+giornata maturava 3,80 € per sempre, anche dopo che la polizza l'avevi rinnovata a 1.500. Per
+far tornare i conti bisognava andare a correggere la voce a mano — e intanto il conguaglio,
+che serve proprio a dirti di quanto hai sforato, perdeva il suo termine di paragone.
+
+**Adesso la previsione vale finché non arriva il conto. Da quel momento comanda il conto.**
+
+Rinnovi il 10 ottobre 2026 a 1.500 €: da quel giorno, e fino al 9 ottobre 2027, la giornata
+pesa 4,11 € invece di 3,80. I giorni prima restano a 3,80, perché allora era quello il costo.
+Il 2027 si apre già a 4,11, perché la polizza lo copre. Non devi correggere niente.
+
+### Due quote, e non vanno confuse
+
+| | chi la usa | da dove viene |
+| --- | --- | --- |
+| `quotaVocePrevista` | la scheda del Budget, il Conguaglio | solo quello che hai scritto tu |
+| `quotaVoceReale` | la giornata: «quanto mi costa oggi» | il conto vero, quando c'è |
+
+È questa separazione che tiene in piedi il conguaglio: se la quota reale comandasse anche lì,
+la differenza fra previsto e speso verrebbe zero per costruzione e il riquadro non direbbe più
+niente. Così invece continua a dire, giustamente, **−113,00 € · speso più del budget**.
+
+### Le tre regole
+
+**1. Alla scadenza, se non hai ancora rinnovato, resta l'ultimo importo pagato.** Non si torna
+alla previsione vecchia: l'assicurazione non ricomincia a costare quello che costava due anni
+fa solo perché la polizza è scaduta.
+
+**2. Le rate della stessa annata si sommano.** Due semestrali da 750 € fanno un'annata da
+1.500, e il giorno in cui arriva la seconda rata **tutta l'annata si ricalcola** — compresi i
+mesi già passati, che erano stati contati a metà.
+
+**3. Le voci che si accumulano hanno una regola loro.** Ogni voce adesso dichiara *come la
+paghi*: «una bolletta ogni tanto» (assicurazione, bollo, finanziamento) oppure «un po' alla
+volta» (carburante). Per le seconde non c'è un conto che fa fede: finché stai dentro la
+previsione vale la previsione, perché quei soldi li spenderai lo stesso; **dal giorno in cui
+la superi** comanda quello che hai speso davvero, diviso i giorni che hai percorso.
+
+Nell'elenco delle voci, ognuna dice che cosa la sta comandando oggi: *«Oggi pesa 4,11 € al
+giorno · 1.500,00 € pagati il 10/06/2026, coprono fino al 09/06/2027»*. Dove previsione e
+realtà coincidono la riga non compare, per non fare rumore.
+
+E nella testata del budget ci sono tutti e due i numeri — la previsione e «coi conti veri» —
+così la differenza con la scheda di «Oggi» non sembra più un errore.
+
+### L'indice dei pagamenti
+
+Smistare i movimenti voce per voce è il conto più caro dell'app. Fatto nel modo ingenuo —
+una lettura per ogni voce e per ognuno dei 365 giorni dell'anno — sono **3.650 letture di
+tutto l'archivio**:
+
+```
+  budgetRealeAnno('2026') su 10.122 movimenti e 10 voci:  3.534 ms
+  con l'indice:                                               25 ms
+```
+
+Centoquaranta volte più veloce, stesso risultato al centesimo. L'indice si fa in **una
+passata sola** per tutte le voci e si rifà solo quando i movimenti cambiano davvero. Non si
+appoggia alla memoria del disegno (quella della 113), perché questi conti servono anche fuori
+da un disegno e lì quella memoria è spenta — ed era proprio lì che costava i 3,5 secondi.
+
+La chiave della memoria tiene due cose, non una: un contatore che `scriviLocale` fa salire a
+ogni scrittura, e il numero dei movimenti. Il primo copre l'uso normale, il secondo copre chi
+li cambiasse scavalcando `scriviLocale`. Un indice vecchio darebbe numeri sbagliati senza dire
+niente, ed è il tipo di errore peggiore. C'è una prova che registra e cancella spese
+**passando dalla strada normale dell'app** e controlla che la quota segua.
+
 ## Lo spazio, e come liberarlo (versione 115)
 
 I dati stanno nella memoria che il browser riserva all'app, e quella memoria ha un tetto: fra

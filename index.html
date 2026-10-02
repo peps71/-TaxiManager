@@ -1083,7 +1083,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 115;
+        const VERSIONE_APP = 116;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1137,6 +1137,11 @@
         //  che registri vive solo nella memoria del browser.
         // ============================================================
         function scriviLocale(chiave, valore) {
+            // Ogni volta che i movimenti cambiano il contatore sale: e' il
+            // segnale con cui gli indici pesanti sanno di doversi rifare. Passa
+            // tutto da qui, quindi non c'e' un modo di cambiare i movimenti
+            // senza che questo se ne accorga.
+            if (chiave === 'taxi_records') window.versioneDati = (window.versioneDati || 0) + 1;
             try {
                 localStorage.setItem(chiave, JSON.stringify(valore));
                 if (window.discoRotto) mostraAvvisoDisco(false);
@@ -4157,7 +4162,7 @@
             // La voce deve pesare davvero in quella data: se e' a zero, o se il suo
             // periodo non copre il giorno della spesa, il budget non la sta gia'
             // contando e la spesa va nella media come tutte le altre.
-            return !!v && quotaVoceGiorno(v, String(r.data || '')) > 0;
+            return !!v && quotaVocePrevista(v, String(r.data || '')) > 0;
         }
 
         // Le spese reali che il budget non copre: carburante, manutenzione,
@@ -4215,11 +4220,11 @@
             const lavorati = giorniLavoratiDelMese(ym);
             // Spese della finestra considerata: il mese intero se e' finito,
             // i giorni gia' passati se e' ancora in corso.
-            const speseFinestra = budgetPeriodo(`${ym}-01`, `${ym}-${String(m.giorni).padStart(2, '0')}`) + m.altre;
+            const speseFinestra = budgetRealePeriodo(`${ym}-01`, `${ym}-${String(m.giorni).padStart(2, '0')}`) + m.altre;
             return {
                 ym, giorni: gg, giorniAltre: m.giorni, inCorso: m.inCorso, lavorati,
                 budget, altre: m.quota, quota: budget + m.quota,
-                totaleAltre: m.altre, budgetMese: budgetMese(ym),
+                totaleAltre: m.altre, budgetMese: budgetRealeMese(ym),
                 quotaLavorati: lavorati ? speseFinestra / lavorati : 0
             };
         }
@@ -9680,11 +9685,147 @@
             return n;
         }
 
-        // Quanto pesa una singola voce in una singola giornata. La voce vale solo
-        // dentro il suo periodo; una rata mensile si divide per i giorni di quel
-        // mese, cosi' febbraio e marzo tornano tutti e due alla rata intera, e una
-        // cifra annuale si divide per i giorni dell'anno.
-        function quotaVoceGiorno(v, iso, giorniMese) {
+        // ============================================================
+        //  LA PREVISIONE, E IL CONTO VERO
+        //  Una voce di budget e' una previsione: vale finche' non arriva il
+        //  conto. Da quel momento comanda il conto.
+        //  L'assicurazione la rinnovi il 10 ottobre e ti costa 1.500 invece
+        //  dei 1.387 che avevi previsto: da quel giorno, e fino al 10 ottobre
+        //  dell'anno dopo, la giornata deve pesare 4,11 e non 3,80. Non e' il
+        //  budget che va corretto a mano - quello resta la tua previsione, ed
+        //  e' con quella che il conguaglio ti dice di quanto hai sforato.
+        //
+        //  Da qui in avanti ci sono DUE quote per ogni voce, e non vanno
+        //  confuse:
+        //    quotaVocePrevista  - solo da quello che hai scritto tu. La usano
+        //                         la scheda del budget e il conguaglio: sono
+        //                         loro che devono parlare di previsione.
+        //    quotaVoceReale     - comanda il conto vero quando c'e'. La usa la
+        //                         giornata: quanto mi costa OGGI davvero.
+        // ============================================================
+
+        // Com'e' fatta una voce: una bolletta che arriva ogni tanto (assicurazione,
+        // bollo, finanziamento) o una spesa che si accumula un po' alla volta
+        // (carburante). Le due cose non si comportano allo stesso modo e non si
+        // possono indovinare dal nome, quindi lo dice la voce.
+        function tipoVoce(v) {
+            return (v && v.tipo === 'accumulo') ? 'accumulo' : 'bolletta';
+        }
+
+        // Quanti giorni copre un pagamento di questa voce
+        function giorniCopertiDaUnPagamento(v, iso) {
+            if (v.unita === 'anno') return giorniDellAnno(String(iso).slice(0, 4));
+            if (v.unita === 'mese') return giorniDelMese(String(iso).slice(0, 7));
+            return 1;
+        }
+
+        // ============================================================
+        //  L'INDICE DEI PAGAMENTI
+        //  Smistare i movimenti voce per voce e' il conto piu' caro dell'app:
+        //  misurato, chiedendolo una volta per ogni voce e per ognuno dei 365
+        //  giorni dell'anno sono 3.650 letture di tutto l'archivio - tre secondi
+        //  e mezzo buoni di telefono fermo.
+        //  Qui si fa UNA passata sola per tutte le voci, e si rifa' solo quando
+        //  i movimenti cambiano davvero: non si appoggia alla memoria del
+        //  disegno, perche' questi conti servono anche fuori da un disegno e
+        //  li' quella memoria e' spenta.
+        // ============================================================
+        let indicePagamentiCache = null;
+        let indicePagamentiVersione = -1;
+        let indicePagamentiVoci = '';
+
+        function indicePagamenti() {
+            const voci = elencoVociFisse();
+            const firmaVoci = voci.map(v => v.slug + ':' + chiaveNome(v.nome)).join('|');
+            // Due cose nella chiave, non una: il contatore delle scritture copre
+            // l'uso normale, il numero dei movimenti copre chi li cambiasse
+            // scavalcando scriviLocale. Un indice vecchio darebbe numeri
+            // sbagliati senza dire niente, ed e' il tipo di errore peggiore.
+            const versione = (window.versioneDati || 0) + ':' + (window.dailyRecords || []).length;
+            if (indicePagamentiCache && indicePagamentiVersione === versione && indicePagamentiVoci === firmaVoci) {
+                return indicePagamentiCache;
+            }
+            const per = new Map();
+            voci.forEach(v => per.set(chiaveNome(v.nome), []));
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                const imp = parseFloat(r.importo || 0) || 0;
+                if (!(imp > 0)) return;
+                const trovata = voceBudgetDiRecord(r);
+                if (!trovata) return;
+                const elenco = per.get(chiaveNome(trovata.nome));
+                if (elenco) elenco.push({ data: String(r.data || ''), importo: imp });
+            });
+            per.forEach(elenco => elenco.sort(perDataCrescente));
+            indicePagamentiCache = per;
+            indicePagamentiVersione = versione;
+            indicePagamentiVoci = firmaVoci;
+            return per;
+        }
+
+        // I pagamenti veri collegati a una voce, in ordine di data.
+        function pagamentiVoce(v) {
+            return indicePagamenti().get(chiaveNome(v && v.nome)) || [];
+        }
+
+        // LE ANNATE
+        // Il primo pagamento apre l'annata e la fa durare quanto il periodo della
+        // voce: pagata il 10 ottobre, una voce annuale copre fino al 9 ottobre
+        // dell'anno dopo. Le rate che cadono dentro quella finestra si sommano:
+        // due semestrali da 750 fanno un'annata da 1.500, e il giorno in cui
+        // arriva la seconda rata tutta l'annata si ricalcola - anche i mesi gia'
+        // passati, che erano stati contati a meta'.
+        const annateCache = new Map();
+        let annateVersione = -1;
+
+        function annateVoce(v) {
+            const versione = (window.versioneDati || 0) + ':' + (window.dailyRecords || []).length
+                            + ':' + elencoVociFisse().length;
+            if (annateVersione !== versione) { annateCache.clear(); annateVersione = versione; }
+            const chiave = (v && v.slug) + '|' + (v && v.unita) + '|' + tipoVoce(v);
+            if (annateCache.has(chiave)) return annateCache.get(chiave);
+
+            const annate = [];
+            if (tipoVoce(v) !== 'accumulo' && v.unita !== 'giorno') {
+                pagamentiVoce(v).forEach(pg => {
+                    const corrente = annate.length ? annate[annate.length - 1] : null;
+                    if (corrente && pg.data <= corrente.ultimoGiorno) {
+                        corrente.totale += pg.importo;
+                        corrente.rate++;
+                        return;
+                    }
+                    const giorni = giorniCopertiDaUnPagamento(v, pg.data);
+                    annate.push({
+                        da: pg.data,
+                        ultimoGiorno: isoPiuGiorni(pg.data, giorni - 1),
+                        giorni, totale: pg.importo, rate: 1
+                    });
+                });
+            }
+            annateCache.set(chiave, annate);
+            return annate;
+        }
+
+        // L'annata che copre una certa data, o - passata l'ultima senza che tu
+        // abbia ancora registrato il rinnovo - l'ultima che c'e' stata: il prezzo
+        // dell'assicurazione non torna quello di due anni fa solo perche' la
+        // polizza e' scaduta.
+        function annataDelGiorno(v, iso) {
+            const annate = annateVoce(v);
+            if (!annate.length) return null;
+            const g = String(iso);
+            for (let i = 0; i < annate.length; i++) {
+                if (g >= annate[i].da && g <= annate[i].ultimoGiorno) return annate[i];
+            }
+            const ultima = annate[annate.length - 1];
+            return g > ultima.ultimoGiorno ? ultima : null;   // prima della prima: previsione
+        }
+
+        // LA PREVISIONE: solo quello che hai scritto tu nel budget.
+        // Una rata mensile si divide per i giorni di quel mese, cosi' febbraio e
+        // marzo tornano tutti e due alla rata intera; una cifra annuale per i
+        // giorni dell'anno.
+        function quotaVocePrevista(v, iso, giorniMese) {
             const imp = parseFloat(v && v.importo || 0);
             if (!(imp > 0)) return 0;
             const g = String(iso || '');
@@ -9695,12 +9836,59 @@
             return imp;
         }
 
+        // LA REALTA': quanto quella voce fa maturare davvero in quel giorno.
+        function quotaVoceReale(v, iso, giorniMese) {
+            const g = String(iso || '');
+            if (v.dataInizio && g < v.dataInizio) return 0;
+            if (v.dataFine && g > v.dataFine) return 0;
+
+            if (tipoVoce(v) === 'accumulo') return quotaVoceAccumulo(v, g, giorniMese);
+
+            const annata = annataDelGiorno(v, g);
+            if (!annata) return quotaVocePrevista(v, g, giorniMese);
+            return annata.totale / annata.giorni;
+        }
+
+        // UNA SPESA CHE SI ACCUMULA (il carburante)
+        // Qui non c'e' una bolletta che fa fede: c'e' quello che hai messo nel
+        // serbatoio fino a oggi. Finche' stai dentro la previsione si usa la
+        // previsione, perche' il resto dell'anno quei soldi li spenderai lo
+        // stesso. Dal giorno in cui la superi comanda la spesa vera, divisa per
+        // i giorni che hai davvero percorso: la previsione, da li' in poi, e'
+        // dimostrata sbagliata.
+        function quotaVoceAccumulo(v, iso, giorniMese) {
+            const g = String(iso || '');
+            const anno = g.slice(0, 4);
+            const trascorsi = giorniDaInizioAnno(g);
+            if (trascorsi < 1) return quotaVocePrevista(v, g, giorniMese);
+            const speso = pagamentiVoce(v)
+                .filter(x => x.data.slice(0, 4) === anno && x.data <= g)
+                .reduce((a, x) => a + x.importo, 0);
+            const previstoFinQui = quotaVocePrevista(v, g, giorniMese) * trascorsi;
+            if (!(speso > previstoFinQui)) return quotaVocePrevista(v, g, giorniMese);
+            return speso / trascorsi;
+        }
+
+        // Che giorno dell'anno e': il 1 gennaio e' 1, il 31 dicembre 365 o 366.
+        function giorniDaInizioAnno(iso) {
+            const [y, m, d] = String(iso).split('-').map(Number);
+            if (!y || !m || !d) return 0;
+            return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86400000) + 1;
+        }
+
+        function isoPiuGiorni(iso, giorni) {
+            const [y, m, d] = String(iso).split('-').map(Number);
+            const t = new Date(Date.UTC(y, m - 1, d + giorni));
+            return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+        }
+
+        // Quanto pesa questa giornata: la realta', non la previsione.
         function budgetDelGiorno(iso) {
             const g = String(iso || '');
             if (g.length < 10) return 0;
             const gg = giorniDelMese(g.slice(0, 7));
             let tot = 0;
-            elencoVociFisse().forEach(v => { tot += quotaVoceGiorno(v, g, gg); });
+            elencoVociFisse().forEach(v => { tot += quotaVoceReale(v, g, gg); });
             return tot;
         }
 
@@ -9725,7 +9913,7 @@
             perOgniGiorno(da, a, (iso) => {
                 const ym = iso.slice(0, 7);
                 const gg = giorniPerMese[ym] || (giorniPerMese[ym] = giorniDelMese(ym));
-                const q = quotaVoceGiorno(v, iso, gg);
+                const q = quotaVocePrevista(v, iso, gg);
                 if (q > 0) giorni++;
                 tot += q;
             });
@@ -9743,9 +9931,37 @@
             perOgniGiorno(da, a, (iso) => {
                 const ym = iso.slice(0, 7);
                 const gg = giorniPerMese[ym] || (giorniPerMese[ym] = giorniDelMese(ym));
-                for (let i = 0; i < voci.length; i++) tot += quotaVoceGiorno(voci[i], iso, gg);
+                for (let i = 0; i < voci.length; i++) tot += quotaVocePrevista(voci[i], iso, gg);
             });
             return Math.round(tot * 100) / 100;
+        }
+
+        // Gli stessi conti, ma con la realta' al posto della previsione: servono
+        // al riquadro «Quanto costa questa giornata», che deve spiegare il numero
+        // che mostra. Spiegarlo con la previsione mentre la cifra grande viene
+        // dalla realta' sarebbe un riquadro che si contraddice da solo.
+        function budgetRealePeriodo(da, a) {
+            const voci = elencoVociFisse();
+            if (!voci.length) return 0;
+            const giorniPerMese = {};
+            let tot = 0;
+            perOgniGiorno(da, a, (iso) => {
+                const ym = iso.slice(0, 7);
+                const gg = giorniPerMese[ym] || (giorniPerMese[ym] = giorniDelMese(ym));
+                for (let i = 0; i < voci.length; i++) tot += quotaVoceReale(voci[i], iso, gg);
+            });
+            return Math.round(tot * 100) / 100;
+        }
+
+        function budgetRealeMese(ym) {
+            return memo('budgetRealeMese:' + ym, () => {
+                const gg = giorniDelMese(ym);
+                return budgetRealePeriodo(`${ym}-01`, `${ym}-${String(gg).padStart(2, '0')}`);
+            });
+        }
+
+        function budgetRealeAnno(anno) {
+            return memo('budgetRealeAnno:' + anno, () => budgetRealePeriodo(`${anno}-01-01`, `${anno}-12-31`));
         }
 
         function budgetAnno(anno) { return memo('budgetAnno:' + anno, () => budgetPeriodo(`${anno}-01-01`, `${anno}-12-31`)); }
@@ -9826,6 +10042,8 @@
                 }
                 const unita = leggi('cf-unita-');
                 if (unita !== null) v.unita = unita;
+                const tipo = leggi('cf-tipo-');
+                if (tipo !== null) v.tipo = (tipo === 'accumulo') ? 'accumulo' : 'bolletta';
                 const dal = leggi('cf-dal-');
                 if (dal !== null) v.dataInizio = dal;
                 const al = leggi('cf-al-');
@@ -9919,10 +10137,40 @@
 
         // Riga chiusa: un colpo d'occhio, senza i campi. Otto voci aperte tutte
         // insieme facevano una scheda alta il triplo di ogni altra.
+        // Che cosa sta comandando oggi su questa voce: la previsione che hai
+        // scritto, o un conto vero gia' arrivato. E' la riga che risponde alla
+        // domanda «ma questo numero da dove esce».
+        function comandaOggiVoce(v) {
+            const oggi = oggiISO();
+            const gg = giorniDelMese(oggi.slice(0, 7));
+            const reale = quotaVoceReale(v, oggi, gg);
+            const previsto = quotaVocePrevista(v, oggi, gg);
+            if (!(reale > 0) && !(previsto > 0)) return null;
+            if (Math.abs(reale - previsto) < 0.005) {
+                return { daPrevisione: true, quota: previsto, testo: 'la tua previsione' };
+            }
+            if (tipoVoce(v) === 'accumulo') {
+                const anno = oggi.slice(0, 4);
+                const speso = pagamentiVoce(v)
+                    .filter(x => x.data.slice(0, 4) === anno && x.data <= oggi)
+                    .reduce((a, x) => a + x.importo, 0);
+                return { daPrevisione: false, quota: reale,
+                         testo: `hai già superato la previsione: ${formatCurrency(speso)} spesi nel ${anno}` };
+            }
+            const annata = annataDelGiorno(v, oggi);
+            if (!annata) return { daPrevisione: true, quota: previsto, testo: 'la tua previsione' };
+            const scaduta = oggi > annata.ultimoGiorno;
+            return { daPrevisione: false, quota: reale,
+                     testo: `${formatCurrency(annata.totale)} pagati${annata.rate > 1 ? ` in ${annata.rate} rate` : ''} il ${ggMmAaaa(annata.da)}`
+                            + (scaduta ? ', periodo finito: resta questa finché non registri il rinnovo'
+                                       : `, coprono fino al ${ggMmAaaa(annata.ultimoGiorno)}`) };
+        }
+
         function rigaVoceFissaChiusa(v, anno) {
             const imp = parseFloat(v.importo || 0);
             const unita = v.unita === 'anno' ? 'anno' : (v.unita === 'mese' ? 'mese' : 'giorno');
             const alGiorno = pesoGiornalieroVoce(v, anno);
+            const oggi = comandaOggiVoce(v);
             return `
                 <div class="flex flex-wrap items-center justify-between gap-3 border border-gray-200 rounded-xl px-4 py-3 bg-gray-50/60">
                     <div class="min-w-0">
@@ -9930,6 +10178,10 @@
                         <p class="text-xs text-gray-500">
                             ${formatCurrency(imp)} ogni ${unita} · ${esc(periodoVoce(v))}${alGiorno > 0 ? ` · <strong>${formatCurrency(alGiorno)}</strong> al giorno` : ''}
                         </p>
+                        ${oggi && !oggi.daPrevisione ? `
+                            <p class="text-xs font-bold text-indigo-700 mt-0.5 leading-relaxed">
+                                Oggi pesa ${formatCurrency(oggi.quota)} al giorno <span class="font-medium text-indigo-400">· ${esc(oggi.testo)}</span>
+                            </p>` : ''}
                     </div>
                     <div class="flex-shrink-0 flex gap-2">
                         <button type="button" onclick="apriVoceFissa('${escJs(v.slug)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">Modifica</button>
@@ -9968,6 +10220,19 @@
                             </select>
                         </label>
                     </div>
+
+                    <label class="block">
+                        ${etichetta('Come la paghi')}
+                        <select id="cf-tipo-${esc(v.slug)}" class="w-full p-2.5 border rounded-lg outline-none font-bold bg-white">
+                            <option value="bolletta" ${tipoVoce(v) === 'bolletta' ? 'selected' : ''}>Una bolletta ogni tanto</option>
+                            <option value="accumulo" ${tipoVoce(v) === 'accumulo' ? 'selected' : ''}>Un po' alla volta</option>
+                        </select>
+                        <span class="block text-[11px] font-medium text-gray-400 mt-1 leading-relaxed">
+                            ${tipoVoce(v) === 'accumulo'
+                                ? 'Come il carburante: finché stai dentro la previsione vale la previsione, dal giorno in cui la superi comanda quello che hai speso davvero.'
+                                : 'Come l\'assicurazione o il bollo: quando registri il pagamento, quella cifra comanda per tutto il periodo che copre.'}
+                        </span>
+                    </label>
 
                     <div class="grid grid-cols-2 gap-2">
                         <label class="block">
@@ -10008,6 +10273,13 @@
             // quindi una rata mensile pesa un filo di piu' a febbraio.
             const giorniAnno = new Date(parseInt(anno, 10), 1, 29).getDate() === 29 ? 366 : 365;
             const alGiorno = nellAnno / giorniAnno;
+            // E quanto sta pesando davvero, se i conti veri gia' arrivati dicono
+            // un'altra cosa: e' la domanda che viene subito dopo aver letto la
+            // previsione, e lasciarla senza risposta faceva sembrare un errore
+            // la differenza con la scheda di «Oggi».
+            const realeNellAnno = budgetRealeAnno(anno);
+            const realeAlGiorno = realeNellAnno / giorniAnno;
+            const scostaDallaPrevisione = Math.abs(realeNellAnno - nellAnno) >= 1;
 
             return `
                 <details class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
@@ -10018,14 +10290,24 @@
                                 Quanto ti costa lavorare, prima ancora di uscire di casa: la licenza, il radio taxi, il
                                 commercialista, le assicurazioni. <strong>Non sono movimenti</strong>: sono una
                                 previsione che matura ogni giorno, e serve a sapere quanto devi incassare oggi.
-                                Le spese vere le registri quando escono dal conto, e il conguaglio qui sotto confronta
-                                le due cose.
+                            </p>
+                            <p class="text-xs text-gray-500 leading-relaxed mt-1.5 max-w-2xl">
+                                <strong>La previsione vale finché non arriva il conto.</strong> Quando registri il
+                                pagamento vero — l'assicurazione rinnovata a 1.500 invece dei 1.387 che avevi previsto —
+                                da quel giorno è quella cifra a pesare sulle giornate, per tutto il periodo che copre.
+                                Non devi correggere niente a mano: quello che hai scritto qui resta la tua previsione,
+                                ed è con quella che il <strong>conguaglio</strong>, qui sotto, ti dice di quanto hai sforato.
                             </p>
                         </div>
                         <div class="text-right">
-                            <p class="etichetta block">Pesa in media ogni giorno</p>
+                            <p class="etichetta block">Previsione, in media ogni giorno</p>
                             <p class="text-2xl font-black text-indigo-900">${formatCurrency(alGiorno)}</p>
                             <p class="text-xs font-bold text-gray-400">${formatCurrency(nellAnno)} nel ${esc(anno)}</p>
+                            ${scostaDallaPrevisione ? `
+                                <p class="text-xs font-bold text-indigo-700 mt-1.5">
+                                    coi conti veri ${formatCurrency(realeAlGiorno)} al giorno
+                                </p>
+                                <p class="text-[11px] font-medium text-gray-400">${formatCurrency(realeNellAnno)} nel ${esc(anno)}</p>` : ''}
                         </div>
                     </summary>
 
