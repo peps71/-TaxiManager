@@ -281,6 +281,27 @@
            sono grandi, colorati e soli sulla riga. */
         .tasto-metodo { font-weight: 650; }
 
+        /* ============================================================
+           NOVE CLASSI CHE TAILWIND NON AVEVA GENERATO
+           Il foglio di stile incorporato si rigenera leggendo le classi usate
+           in questo file: se se ne usa una che al momento della generazione non
+           c'era, quella classe NON FA NIENTE, e in silenzio. E' successo con
+           tre classi della striscia in cima (top-0, right-0, z-[60]): la
+           striscia c'era ma non stava dove doveva.
+           Si scrivono qui a mano invece di rigenerare tutto: sono nove regole,
+           e cosi' non dipendono da un passaggio esterno. Alla prossima
+           rigenerazione del foglio si possono togliere.
+           ============================================================ */
+        .top-0 { top: 0; }
+        .right-0 { right: 0; }
+        .z-\[60\] { z-index: 60; }
+        .pt-0 { padding-top: 0; }
+        .pb-3 { padding-bottom: 0.75rem; }
+        .bg-indigo-50\/60 { background-color: rgb(238 242 255 / 0.6); }
+        .bg-yellow-400\/12 { background-color: rgb(250 204 21 / 0.12); }
+        .hover\:bg-yellow-300:hover { background-color: rgb(253 224 71); }
+        .group:hover .group-hover\:text-gray-900 { color: rgb(17 24 39); }
+
         /* Stili specifici per la Stampa / Esportazione PDF */
         @media print {
             aside, #toast, #strisce, .no-print { display: none !important; }
@@ -1083,7 +1104,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 118;
+        const VERSIONE_APP = 119;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -10545,7 +10566,7 @@
                 </div>`;
         }
 
-        // Il riquadro del budget        // Il riquadro del budget: l'elenco delle voci e quanto pesano in tutto
+        // Il riquadro del budget: l'elenco delle voci e quanto pesano in tutto
         function sezioneBudgetFissi() {
             const anno = annoAttivo();
             const voci = elencoVociFisse();
@@ -10768,14 +10789,16 @@
             const righe = elencoVociFisse().map(v => {
                 const b = budgetVocePeriodo(v, da, fine);
                 return {
+                    chiave: chiaveNome(v.nome),
                     nome: String(v.nome || '').trim() || 'Voce senza nome',
                     budget: b.totale, giorniCoperti: b.giorni,
                     maturato: inCorso ? budgetVocePeriodo(v, da, aOggi).totale : b.totale,
-                    speso: 0, movimenti: 0, ultima: ''
+                    speso: 0, movimenti: 0, ultima: '', voci: []
                 };
             });
             const perNome = new Map(righe.map(r => [chiaveNome(r.nome), r]));
-            const fuori = { nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0, maturato: 0, speso: 0, movimenti: 0, ultima: '', extra: true };
+            const fuori = { chiave: '__fuori__', nome: 'Altre spese fisse registrate', budget: 0, giorniCoperti: 0,
+                            maturato: 0, speso: 0, movimenti: 0, ultima: '', voci: [], extra: true };
 
             let futuri = 0, importoFuturi = 0;
             (window.dailyRecords || []).forEach(r => {
@@ -10795,10 +10818,14 @@
                 const riga = (voce && perNome.get(chiaveNome(voce.nome))) || fuori;
                 riga.speso += parseFloat(r.importo || 0);
                 riga.movimenti++;
+                riga.voci.push(r);
                 if (d > riga.ultima) riga.ultima = d;
             });
 
             const tutte = righe.concat(fuori.movimenti ? [fuori] : []);
+            // Il piu' recente in cima: cercando una spesa si parte sempre
+            // dall'ultima, non da quella di gennaio.
+            tutte.forEach(r => r.voci.sort(perDataDecrescente));
             const budget = tutte.reduce((t, r) => t + r.budget, 0);
             const maturato = tutte.reduce((t, r) => t + (r.maturato || 0), 0);
             const speso = tutte.reduce((t, r) => t + r.speso, 0);
@@ -10811,6 +10838,15 @@
                 budget, maturato, speso, differenza: budget - speso, pctAnno, pctSpeso,
                 futuri, importoFuturi
             };
+        }
+
+        // Aprire una riga del conguaglio: quali movimenti ci stanno dentro.
+        // Una riga che dice «2 movimenti» senza farteli vedere e' una domanda
+        // lasciata a meta', e per le spese fuori budget e' proprio quella la
+        // domanda che conta: QUALI sono.
+        function alternaDettaglioConguaglio(chiave) {
+            window.conguaglioAperto = window.conguaglioAperto === chiave ? null : chiave;
+            renderContent();
         }
 
         function sezioneConguaglio() {
@@ -10896,14 +10932,23 @@
                                 ${c.righe.map(r => {
                                     const d = r.budget - r.speso;
                                     const mat = r.maturato || 0;
+                                    const aperta = window.conguaglioAperto === r.chiave;
                                     return `
                                     <tr class="${r.extra ? 'bg-yellow-50' : ''}">
                                         <td class="p-3 font-bold text-gray-800">
-                                            ${esc(r.nome)}
-                                            ${r.extra ? '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-xs font-black uppercase">fuori budget</span>' : ''}
-                                            <span class="block text-xs font-medium text-gray-400">
-                                                ${r.movimenti ? `${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}, l'ultimo il ${ggMm(r.ultima)}` : 'nessun movimento registrato'}
-                                            </span>
+                                            ${r.movimenti ? `
+                                                <button onclick="alternaDettaglioConguaglio('${escJs(r.chiave)}')"
+                                                        aria-expanded="${aperta ? 'true' : 'false'}"
+                                                        class="text-left w-full group">
+                                                    <span class="font-bold text-gray-800 group-hover:text-gray-900">${esc(r.nome)}</span>
+                                                    ${r.extra ? '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-xs font-black uppercase whitespace-nowrap">fuori budget</span>' : ''}
+                                                    <span class="block text-xs font-medium text-gray-400">
+                                                        <span class="text-gray-400">${aperta ? '\u25be' : '\u25b8'}</span>
+                                                        ${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}, l'ultimo il ${ggMm(r.ultima)}
+                                                    </span>
+                                                </button>`
+                                              : `${esc(r.nome)}
+                                                 <span class="block text-xs font-medium text-gray-400">nessun movimento registrato</span>`}
                                         </td>
                                         <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">
                                             ${formatCurrency(r.budget)}
@@ -10911,7 +10956,41 @@
                                         </td>
                                         <td class="p-3 text-right font-bold whitespace-nowrap ${(c.inCorso && r.speso > mat + 0.005) ? 'text-red-600' : 'text-gray-700'}">${formatCurrency(r.speso)}</td>
                                         <td class="p-3 text-right font-black whitespace-nowrap ${Math.abs(d) < 0.005 ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')}">${d > 0 ? '+' : ''}${formatCurrency(d)}</td>
-                                    </tr>`;
+                                    </tr>
+                                    ${aperta ? `
+                                    <tr class="${r.extra ? 'bg-yellow-50' : 'bg-gray-50'}">
+                                        <td colspan="4" class="px-3 pb-3 pt-0">
+                                            <!-- La tabella e' piu' larga dello schermo e scorre in orizzontale.
+                                                 Il dettaglio no: resta agganciato al bordo sinistro e largo quanto
+                                                 lo schermo, se no per leggerlo bisognerebbe trascinare la tabella. -->
+                                            <div style="position:sticky;left:0;max-width:calc(100vw - 5rem)">
+                                            ${r.extra ? `
+                                                <p class="text-xs text-gray-600 leading-relaxed mb-2">
+                                                    Queste spese sono scritte come costi fissi ma <strong>non corrispondono a nessuna voce
+                                                    del tuo budget</strong>: o la voce l'hai tolta, o la scrivevano le versioni vecchie
+                                                    dell'app. Contano nelle spese dell'anno e nelle tasse, ma non hanno un budget con cui
+                                                    confrontarsi. Se è una spesa che torna, aggiungi la voce; se non serve più, eliminala
+                                                    da «Tutte le spese, riga per riga».
+                                                </p>` : ''}
+                                            <div class="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                                                <!-- Due righe e non una: su un telefono, con data, metodo e importo
+                                                     sulla stessa riga, la descrizione si riduceva a «Cost...» - ed e'
+                                                     proprio la descrizione la cosa che si sta cercando. -->
+                                                ${r.voci.map(m => `
+                                                    <div class="px-3 py-2">
+                                                        <p class="text-xs font-bold text-gray-800 leading-relaxed">
+                                                            ${esc(m.categoria)}${m.nota ? ` <span class="font-normal text-gray-400">· ${esc(m.nota)}</span>` : ''}
+                                                        </p>
+                                                        <p class="flex items-center gap-2 mt-0.5">
+                                                            <span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(m.data)}</span>
+                                                            <span class="${metodoBadgeClass(m.metodo)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(metodoBreve(m.metodo))}</span>
+                                                            <span class="ml-auto text-xs font-black text-red-600 whitespace-nowrap">−${formatCurrency(m.importo)}</span>
+                                                        </p>
+                                                    </div>`).join('')}
+                                            </div>
+                                            </div>
+                                        </td>
+                                    </tr>` : ''}`;
                                 }).join('')}
                             </tbody>
                             <tfoot>

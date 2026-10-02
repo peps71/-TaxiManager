@@ -68,6 +68,41 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le righe del conguaglio si aprono (versione 119)
+
+La riga **«Altre spese fisse registrate — fuori budget»** diceva *«2 movimenti, l'ultimo il
+16/05»* e si fermava li'. Sapere che ci sono due spese senza poter sapere **quali** e' una
+domanda lasciata a meta' — e per le spese fuori budget e' proprio quella la domanda che conta.
+
+Adesso ogni riga del conguaglio con dei movimenti si apre: la tocchi e vedi data, descrizione,
+metodo e importo di ognuno, dal piu' recente. Una alla volta, per non allungare la tabella.
+
+Per la riga fuori budget c'e' anche la spiegazione: quelle spese sono scritte come costi fissi
+ma non corrispondono a nessuna voce del budget — o la voce e' stata tolta, o le scrivevano le
+versioni vecchie dell'app. Contano nelle spese dell'anno e nelle tasse, ma non hanno un budget
+con cui confrontarsi.
+
+Due dettagli di impaginazione che cambiano tutto su un telefono: la tabella scorre in
+orizzontale, il dettaglio no — resta agganciato al bordo sinistro e largo quanto lo schermo,
+se no per leggerlo bisognerebbe trascinare la tabella. E ogni movimento sta su **due righe**:
+con data, metodo e importo sulla stessa riga la descrizione si riduceva a «Cost...», ed e'
+proprio la descrizione quello che si sta cercando.
+
+### Nove classi che non facevano niente
+
+Il foglio di stile incorporato si rigenera leggendo le classi usate nel file. Usarne una che al
+momento della generazione non c'era non da' nessun errore: **quella classe semplicemente non fa
+niente, in silenzio.**
+
+Controllando, ne ho trovate nove in questa condizione — e tre erano sulla striscia in cima
+introdotta dalla 112 (`top-0`, `right-0`, `z-[60]`): la striscia c'era, ma non stava dove
+doveva. Sono scritte a mano nel blocco di stile, come gia' `.barra-fondo`.
+
+Il controllo e' ora **dentro il giro delle prove** e blocca tutto se trova una classe usata e
+non definita. Mi era sfuggito perche' il mio controllo precedente guardava una riga fissa del
+file — la 27 — e il blocco della CSP della 113 aveva spostato il foglio di stile alla 78.
+Adesso la riga del foglio si cerca, non si indovina.
+
 ## Le tasse e i contributi entrano nel budget (versione 118)
 
 Tre cose, nate da una segnalazione: *«ci sono gia' spese tasse e contributi, ma non li vedo nel
