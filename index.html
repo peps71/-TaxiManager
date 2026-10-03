@@ -401,8 +401,8 @@
         <!-- C'e' una versione nuova pronta, e aspetta che tu dica quando. -->
         <div id="avviso-versione" class="hidden bg-gray-900 text-yellow-400 px-4 py-2">
             <div class="max-w-3xl mx-auto flex items-center justify-between gap-3">
-                <p class="text-sm font-black leading-tight min-w-0 truncate"><span id="avviso-versione-testo">C'è una versione nuova pronta.</span></p>
-                <button onclick="aggiornaApp()" class="shrink-0 bg-yellow-400 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg hover:bg-yellow-300 transition-colors">Carica adesso</button>
+                <p class="text-sm font-black leading-tight min-w-0 truncate"><span id="avviso-versione-testo">È disponibile una versione aggiornata.</span></p>
+                <button onclick="aggiornaApp()" class="shrink-0 bg-yellow-400 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg hover:bg-yellow-300 transition-colors">Installa adesso</button>
             </div>
         </div>
     </div>
@@ -1156,7 +1156,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 126;
+        const VERSIONE_APP = 127;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3099,7 +3099,7 @@
                                     </select>
                                 </div>
                                 <div class="lg:col-span-3">
-                                    <label for="vc-telaio" class="block text-xs font-bold text-gray-700 mb-1">Numero di telaio <span class="text-gray-400 font-normal">facoltativo, comodo per le pratiche</span></label>
+                                    <label for="vc-telaio" class="block text-xs font-bold text-gray-700 mb-1">Numero di telaio <span class="text-gray-400 font-normal">facoltativo, utile per le pratiche</span></label>
                                     <input type="text" id="vc-telaio" value="${val('telaio')}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 uppercase" />
                                 </div>
                             </div>
@@ -3134,7 +3134,7 @@
                                 </div>
                                 ${ancoraInUso ? `
                                     <div class="lg:col-span-3">
-                                        <label for="vc-valore-stimato" class="block text-xs font-bold text-gray-700 mb-1">Quanto vale oggi, a occhio (€) <span class="text-gray-400 font-normal">facoltativo</span></label>
+                                        <label for="vc-valore-stimato" class="block text-xs font-bold text-gray-700 mb-1">Valore attuale stimato (€) <span class="text-gray-400 font-normal">facoltativo</span></label>
                                         <input type="text" inputmode="decimal" id="vc-valore-stimato" value="${val('valore-stimato')}" placeholder="0,00" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
                                         <p class="text-xs text-gray-400 mt-1">Serve solo per stimare quanto valore hai già perso: finché non vendi è una stima, non un dato certo.</p>
                                     </div>
@@ -3148,7 +3148,7 @@
                                         <input type="number" inputmode="numeric" id="vc-km-uscita" value="${val('km-uscita')}" placeholder="0" min="0" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
                                     </div>
                                     <div>
-                                        <label for="vc-valore-uscita" class="block text-xs font-bold text-gray-700 mb-1">Quanto hai incassato (€)</label>
+                                        <label for="vc-valore-uscita" class="block text-xs font-bold text-gray-700 mb-1">Importo incassato (€)</label>
                                         <input type="text" inputmode="decimal" id="vc-valore-uscita" value="${val('valore-uscita')}" placeholder="0,00" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-bold" />
                                         <p class="text-xs text-gray-400 mt-1">Prezzo di vendita, valore della permuta o incentivo di rottamazione. Zero se non hai preso niente.</p>
                                     </div>
@@ -3213,7 +3213,7 @@
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                             <div>
-                                <p class="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Quanto ti è costata</p>
+                                <p class="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Costo sostenuto</p>
                                 <div class="space-y-0.5">
                                     ${rigaFiscale(
                                         s.perditaStimata ? 'Valore perso (stima)' : 'Valore perso',
@@ -3237,7 +3237,7 @@
                             </div>
 
                             <div>
-                                <p class="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Quanto costa ogni chilometro</p>
+                                <p class="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">Costo al chilometro</p>
                                 ${s.kmPercorsi ? `
                                     <div class="space-y-0.5">
                                         ${rigaFiscale('Solo la vettura', centesimi(s.perditaKm))}
@@ -3361,11 +3361,11 @@
         ];
 
         const SCHEDE_SECONDARIE = [
-            { id: 'categorie',  label: 'Spese e tasse',         desc: 'Dove vanno i soldi, e quanto è già del fisco', icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
+            { id: 'categorie',  label: 'Spese e tasse',         desc: 'Ripartizione delle uscite e quota fiscale' , icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
             { id: 'scadenze',   label: 'Scadenze',              desc: 'Bollo, revisione, INPS: cosa scade e quando',   icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14v3"/><circle cx="12" cy="19.5" r="0.5" fill="currentColor"/></svg>' },
-            { id: 'auto',       label: 'Le mie auto',           desc: 'Le vetture, i chilometri, quanto valgono',      icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
+            { id: 'auto',       label: 'Parco auto',               desc: 'Vetture, chilometri e valore residuo'     ,      icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
             { id: 'rendimento', label: 'Rendimento',            desc: 'Euro all\'ora, al chilometro, per corsa',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>' },
-            { id: 'report',     label: 'Commercialista',        desc: 'Il riepilogo da stampare o da esportare',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
+            { id: 'report',     label: 'Commercialista',        desc: 'Riepilogo da stampare o da esportare'    ,       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
             { id: 'cloud',      label: 'Backup e impostazioni', desc: 'Copie automatiche, accesso, aliquote fiscali',  icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 3 16.3"/><path d="M16 16l2 2 4-4"/><path d="M20 16.5A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 3 14.5"/></svg>' }
         ];
 
@@ -3732,7 +3732,7 @@
                             <p class="cifra-casella ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5">${d.uscite ? '−' + soldi(d.uscite) : '—'}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
-                            <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Ti resta</p>
+                            <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Margine</p>
                             <p class="cifra-casella ${resta >= 0 ? 'text-white' : 'text-red-400'} mt-0.5">${soldi(resta)}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
@@ -4683,16 +4683,16 @@
                                 </div>
                                 <div class="grid grid-cols-2 gap-3 mt-1">
                                     <div>
-                                        <p class="text-[10.5px] font-bold uppercase tracking-wider text-indigo-400">Da mettere da parte</p>
-                                        <p class="text-[17px] font-black text-orange-600 mt-0.5">${soldi(alFisco)}</p>
+                                        <p class="text-[10.5px] font-bold uppercase text-indigo-400">Da accantonare</p>
+                                        <p class="cifra-casella text-orange-600 mt-0.5">${soldi(alFisco)}</p>
                                     </div>
                                     <div>
-                                        <p class="text-[10.5px] font-bold uppercase tracking-wider text-indigo-400">Tuoi</p>
-                                        <p class="text-[17px] font-black text-green-700 mt-0.5">${soldi(risultato - alFisco)}</p>
+                                        <p class="text-[10.5px] font-bold uppercase tracking-wider text-indigo-400">Netto</p>
+                                        <p class="cifra-casella text-green-700 mt-0.5">${soldi(risultato - alFisco)}</p>
                                     </div>
                                 </div>
                                 <details class="mt-2">
-                                    <summary class="text-xs font-black text-indigo-600 cursor-pointer select-none">Perché una parte è già del fisco</summary>
+                                    <summary class="text-xs font-black text-indigo-600 cursor-pointer select-none">Perché una quota è già del fisco</summary>
                                     <p class="text-xs text-indigo-500 mt-2 leading-relaxed">
                                         Nel costo del giorno c'è già l'IRPEF che ti aspetti al ritmo di quest'anno. Quello che fai
                                         <strong>in più</strong> di quel ritmo porta però tasse in più: questa è la parte che conviene
@@ -4708,7 +4708,7 @@
                             <strong>${formatCurrency(q.quotaLavorati)}</strong>: nei riposi le spese corrono lo stesso, ma non c'è incasso a coprirle.
                         </p>` : ''}
                     <details class="mt-2">
-                    <summary class="text-xs font-black text-indigo-600 cursor-pointer select-none">Come è fatto questo conto</summary>
+                    <summary class="text-xs font-black text-indigo-600 cursor-pointer select-none">Dettaglio del calcolo</summary>
                     <p class="text-xs text-indigo-500 mt-2 leading-relaxed">
                         Le voci a <strong>budget</strong> entrano qui a preventivo, non a fattura: pesano ogni giorno anche quando la spesa esce dal conto una volta l'anno — è per questo che il giorno in cui paghi l'assicurazione non diventa un disastro.
                         Le <strong>spese di questa giornata</strong> sono invece quelle che hai registrato qui e che il budget non copre${costo.fuoriBudget > 0 ? ` (${formatCurrency(costo.fuoriBudget)})` : ''}: se oggi hai fatto il pieno, oggi devi incassare quei soldi in più per andare a pari.
@@ -5273,7 +5273,7 @@
                                     <p class="text-xs font-bold text-gray-500">${migliore.nCorse} corse</p>
                                 </button>
                                 <button onclick="setDashGiorno('${peggiore.iso}')" class="text-left bg-red-50 border border-red-200 rounded-xl p-3 hover:bg-red-100 transition-colors">
-                                    <p class="text-xs font-black uppercase tracking-wider text-red-700">Giornata più fiacca</p>
+                                    <p class="text-xs font-black uppercase tracking-wider text-red-700">Giornata peggiore</p>
                                     <p class="text-sm font-black text-gray-900">${peggiore.giorno} ${nomeMese(mese)} · ${formatCurrency(peggiore.incassi)}</p>
                                     <p class="text-xs font-bold text-gray-500">${peggiore.nCorse} corse</p>
                                 </button>
@@ -5370,7 +5370,7 @@
                                     <p class="text-xs font-bold text-gray-500">${migliore.nCorse} corse</p>
                                 </button>
                                 <button onclick="setDashMese('${peggiore.ym}')" class="text-left bg-red-50 border border-red-200 rounded-xl p-3 hover:bg-red-100 transition-colors">
-                                    <p class="text-xs font-black uppercase tracking-wider text-red-700">Mese più fiacco</p>
+                                    <p class="text-xs font-black uppercase tracking-wider text-red-700">Mese peggiore</p>
                                     <p class="text-sm font-black text-gray-900">${nomeMese(peggiore.mese)} · ${formatCurrency(peggiore.incassi)}</p>
                                     <p class="text-xs font-bold text-gray-500">${peggiore.nCorse} corse</p>
                                 </button>
@@ -5613,17 +5613,17 @@
                         <input type="date" id="corsa-data" required value="${giorno || window.ultimoDataCorsa || oggiISO()}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400" />
                     </div>
                     <div>
-                        <label for="corsa-cat" class="block text-xs font-bold text-gray-700 mb-1">Da dove a dove <span class="text-gray-400 font-normal">se vuoi</span></label>
+                        <label for="corsa-cat" class="block text-xs font-bold text-gray-700 mb-1">Tratta <span class="text-gray-400 font-normal">facoltativa</span></label>
                         <input type="text" id="corsa-cat" placeholder="Lascia vuoto per numerarla" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400" />
                     </div>
                     <div>
-                        <label for="corsa-metodo" class="block text-xs font-bold text-gray-700 mb-1">Come ha pagato?</label>
+                        <label for="corsa-metodo" class="block text-xs font-bold text-gray-700 mb-1">Metodo di pagamento</label>
                         <select id="corsa-metodo" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400 font-medium">
                             ${opzioniMetodo(window.ultimoMetodoCorsa || 'Contanti', 'ENTRATA')}
                         </select>
                     </div>
                     <div>
-                        <label for="corsa-imp" class="block text-xs font-bold text-gray-700 mb-1">Quanto?</label>
+                        <label for="corsa-imp" class="block text-xs font-bold text-gray-700 mb-1">Importo (€)</label>
                         <input type="text" inputmode="decimal" id="corsa-imp" required placeholder="0,00" autofocus class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400 font-bold text-gray-900" />
                     </div>
                     <div class="lg:col-span-4 flex flex-col sm:flex-row gap-3">
@@ -5677,11 +5677,11 @@
         return `
             <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <span class="etichetta text-red-600">Stai segnando una spesa</span>
+                    <span class="etichetta text-red-600">Stai registrando una spesa</span>
                     <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || oggiISO())}</span>
                 </div>
                 <div>
-                    <label for="spesa-lampo-cat" class="etichetta block mb-1.5">Che spesa è</label>
+                    <label for="spesa-lampo-cat" class="etichetta block mb-1.5">Tipo di spesa</label>
                     <select id="spesa-lampo-cat" class="w-full p-3 border border-gray-200 rounded-xl font-bold text-gray-900 bg-white outline-none focus:border-red-500">
                         ${opzioniCategoriaSpesa(false)}
                     </select>
@@ -5695,8 +5695,8 @@
                 <label for="spesa-lampo-fattura" class="flex items-center gap-2.5 cursor-pointer select-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
                     <input type="checkbox" id="spesa-lampo-fattura" ${window.ultimaFatturaUscita ? 'checked' : ''} class="w-5 h-5 accent-red-600 shrink-0" />
                     <span class="min-w-0">
-                        <span class="block text-sm font-bold text-gray-900">Mi fa fattura</span>
-                        <span class="block text-[11px] font-medium text-gray-400 leading-tight">spunta se ti rilascia fattura, non scontrino</span>
+                        <span class="block text-sm font-bold text-gray-900">Con fattura</span>
+                        <span class="block text-[11px] font-medium text-gray-400 leading-tight">da spuntare se il fornitore rilascia fattura, non scontrino</span>
                     </span>
                 </label>
                 <div class="grid grid-cols-2 gap-2">
@@ -6094,7 +6094,7 @@
                                 <button onclick="azzeraFiltriGiornate()" class="px-4 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white">Mostra tutto</button>
                             ` : ''}
                         </div>
-                        ${giorno ? `<p class="text-[11px] text-white/35">Stai guardando un giorno solo, quindi il mese non serve.</p>` : ''}
+                        ${giorno ? `<p class="text-[11px] text-white/35">Con un giorno selezionato il filtro per mese non si applica.</p>` : ''}
                     </div>
                 </details>`;
 
@@ -6164,7 +6164,7 @@
                                 <p class="cifra-casella ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5">${totSpese > 0 ? '−' + soldi(totSpese) : '—'}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
-                                <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Ti resta</p>
+                                <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Margine</p>
                                 <p class="cifra-casella text-white mt-0.5">${soldi(totCorse - totSpese)}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
@@ -6526,7 +6526,7 @@
                             ${t ? `<button onclick="deleteShift('${escJs(t.id)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white">Elimina</button>` : ''}
                             <button onclick="apriNellElenco('${iso}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">Apri nelle giornate</button>
                         </div>
-                        <p class="text-xs text-gray-500 leading-tight">I km si aggiungono qui sopra, quando li sai. Per un orario diverso da questi usa «+ Registra un turno».</p>
+                        <p class="text-xs text-gray-500 leading-tight">I chilometri si completano qui sopra in qualsiasi momento. Per un orario diverso da questi usare «+ Registra un turno».</p>
                     </div>`;
             };
 
@@ -6551,7 +6551,7 @@
                         <div class="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 no-print">
                             <div>
                                 <p class="font-black text-gray-900">${daCompletare.length} ${daCompletare.length === 1 ? 'turno senza km' : 'turni senza km'}</p>
-                                <p class="text-xs text-gray-600">Puoi aggiungerli quando vuoi: le ore e gli incassi sono già conteggiati.</p>
+                                <p class="text-xs text-gray-600">I km si possono completare in seguito: ore e incassi sono già conteggiati.</p>
                             </div>
                             <button onclick="vaiAlTurnoSenzaKm()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 text-xs font-black px-4 py-2.5 rounded-xl">Vai al primo</button>
                         </div>
@@ -6614,11 +6614,11 @@
             return `
                 <div class="bg-white border-2 border-yellow-400 rounded-2xl p-5 shadow-sm no-print">
                     ${moduloProfiloHTML(
-                        'Benvenuto: dicci chi sei',
-                        'Lo chiediamo una volta sola. Nome e cognome per l\'app, licenza, codice radio e partita IVA per le carte che vanno al commercialista. Puoi anche saltare e compilarla dopo, da «Gestione → Backup e impostazioni».',
-                        'Salva e comincia')}
+                        'Dati del titolare',
+                        'Si compilano una volta sola. Nome e cognome identificano l\'app; licenza, codice radio e partita IVA compaiono in testa ai documenti per il commercialista. La compilazione può essere rimandata: la scheda resta in «Gestione → Backup e impostazioni».',
+                        'Salva e prosegui')}
                     <button onclick="rimandaLaScheda()" class="mt-3 text-xs font-black text-gray-400 hover:text-gray-700 underline underline-offset-2">
-                        Lo faccio dopo
+                        Compila più tardi
                     </button>
                 </div>`;
         }
@@ -6635,7 +6635,7 @@
             ].filter(Boolean);
             const col = coloreTurno(p.colore);
             if (!profiloCompilato() && !righe.length) {
-                return `<p class="text-xs text-gray-400 no-print">Aggiungi la tua scheda da «Backup e impostazioni» e comparirà qui in testa, con licenza e partita IVA.</p>`;
+                return `<p class="text-xs text-gray-400 no-print">Compila la scheda del titolare da «Backup e impostazioni»: comparirà qui in testa, con licenza e partita IVA.</p>`;
             }
             return `
                 <div class="border border-gray-200 rounded-xl p-4 print-break">
@@ -6667,10 +6667,10 @@
             return `
                 <div class="bg-red-50 border-2 border-red-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 no-print">
                     <div class="min-w-0">
-                        <p class="font-black text-red-800">${urgenti.length} scadenz${urgenti.length > 1 ? 'e' : 'a'} da tenere d'occhio</p>
+                        <p class="font-black text-red-800">${urgenti.length} scadenz${urgenti.length > 1 ? 'e in avvicinamento' : 'a in avvicinamento'}</p>
                         <p class="text-xs text-red-700">${urgenti.map(s => `${esc(s.nome)} (${s.giorniMancanti < 0 ? 'scaduta' : (s.giorniMancanti === 0 ? 'oggi' : 'tra ' + s.giorniMancanti + ' gg')})`).join(' · ')}</p>
                     </div>
-                    <button onclick="switchTab('scadenze')" class="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl shrink-0">Guarda</button>
+                    <button onclick="switchTab('scadenze')" class="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl shrink-0">Apri</button>
                 </div>`;
         }
 
@@ -6679,7 +6679,7 @@
         //  Entrando in una sezione non c'era modo di tornare all'indice se non
         //  ritrovando «Gestione» nella barra in basso - che resta accesa, ma
         //  non e' un tasto «indietro» e nessuno lo legge cosi'. E per passare
-        //  da «Scadenze» a «Le mie auto» bisognava fare due tappe.
+        //  da «Scadenze» a «Parco auto» bisognava fare due tappe.
         //  Adesso in cima a ogni sezione c'e' il ritorno all'indice e la fila
         //  delle sorelle, con quella dove sei accesa: da una sezione all'altra
         //  e' un tocco solo.
@@ -6822,10 +6822,10 @@
                 <div class="fade-in space-y-6 max-w-7xl mx-auto">
                     <header class="flex justify-between items-center gap-x-3">
                         <div class="min-w-0 flex-1">
-                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight leading-tight">Come va il ${annoAttivo()}</h2>
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight leading-tight">Andamento ${annoAttivo()}</h2>
                             <p class="text-gray-500 text-[13px] font-medium mt-0.5 flex items-center gap-1.5 truncate">
                                 <span class="w-1.5 h-1.5 rounded-full ${window.isCloudSyncing ? 'bg-green-500' : 'bg-yellow-500'}"></span>
-                                ${window.isCloudSyncing ? 'dati al sicuro sul Cloud' : 'solo su questo dispositivo'}
+                                ${window.isCloudSyncing ? 'Dati sincronizzati sul Cloud' : 'Dati solo su questo dispositivo'}
                             </p>
                         </div>
                         ${pillolaAnno('dash')}
@@ -6923,7 +6923,7 @@
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
                             <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Registro spese</h2>
-                            <p class="text-gray-500 text-[13px] font-medium mt-0.5">Carburante, manutenzione, tutto quello che esce.</p>
+                            <p class="text-gray-500 text-[13px] font-medium mt-0.5">Carburante, manutenzione e ogni altra uscita.</p>
                         </div>
                         <button onclick="toggleUscitaForm()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm">
                             ${window.showUscitaForm ? 'Annulla' : '+ Nuova Spesa'}
@@ -7042,9 +7042,9 @@
                                     <tr>
                                         <th class="p-4 font-bold">Data</th>
                                         <th class="p-4 font-bold">Descrizione</th>
-                                        <th class="p-4 font-bold">Come hai pagato?</th>
+                                        <th class="p-4 font-bold">Metodo di pagamento</th>
                                         <th class="p-4 font-bold text-right">Importo</th>
-                                        <th class="p-4 font-bold text-center">Azione</th>
+                                        <th class="p-4 font-bold text-center">Azioni</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
@@ -7120,7 +7120,7 @@
                     <header class="mb-2 flex flex-wrap items-start justify-between gap-3">
                         <div>
                         <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Rendimento</h2>
-                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quale turno e quale giorno della settimana ti rendono di più, nel ${annoAttivo()}.</p>
+                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Resa per turno e per giorno della settimana nel ${annoAttivo()}.</p>
                         </div>
                         ${pillolaAnno('rend')}
                     </header>
@@ -7155,7 +7155,7 @@
                             </button>
                             ${rd.giornoPeggiore ? `
                                 <button onclick="vaiAlGiorno('${rd.giornoPeggiore.data}')" class="text-left bg-red-50 border border-red-200 rounded-2xl p-5 hover:bg-red-100 transition-colors">
-                                    <p class="text-xs text-red-700 font-black uppercase tracking-wider mb-1">Giornata più fiacca</p>
+                                    <p class="text-xs text-red-700 font-black uppercase tracking-wider mb-1">Giornata peggiore</p>
                                     <p class="text-2xl font-black text-gray-900 leading-tight">${formatCurrency(rd.giornoPeggiore.tot)}</p>
                                     <p class="text-sm font-bold text-gray-700 capitalize">${dataEstesa(rd.giornoPeggiore.data)}</p>
                                     <p class="text-xs font-bold text-gray-500">${rd.giornoPeggiore.nCorse} corse${rd.giornoPeggiore.turno ? ' · ' + esc(rd.giornoPeggiore.turno) : ''}${rd.giornoPeggiore.ore ? ' · ' + formatCurrency(rd.giornoPeggiore.tot / rd.giornoPeggiore.ore) + '/ora' : ''}</p>
@@ -7260,7 +7260,7 @@
                                 </span>
                             </p>
                             ${fuori >= 0.005 ? `<p class="text-[11px] font-medium text-gray-400 mt-1.5">${formatCurrency(fuori)} pagati in contanti o senza metodo: fuori</p>` : ''}
-                        ` : '<p class="text-xs text-gray-400 mt-2">Niente registrato quest\'anno.</p>'}
+                        ` : '<p class="text-xs text-gray-400 mt-2">Nessun dato registrato quest\'anno.</p>'}
                     </div>`;
             };
             const sf = statsForfettario();
@@ -7272,7 +7272,7 @@
                     <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
                         <div>
                         <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Spese e tasse</h2>
-                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quanto ti costa un giorno di lavoro, dove vanno i soldi e quanto è già del fisco.</p>
+                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Costo di una giornata, ripartizione delle uscite e quota già destinata al fisco.</p>
                         </div>
                         ${pillolaAnno('spese')}
                     </header>
@@ -7369,7 +7369,7 @@
                                                 <span><span class="inline-block w-2 h-2 rounded-sm bg-purple-500 align-middle"></span> INPS</span>
                                                 <span><span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> IRPEF</span>
                                                 <span><span class="inline-block w-2 h-2 rounded-sm bg-orange-400 align-middle"></span> Addizionali</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Resta a te</span>
+                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Netto</span>
                                             </div>
                                         </div>
                                     ` : ''}
@@ -7408,7 +7408,7 @@
                                             ${rigaFiscale('IRPEF a scaglioni', '-' + formatCurrency(f.irpef), { classe: 'text-red-600' })}
                                             ${rigaFiscale('Addizionali (' + fs.addizionaliPerc + '%)', '-' + formatCurrency(f.addizionali), { classe: 'text-orange-600' })}
                                             ${rigaFiscale('Totale tasse e contributi', formatCurrency(st.tasse), { forte: true, classe: 'text-red-600' })}
-                                            ${rigaFiscale('Resta a te (netto stimato)', formatCurrency(nettoStimato), { forte: true, classe: 'text-green-700', bordo: true })}
+                                            ${rigaFiscale('Netto stimato', formatCurrency(nettoStimato), { forte: true, classe: 'text-green-700', bordo: true })}
                                         </div>
                                     </div>
 
@@ -7431,7 +7431,7 @@
                                     ` : ''}
 
                                     <p class="text-xs text-gray-600 leading-relaxed bg-yellow-50 border border-yellow-200 rounded-xl p-3">
-                                        <strong>Questa stima guarda solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
+                                        <strong>La stima considera solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
                                         Per il fisco, in regime ordinario, concorrono al reddito <em>tutti</em> i corrispettivi, contanti compresi,
                                         quindi il conto vero e' piu' alto. Quanto piu' alto lo vedi qui sotto, negli approfondimenti, nel confronto
                                         fra le due basi di calcolo.
@@ -7502,7 +7502,7 @@
                                     ${rigaFiscale('IRPEF', '-' + formatCurrency(sc.irpef), { classe: 'text-red-600' })}
                                     ${rigaFiscale('Addizionali', '-' + formatCurrency(sc.addizionali), { classe: 'text-orange-600' })}
                                     ${rigaFiscale('Tasse e contributi', formatCurrency(sc.tasse), { forte: true, classe: 'text-red-600', bordo: true })}
-                                    ${rigaFiscale('Resta a te', formatCurrency(sc.netto), { forte: true, classe: 'text-green-700' })}
+                                    ${rigaFiscale('Netto stimato', formatCurrency(sc.netto), { forte: true, classe: 'text-green-700' })}
                                     <div class="mt-3 grid grid-cols-2 gap-2 text-center">
                                         <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
                                             <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Al mese</p>
@@ -7583,8 +7583,8 @@
 
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Le mie auto</h2>
-                            <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quelle che hai avuto, quella che usi: quanto sono costate e quanta strada hanno fatto.</p>
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Parco auto</h2>
+                            <p class="text-gray-500 text-[13px] font-medium mt-0.5">Vetture in uso e dismesse: costi sostenuti e chilometri percorsi.</p>
                         </div>
                         <button onclick="apriFormVeicolo('nuovo')" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm no-print">
                             + Aggiungi una vettura
@@ -7614,7 +7614,7 @@
                         ${conCostoKm.length > 1 ? `
                             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card">
                                 <div class="px-5 py-4 border-b border-gray-100">
-                                    <h3 class="text-lg font-black text-gray-900">Quale ti è convenuta di più</h3>
+                                    <h3 class="text-lg font-black text-gray-900">Quale è stata più conveniente</h3>
                                     <p class="text-xs text-gray-500">Solo le vetture già uscite, per cui il conto è chiuso. Dalla più economica al chilometro.</p>
                                 </div>
                                 <div class="overflow-x-auto">
@@ -7671,7 +7671,7 @@
 
                     <header>
                         <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Scadenze</h2>
-                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Revisione, RCA, bollo, tassametro, licenza: le date da non dimenticare.</p>
+                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Revisione, RCA, bollo, tassametro, licenza: le scadenze da monitorare.</p>
                     </header>
 
                     ${scadenzeList.length ? `
@@ -7844,7 +7844,7 @@
                         <div class="flex items-center justify-between gap-x-3">
                             <div class="min-w-0 flex-1">
                                 <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Commercialista</h2>
-                                <p class="text-gray-500 text-[13px] font-medium mt-0.5">Il riepilogo del mese o dell'anno, da stampare o da salvare.</p>
+                                <p class="text-gray-500 text-[13px] font-medium mt-0.5">Riepilogo mensile o annuale, da stampare o esportare.</p>
                             </div>
                             ${pillolaAnno('rep')}
                         </div>
@@ -8010,7 +8010,7 @@
                                     <p class="text-base xl:text-lg font-black text-gray-900 mt-0.5">${oreScritte(rep.oreTot)} h</p>
                                 </div>
                                 <div class="p-3 bg-gray-50 rounded-xl border border-gray-200/80">
-                                    <p class="text-xs text-gray-500 font-bold">Km Percorsi</p>
+                                    <p class="text-xs text-gray-500 font-bold">Km percorsi</p>
                                     <p class="text-base xl:text-lg font-black text-gray-900 mt-0.5">${rep.kmTot} km</p>
                                 </div>
                                 <div class="p-3 bg-yellow-50 rounded-xl border border-yellow-200">
@@ -8045,7 +8045,7 @@
 
                     <header class="mb-6">
                         <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Backup e impostazioni</h2>
-                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Le copie dei tuoi dati, l'accesso, le aliquote per la stima delle tasse.</p>
+                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Copie dei dati, accesso al Cloud e aliquote per la stima fiscale.</p>
                     </header>
 
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
@@ -8100,8 +8100,8 @@
 
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         ${moduloProfiloHTML(
-                            'La tua scheda',
-                            'Nome, licenza, codice radio e partita IVA. Servono soprattutto sulle carte che escono dall\'app: il riepilogo per il commercialista li porta in testa. Restano nella tua cartella privata sul Cloud, come tutto il resto.',
+                            'Scheda del titolare',
+                            'Nome, licenza, codice radio e partita IVA. Compaiono in testa ai documenti prodotti dall\'app, a partire dal riepilogo per il commercialista. Restano nella cartella privata sul Cloud, come il resto dei dati.',
                             'Salva la scheda')}
                     </div>
 
@@ -8114,12 +8114,12 @@
                             <div>
                                 <label for="set-inps-rata" class="text-xs font-bold text-gray-600 uppercase">INPS · rata fissa (€)</label>
                                 <input type="text" inputmode="decimal" id="set-inps-rata" value="${importoScritto(window.fiscalSettings.inpsRata ?? 1130.34)}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
-                                <p class="text-xs text-gray-400 mt-1 leading-relaxed">Quanto paghi per ogni rata del minimale.</p>
+                                <p class="text-xs text-gray-400 mt-1 leading-relaxed">Importo di ogni rata del minimale.</p>
                             </div>
                             <div>
                                 <label for="set-inps-rate" class="text-xs font-bold text-gray-600 uppercase">INPS · quante rate</label>
                                 <input type="text" inputmode="decimal" id="set-inps-rate" value="${window.fiscalSettings.inpsNumeroRate ?? 4}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
-                                <p class="text-xs text-gray-400 mt-1 leading-relaxed">In un anno: quattro, di solito.</p>
+                                <p class="text-xs text-gray-400 mt-1 leading-relaxed">In genere quattro all'anno.</p>
                             </div>
                             <div>
                                 <label for="set-inps-minimale" class="text-xs font-bold text-gray-600 uppercase">INPS · minimale (€)</label>
@@ -8151,7 +8151,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                             <h3 class="text-lg font-bold text-gray-900">Esporta i dati</h3>
-                            <p class="text-xs text-gray-500 leading-relaxed">Scarica una copia dei tuoi movimenti da salvare su iCloud Drive o Google Drive per sicurezza, oppure in CSV per il commercialista.</p>
+                            <p class="text-xs text-gray-500 leading-relaxed">Copia completa dei movimenti da conservare su iCloud Drive o Google Drive, oppure in CSV per il commercialista.</p>
                             <button onclick="exportBackup()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors">
                                 Scarica il backup completo (.json)
                             </button>
@@ -8472,11 +8472,11 @@
                         <input type="text" id="uscita-nota" placeholder="Es. targa, fornitore, n° fattura..." class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400" />
                     </div>
                     <div>
-                        <label for="uscita-imp" class="block text-xs font-bold text-gray-700 mb-1">Quanto?</label>
+                        <label for="uscita-imp" class="block text-xs font-bold text-gray-700 mb-1">Importo (€)</label>
                         <input type="text" inputmode="decimal" id="uscita-imp" required placeholder="0,00" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-bold text-gray-900" />
                     </div>
                     <div>
-                        <label for="uscita-metodo" class="block text-xs font-bold text-gray-700 mb-1">Come hai pagato?</label>
+                        <label for="uscita-metodo" class="block text-xs font-bold text-gray-700 mb-1">Metodo di pagamento</label>
                         <select id="uscita-metodo" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium">
                             ${opzioniMetodo(window.ultimoMetodoUscita || 'Contanti', 'USCITA')}
                         </select>
@@ -8485,7 +8485,7 @@
                         <span class="block text-xs font-bold text-gray-700 mb-1">Documento</span>
                         <label for="uscita-fattura" class="flex items-center gap-2.5 cursor-pointer select-none border rounded-lg px-3 py-2.5 min-h-[44px]">
                             <input type="checkbox" id="uscita-fattura" ${window.ultimaFatturaUscita ? 'checked' : ''} class="w-5 h-5 accent-red-600 shrink-0" />
-                            <span class="text-sm font-bold text-gray-800">Mi fa fattura</span>
+                            <span class="text-sm font-bold text-gray-800">Con fattura</span>
                         </label>
                     </div>
                     <div class="lg:col-span-4 border-t border-gray-100 pt-4">
@@ -9656,7 +9656,7 @@
 
                     ${anni.length ? `
                         <div class="border-t border-gray-100 pt-3.5">
-                            <p class="etichetta block mb-2">Cosa c'è, anno per anno</p>
+                            <p class="etichetta block mb-2">Dati presenti, anno per anno</p>
                             <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                                 ${anni.map(x => `
                                     <div class="px-3 py-2.5 flex items-center gap-3">
@@ -9675,7 +9675,7 @@
                             ${vecchi.length ? `
                                 <p class="text-xs text-gray-500 mt-2.5 leading-relaxed">
                                     <strong>Archiviare</strong> vuol dire: scarichi il file di quell'anno, e poi quell'anno viene tolto
-                                    da qui <strong>e dalla tua cartella sul Cloud</strong> — quindi da tutti i tuoi dispositivi. Si rimette
+                                    da qui <strong>e dalla cartella sul Cloud</strong> — quindi da tutti i tuoi dispositivi. Si rimette
                                     quando vuoi con «Importa backup», ma solo se tieni quel file. L'anno in corso e quello prima non si
                                     archiviano: servono per le tasse e sono quelli che guardi.
                                 </p>`
@@ -10053,7 +10053,7 @@
             const schede = window.schedeIstantanee;
             let elenco;
             if (!window.isCloudSyncing) {
-                elenco = `<p class="text-xs text-gray-500 leading-relaxed">Le copie automatiche vivono nella tua cartella sul Cloud: entra con Google qui sopra e partono da sole.</p>`;
+                elenco = `<p class="text-xs text-gray-500 leading-relaxed">Le copie automatiche risiedono nella cartella privata sul Cloud: si attivano accedendo con Google qui sopra.</p>`;
             } else if (!schede) {
                 elenco = `<p class="text-xs text-gray-400">Lettura delle copie in corso...</p>`;
             } else {
@@ -10742,7 +10742,7 @@
                     </div>
                     <div class="flex-shrink-0 flex gap-2">
                         <button type="button" onclick="apriVoceFissa('${escJs(v.slug)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">Modifica</button>
-                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" class="text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Togli</button>
+                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" class="text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Rimuovi</button>
                     </div>
                 </div>`;
         }
@@ -10828,7 +10828,7 @@
 
                     <div class="flex gap-2 pt-1">
                         <button type="button" onclick="chiudiVoceFissa()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-lg text-sm">Fatto</button>
-                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" class="text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 font-bold py-2 px-4 rounded-lg text-sm">Togli</button>
+                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" class="text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 font-bold py-2 px-4 rounded-lg text-sm">Rimuovi</button>
                     </div>
                 </div>`;
         }
@@ -10967,7 +10967,7 @@
             return `
                 <div class="border-2 border-indigo-200 bg-indigo-50/60 rounded-xl p-4 space-y-3">
                     <div>
-                        <p class="text-sm font-black text-indigo-900">Paghi queste cose, ma non sono nel budget</p>
+                        <p class="text-sm font-black text-indigo-900">Costi ricorrenti non presenti a budget</p>
                         <p class="text-xs text-indigo-800 leading-relaxed mt-1">
                             Le hai già registrate come spese e tornano negli anni: sono costi fissi, ma finché non stanno
                             qui non pesano sulla giornata, e il tuo pareggio è più basso del vero di circa
@@ -11023,7 +11023,7 @@
                                 previsione che matura ogni giorno, e serve a sapere quanto devi incassare oggi.
                             </p>
                             <p class="text-xs text-gray-500 leading-relaxed mt-1.5 max-w-2xl">
-                                <strong>Quello che scrivi qui è il pavimento.</strong> La giornata pesa almeno quanto hai
+                                <strong>Gli importi inseriti qui sono la base minima del calcolo.</strong> La giornata pesa almeno quanto hai
                                 previsto, tutto l'anno: se hai messo 4.800 € di tasse e a ottobre ne hai pagati 2.523, la
                                 giornata continua a portare la quota dei 4.800 — quei soldi li devi tirare fuori lo stesso,
                                 e di qui a dicembre arrivano.
@@ -11354,7 +11354,7 @@
                     ${c.inCorso && c.budget > 0 ? `
                         <div class="bg-gray-50 border border-gray-100 rounded-xl p-4">
                             <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-                                <p class="etichetta block">A che punto sei</p>
+                                <p class="etichetta block">Stato di avanzamento</p>
                                 <p class="text-xs font-bold text-gray-500">
                                     l'anno è al <strong class="text-gray-800">${c.pctAnno.toFixed(0)}%</strong> ·
                                     del budget ne hai speso il <strong class="${c.pctSpeso > c.pctAnno + 5 ? 'text-red-600' : 'text-gray-800'}">${c.pctSpeso.toFixed(0)}%</strong>
@@ -11438,7 +11438,7 @@
                                                 <p class="text-xs text-gray-600 leading-relaxed mb-2">
                                                     Queste spese sono scritte come costi fissi ma <strong>non corrispondono a nessuna voce
                                                     del tuo budget</strong>. Contano nelle spese dell'anno e nelle tasse, ma non hanno un
-                                                    budget con cui confrontarsi. <strong>Prima di cancellarle guarda il marchio:</strong>
+                                                    budget con cui confrontarsi. <strong>Prima di cancellarle controlla il marchio:</strong>
                                                 </p>
                                                 <p class="text-xs text-gray-600 leading-relaxed mb-2">
                                                     <span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">generata dall'app</span>
@@ -11576,7 +11576,7 @@
                                     <th class="p-3 font-bold text-right">Righe</th>
                                     <th class="p-3 font-bold text-right">Totale</th>
                                     <th class="p-3 font-bold">Periodo</th>
-                                    <th class="p-3 font-bold text-center">Azione</th>
+                                    <th class="p-3 font-bold text-center">Azioni</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">

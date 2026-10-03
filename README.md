@@ -69,6 +69,71 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le diciture, riscritte da gestionale (versione 127)
+
+L'app parlava come un amico al bar: «Come va il 2026», «Ti resta», «Quanto?»,
+«Mi fa fattura», «Da dove a dove (se vuoi)», «Benvenuto: dicci chi sei». È un
+gestionale per un'attività di taxi, non una chiacchierata: le diciture adesso
+dicono la cosa e basta.
+
+### Titoli e sezioni
+
+| Prima | Adesso |
+| --- | --- |
+| Come va il 2026 | Andamento 2026 |
+| Le mie auto | Parco auto |
+| Ti resta | Margine |
+| Da mettere da parte · Tuoi | Da accantonare · Netto |
+| Resta a te | Netto stimato |
+| Come è fatto questo conto | Dettaglio del calcolo |
+| 3 scadenze da tenere d'occhio | 3 scadenze in avvicinamento |
+| Paghi queste cose, ma non sono nel budget | Costi ricorrenti non presenti a budget |
+| A che punto sei | Stato di avanzamento |
+| Cosa c'è, anno per anno | Dati presenti, anno per anno |
+| Giornata / Mese più fiacco | Giornata / Mese peggiore |
+
+### Campi dei moduli
+
+| Prima | Adesso |
+| --- | --- |
+| Quanto? | Importo (€) |
+| Come ha pagato? · Come hai pagato? | Metodo di pagamento |
+| Mi fa fattura | Con fattura |
+| Che spesa è | Tipo di spesa |
+| Da dove a dove (se vuoi) | Tratta (facoltativa) |
+| Quanto vale oggi, a occhio (€) | Valore attuale stimato (€) |
+| Quanto hai incassato (€) | Importo incassato (€) |
+| Quanto ti è costata | Costo sostenuto |
+| Quanto costa ogni chilometro | Costo al chilometro |
+| Quale ti è convenuta di più | Quale è stata più conveniente |
+
+### Sottotitoli delle schermate
+
+Descrivono il contenuto invece di commentarlo:
+
+- «Quanto ti costa un giorno di lavoro, dove vanno i soldi e quanto è già del
+  fisco» → «Costo di una giornata, ripartizione delle uscite e quota già
+  destinata al fisco»
+- «Quelle che hai avuto, quella che usi: quanto sono costate e quanta strada
+  hanno fatto» → «Vetture in uso e dismesse: costi sostenuti e chilometri
+  percorsi»
+- «Quale turno e quale giorno della settimana ti rendono di più» → «Resa per
+  turno e per giorno della settimana»
+- «dati al sicuro sul Cloud» → «Dati sincronizzati sul Cloud»
+
+### La scheda del titolare
+
+«Benvenuto: dicci chi sei» è diventato «Dati del titolare», «Lo faccio dopo»
+è «Compila più tardi», «Salva e comincia» è «Salva e prosegui». Anche i testi
+di spiegazione sono passati dal «tu» all'impersonale.
+
+### Una parola che non ci stava
+
+«DA ACCANTONARE», in maiuscolo con le lettere distanziate, a 320 px non entrava
+in mezza colonna: «ACCANTONARE» è una parola sola e non va a capo. Tolta la
+spaziatura extra su quella sola etichetta, e le due cifre sotto passate alla
+classe che adatta il corpo come le altre.
+
 ## Una cifra sola per il pareggio (versione 126)
 
 La testata scura diceva **Spese 83,90** e la scheda sotto **Costo fisso al

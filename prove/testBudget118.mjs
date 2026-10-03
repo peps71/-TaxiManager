@@ -65,7 +65,7 @@ prova(`con tutte e due, la famiglia prende tutto e il dettaglio niente (${r.fam}
 // 4) senza nessuna voce, l'app le propone
 await apparecchia([]);
 r = await p.evaluate(() => ({
-  testo: /Paghi queste cose, ma non sono nel budget/i.test(document.getElementById('main-container').innerText),
+  testo: /Costi ricorrenti non presenti a budget/i.test(document.getElementById('main-container').innerText),
   proposte: proposteBudget().map(x => `${x.nome}=${x.importo}`)
 }));
 prova('senza voci, la proposta compare', r.testo);

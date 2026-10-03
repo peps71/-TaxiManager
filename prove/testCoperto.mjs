@@ -53,7 +53,7 @@ for (const [scheda, vai] of [['Oggi', g => { switchTab('giornata'); applyFilterG
     const out = {};
     document.querySelectorAll('#main-container p').forEach(l => {
       const k = (l.innerText || '').trim().toUpperCase();
-      if (!/^(SPESE|COSTO GIORNO|TI RESTA|A CORSA|ALL'ORA)$/.test(k)) return;
+      if (!/^(SPESE|COSTO GIORNO|MARGINE|A CORSA|ALL'ORA)$/.test(k)) return;
       if (l.nextElementSibling) out[k] = l.nextElementSibling.innerText.trim();
     });
     return out;
@@ -63,7 +63,7 @@ for (const [scheda, vai] of [['Oggi', g => { switchTab('giornata'); applyFilterG
     return k !== undefined && /\d/.test(caselle[k]) && !/∗/.test(caselle[k]);
   };
   tutto &= prova(`${scheda}: la casella del costo in chiaro (${caselle['COSTO GIORNO'] || caselle['SPESE'] || '?'})`, inChiaro(['COSTO GIORNO', 'SPESE']));
-  tutto &= prova(`${scheda}: Ti resta in chiaro (${caselle['TI RESTA'] || '?'})`, inChiaro(['TI RESTA']));
+  tutto &= prova(`${scheda}: Margine in chiaro (${caselle['MARGINE'] || '?'})`, inChiaro(['MARGINE']));
   tutto &= prova(`${scheda}: la terza casella in chiaro (${caselle['A CORSA'] || caselle["ALL'ORA"] || '?'})`, inChiaro(['A CORSA', "ALL'ORA"]));
   // e scoperto si legge tutto
   await p.evaluate(() => alternaIncassoVisibile());

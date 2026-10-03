@@ -59,7 +59,7 @@ function caselleTestata() {
     const out = {};
     document.querySelectorAll('#main-container p').forEach(l => {
       const t = (l.innerText || '').trim();
-      if (!/^(SPESE|COSTO GIORNO|TI RESTA|A CORSA|ALL'ORA)$/i.test(t)) return;
+      if (!/^(SPESE|COSTO GIORNO|MARGINE|A CORSA|ALL'ORA)$/i.test(t)) return;
       if (l.nextElementSibling) out[t.toUpperCase()] = l.nextElementSibling.innerText.trim();
     });
     return out;
@@ -115,11 +115,11 @@ const t1 = await caselleTestata();
 const c1 = await lettura();
 const costoTestata = Math.abs(parseFloat(soloMeno(t1['COSTO GIORNO'])));
 const pareggioScheda = parseFloat(soloMeno((c1.testo.match(/PAREGGIO\s*\n\s*([^\n]+)/) || [])[1]));
-const restaTestata = parseFloat(soloMeno(t1['TI RESTA']));
+const restaTestata = parseFloat(soloMeno(t1['MARGINE']));
 const sottoScheda = parseFloat(soloMeno(c1.segnata));
 c('la testata si chiama «Costo giorno», non piu\' «Spese»', !!t1['COSTO GIORNO'] && !t1['SPESE']);
 c('il costo della testata e\' il pareggio della scheda', Math.abs(costoTestata - pareggioScheda) < 0.015);
-c('il «ti resta» della testata e\' il sotto/sopra della scheda', Math.abs(restaTestata - sottoScheda) < 0.015);
+c('il margine della testata e\' il sotto/sopra della scheda', Math.abs(restaTestata - sottoScheda) < 0.015);
 
 // --- su un periodo intero restano le spese vere ---
 await p.evaluate(() => { pulisciGiornoGiornate(); switchTab('giornata'); });
@@ -129,7 +129,7 @@ c('su tutte le giornate la casella torna a chiamarsi «Spese»', !!t2['SPESE'] &
 
 // --- un solo segno meno in tutta l'app ---
 c('il meno e\' sempre quello tipografico, mai il trattino',
-  !/-\d/.test(t1['COSTO GIORNO'] + ' ' + t1['TI RESTA'] + ' ' + c1.segnata));
+  !/-\d/.test(t1['COSTO GIORNO'] + ' ' + t1['MARGINE'] + ' ' + c1.segnata));
 
 await b.close();
 console.log(`  ${ok} controlli passati`);
