@@ -1156,7 +1156,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 125;
+        const VERSIONE_APP = 126;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1709,11 +1709,20 @@
 
         const FORMATO_SOLDI = new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true });
 
-        const formatCurrency = (val) => FORMATO_EURO.format(val || 0);
-        const numeroIT = (val) => FORMATO_NUMERO.format(val || 0);
+        // UN MENO SOLO IN TUTTA L'APP
+        // Intl scrive il negativo con il trattino (-), mentre l'app scrive il
+        // meno tipografico (−) dove lo mette a mano: «−' + soldi(...)». Nella
+        // stessa riga si vedevano i due segni uno accanto all'altro - «−88,77»
+        // e «-0,47» - di lunghezza e altezza diverse. Si uniforma qui, una
+        // volta per tutte: i CSV e i backup non passano da queste funzioni,
+        // scrivono i numeri grezzi, quindi nessun file cambia.
+        const MENO = '\u2212';
+        const conMeno = (testo) => testo.replace('-', MENO);
+        const formatCurrency = (val) => conMeno(FORMATO_EURO.format(val || 0));
+        const numeroIT = (val) => conMeno(FORMATO_NUMERO.format(val || 0));
         // Un importo senza il simbolo: dove la colonna dice gia' di che si
         // tratta («Spese», «Ti resta»), tre euro ripetuti sono tre macchie.
-        const soldi = (val) => FORMATO_SOLDI.format(val || 0);
+        const soldi = (val) => conMeno(FORMATO_SOLDI.format(val || 0));
         // ============================================================
         //  L'INCASSO COPERTO
         //  Il totale del giorno non si mostra finche' non lo chiedi: al suo
@@ -3688,7 +3697,13 @@
         // spostarsi, e IL numero - uno solo, grande davvero, con sotto le due
         // righe che dicono cosa ne resta. Prima il numero piu' importante della
         // schermata aveva lo stesso corpo di altri sedici.
-        function testataPeriodo(sottotitolo, navigatore, d, note, spiegaSpese) {
+        function testataPeriodo(sottotitolo, navigatore, d, note, spese) {
+            // La prima casella si chiama «Spese» quando mostra spese vere (un
+            // mese, un anno) e «Costo giorno» quando mostra il costo pieno di
+            // una giornata - che comprende anche la quota dell'IRPEF, e una
+            // tassa non e' una spesa gia' uscita.
+            const etichettaSpese = (spese && spese.etichetta) || 'Spese';
+            const spiegaSpese = spese && spese.spiega;
             const resta = d.saldo;
             // La stessa scheda scura della giornata, qui in cima al riepilogo:
             // il numero grande bianco, il simbolo piu' tenue, e sotto le caselle
@@ -3713,7 +3728,7 @@
                     </div>
                     <div class="flex border-t border-white/10 pt-3.5">
                         <div class="flex-1 min-w-0"${spiegaSpese ? ` title="${esc(spiegaSpese)}"` : ''}>
-                            <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
+                            <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">${etichettaSpese}</p>
                             <p class="cifra-casella ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5">${d.uscite ? '−' + soldi(d.uscite) : '—'}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
@@ -4409,6 +4424,30 @@
             };
         }
 
+        // ============================================================
+        //  IL COSTO PIENO DI UNA GIORNATA
+        //  Tre pezzi: la quota dei costi a budget (l'assicurazione pesa ogni
+        //  giorno, non solo il giorno in cui la paghi), le spese fuori budget
+        //  di QUEL giorno (il pieno di oggi e' un costo di oggi: se l'hai
+        //  fatto, oggi devi incassare quei soldi in piu' per andare a pari) e
+        //  la quota dell'IRPEF che l'anno promette.
+        //  E' la stessa cifra che la testata scura mostra come «Costo giorno»
+        //  e che la scheda sotto chiama «pareggio»: una sola, cosi' si guarda
+        //  in un posto solo per sapere quanto serve.
+        // ============================================================
+        function costoGiornata(iso, listaUscite) {
+            const sp = speseGiornataSpalmate(iso, listaUscite);
+            const irpef = irpefDelGiorno(iso).quota;
+            return {
+                budget: sp.quotaBudget,
+                fuoriBudget: sp.fuoriBudget,
+                irpef,
+                totale: sp.quotaBudget + sp.fuoriBudget + irpef,
+                pagateOggiABudget: sp.pagateOggiABudget,
+                vere: sp.vere
+            };
+        }
+
         // Quanto pesa davvero una giornata: il budget dei costi fissi di quel
         // giorno, piu' la media delle altre spese del mese, piu' la quota
         // giornaliera dell'IRPEF che l'anno promette. I primi due sono soldi
@@ -4592,12 +4631,13 @@
         // per coprire tutto: e' il numero che dice se la giornata e' andata
         // davvero in attivo. Le spese ci sono tutte, non solo quelle fisse:
         // il pieno di gasolio e il tagliando servono per tutto il mese.
-        function bloccoQuotaSpese(iso, incassiGiorno, usciteGiorno) {
+        function bloccoQuotaSpese(iso, incassiGiorno, listaUscite) {
             const q = quotaDelGiorno(iso);
-            if (!(q.quota > 0)) return '';
+            const costo = costoGiornata(iso, listaUscite);
+            if (!(costo.totale > 0)) return '';
             const mese = nomeMese(parseInt(q.ym.slice(5, 7), 10));
-            const risultato = (incassiGiorno || 0) - q.quota;
-            const speseOggi = usciteGiorno || 0;
+            const risultato = (incassiGiorno || 0) - costo.totale;
+            const speseOggi = costo.vere;
             // «Sopra il pareggio: -32,00» era una contraddizione: se il numero
             // e' negativo non sei sopra, sei sotto. L'etichetta segue il segno,
             // e il segno si scrive per esteso - un «+12,40» verde e un
@@ -4608,22 +4648,22 @@
             return `
                 <div class="bg-white border border-indigo-100 rounded-[1.25rem] shadow-sm p-4">
                     <p class="etichetta block text-indigo-500">Costo fisso al giorno</p>
-                    <p class="mt-1.5"><span class="cifra text-[1.75rem] text-indigo-900">${cifraEuro(q.quota)}</span></p>
+                    <p class="mt-1.5"><span class="cifra text-[1.75rem] text-indigo-900">${cifraEuro(costo.totale)}</span></p>
                     <p class="text-[11px] font-medium text-indigo-400 mt-0.5">${mese} · budget ${formatCurrency(q.budgetMese)} + spese ${formatCurrency(q.totaleAltre)}${q.inCorso ? ' finora' : ''}</p>
                     <p class="text-[11px] font-medium text-indigo-400 mt-0.5">
-                        a budget ${formatCurrency(q.budget)} + spese fuori budget ${formatCurrency(q.altre)}${q.irpef > 0 ? ` + IRPEF stimata ${formatCurrency(q.irpef)}` : ''}
+                        a budget ${formatCurrency(costo.budget)} + spese di questa giornata ${formatCurrency(costo.fuoriBudget)}${costo.irpef > 0 ? ` + IRPEF stimata ${formatCurrency(costo.irpef)}` : ''}
                     </p>
                     <div class="grid grid-cols-2 gap-2.5 mt-3.5">
                         <div class="bg-indigo-50/70 rounded-xl p-3">
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-indigo-400">Pareggio</p>
-                            <p class="cifra-casella text-indigo-900 mt-0.5">${soldi(q.quota)}</p>
+                            <p class="cifra-casella text-indigo-900 mt-0.5">${soldi(costo.totale)}</p>
                         </div>
                         <div class="bg-indigo-50/70 rounded-xl p-3">
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-indigo-400">${sopra ? 'Sopra il pareggio' : 'Sotto il pareggio'}</p>
                             <p class="cifra-casella ${sopra ? 'text-green-700' : 'text-red-600'} mt-0.5">${segno}${soldi(Math.abs(risultato))}</p>
                         </div>
                     </div>
-                    ${q.irpef > 0 && vociBudgetConIrpef().length ? `
+                    ${costo.irpef > 0 && vociBudgetConIrpef().length ? `
                         <p class="text-[11px] font-bold text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 mt-2.5 leading-relaxed">
                             Nel budget hai la voce «${esc(vociBudgetConIrpef()[0])}»: se comprende già l'IRPEF, qui la stai contando due volte.
                             Togli l'IRPEF da quella voce e lascia fare la stima qui sotto.
@@ -4670,12 +4710,11 @@
                     <details class="mt-2">
                     <summary class="text-xs font-black text-indigo-600 cursor-pointer select-none">Come è fatto questo conto</summary>
                     <p class="text-xs text-indigo-500 mt-2 leading-relaxed">
-                        Le voci a <strong>budget</strong> entrano qui a preventivo, non a fattura: pesano ogni giorno anche quando la spesa esce dal conto una volta l'anno.
-                        Le altre sono le spese che hai registrato${speseOggi > 0 ? ` (in questa giornata ${formatCurrency(speseOggi)})` : ''}, divise per i giorni del mese: un tagliando serve per tutto il mese, non solo per il giorno in cui l'hai pagato.
+                        Le voci a <strong>budget</strong> entrano qui a preventivo, non a fattura: pesano ogni giorno anche quando la spesa esce dal conto una volta l'anno — è per questo che il giorno in cui paghi l'assicurazione non diventa un disastro.
+                        Le <strong>spese di questa giornata</strong> sono invece quelle che hai registrato qui e che il budget non copre${costo.fuoriBudget > 0 ? ` (${formatCurrency(costo.fuoriBudget)})` : ''}: se oggi hai fatto il pieno, oggi devi incassare quei soldi in più per andare a pari.
                         È una lettura, non un movimento: i totali di mese e anno restano quelli veri.
-                        ${q.inCorso ? `${mese} è ancora in corso, quindi le spese fuori budget sono la media dei primi ${q.giorniAltre} giorni.` : ''}
                     </p>
-                    ${q.irpef > 0 ? `
+                    ${costo.irpef > 0 ? `
                         <p class="text-xs text-indigo-500 mt-2 leading-relaxed">
                             L'<strong>IRPEF stimata</strong> è ${formatCurrency(q.irpefAnno)} per tutto il ${q.ym.slice(0, 4)} — IRPEF a scaglioni
                             più addizionali regionali e comunali sull'utile che l'anno promette al ritmo tenuto finora
@@ -4685,9 +4724,8 @@
                             La stima si sposta man mano che l'anno va, perché si muove l'utile su cui è calcolata.
                         </p>
                         <p class="text-xs text-indigo-400 mt-2 leading-relaxed">
-                            Per questo il <strong>pareggio</strong> qui è più alto del «ti resta» della scheda scura in cima:
-                            quello dice quanto ti è rimasto in mano dopo le spese, questo quanto serve perché la giornata
-                            paghi anche la sua parte di tasse.
+                            È la stessa cifra che la scheda scura in cima mostra come <strong>costo giorno</strong>, e il
+                            «ti resta» di là è questo «sopra / sotto il pareggio»: un numero solo, da guardare in un posto solo.
                         </p>` : ''}
                     </details>
                 </div>`;
@@ -4927,9 +4965,23 @@
             // «Oggi»: lo stesso giorno non puo' dire due numeri diversi in due
             // schermate. Il dettaglio qui sotto resta quello vero, riga per riga.
             const spalmG = speseGiornataSpalmate(g, dVero.listaUscite);
+            // ============================================================
+            //  UNA CIFRA SOLA PER IL PAREGGIO
+            //  La testata diceva «Spese 83,90» e la scheda sotto «Costo fisso
+            //  al giorno 93,61»: due numeri diversi per la stessa giornata,
+            //  che costringevano a guardare in due posti per sapere quanto
+            //  serve per andare a pari. Adesso la testata porta lo stesso
+            //  costo della scheda - quota del budget, media delle spese fuori
+            //  budget e quota dell'IRPEF - cosi' «ti resta» e' esattamente il
+            //  «sopra/sotto il pareggio» della scheda.
+            //  Se non c'e' budget la scheda non compare: li' la testata resta
+            //  sulle spese spalmate di prima, altrimenti mostrerebbe una media
+            //  al posto di quello che hai speso davvero.
+            // ============================================================
+            const costoG = costoGiornata(g, dVero.listaUscite);
             const d = Object.assign({}, dVero, {
-                uscite: spalmG.totale,
-                saldo: dVero.incassi - spalmG.totale
+                uscite: costoG.totale,
+                saldo: dVero.incassi - costoG.totale
             });
             // Nessuna corsa e nessun turno = giornata di riposo. Se non è stata
             // registrata esplicitamente la deduco, ma solo per i giorni già passati:
@@ -4950,7 +5002,7 @@
                             </label>
                             <button onclick="scorriGiorno(1)" title="Giorno successivo" aria-label="Giorno successivo" class="tasto-icona w-9 h-9 rounded-xl eroe-campo text-yellow-400 flex items-center justify-center text-lg">›</button>
                             <button onclick="setDashGiorno(ultimoGiornoConDati())" title="Vai all'ultima giornata registrata" class="px-2 text-[11px] font-bold text-white/55 hover:text-white underline underline-offset-2">Ultimo</button>
-                        `, d, null, `Spese del giorno ${formatCurrency(spalmG.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalmG.quotaBudget)}`)}
+                        `, d, null, { etichetta: 'Costo giorno', spiega: `Quota dei costi a budget ${formatCurrency(costoG.budget)} + spese di questa giornata ${formatCurrency(costoG.fuoriBudget)}${costoG.irpef > 0 ? ` + IRPEF stimata ${formatCurrency(costoG.irpef)}` : ''}` })}
 
                     ${riposo ? `
                         <div class="p-8 text-center bg-blue-50/50">
@@ -4976,7 +5028,7 @@
                                     ${formatCurrency(spalmG.pagateOggiABudget)} pagati in questa data sono già a budget: non pesano su questa giornata, sono spalmati su tutto l'anno.
                                 </p>` : ''}
 
-                            ${bloccoQuotaSpese(g, d.incassi, dVero.uscite)}
+                            ${bloccoQuotaSpese(g, d.incassi, dVero.listaUscite)}
 
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                                 <div class="space-y-3">
@@ -5864,7 +5916,14 @@
             // esce dal conto. Su un mese o su un anno restano quelle vere, perche'
             // li' il confronto con il budget si fa nel conguaglio.
             const spalm = giorno ? speseGiornataSpalmate(giorno, spesePeriodo) : null;
-            const totSpese = spalm ? spalm.totale : totSpeseVere;
+            // Su un giorno solo si mostra il costo pieno della giornata, lo
+            // stesso che dice la scheda in Andamento: lo stesso giorno non puo'
+            // dire due numeri diversi in due schermate. Su un periodo (un mese,
+            // tutte le giornate) restano le spese vere: li' non c'e' un
+            // pareggio da leggere, ci sono soldi usciti.
+            const costoG = giorno ? costoGiornata(giorno, spesePeriodo) : null;
+            const costoPieno = !!costoG && costoG.totale > 0;
+            const totSpese = costoPieno ? costoG.totale : (spalm ? spalm.totale : totSpeseVere);
 
             // Ripartizione del periodo, calcolata prima del filtro metodo: serve a
             // far vedere quanto pesa ogni voce prima di selezionarla.
@@ -6098,8 +6157,10 @@
                             </p>` : ''}
 
                         <div class="flex mt-4 pt-3.5 border-t border-white/10">
-                            <div class="flex-1 min-w-0" ${spalm ? `title="Spese del giorno ${formatCurrency(spalm.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalm.quotaBudget)}"` : ''}>
-                                <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
+                            <div class="flex-1 min-w-0" ${costoPieno
+                                ? `title="Quota dei costi a budget ${formatCurrency(costoG.budget)} + spese di questa giornata ${formatCurrency(costoG.fuoriBudget)}${costoG.irpef > 0 ? ` + IRPEF stimata ${formatCurrency(costoG.irpef)}` : ''}"`
+                                : (spalm ? `title="Spese del giorno ${formatCurrency(spalm.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalm.quotaBudget)}"` : '')}>
+                                <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">${costoPieno ? 'Costo giorno' : 'Spese'}</p>
                                 <p class="cifra-casella ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5">${totSpese > 0 ? '−' + soldi(totSpese) : '—'}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
@@ -6934,12 +6995,12 @@
                           }
                           const giorno = giornoFiltroUscite();
                           if (!giorno) return '';
-                          const q = quotaDelGiorno(giorno);
-                          if (!(q.quota > 0)) return '';
+                          const cg = costoGiornata(giorno, (window.dailyRecords || []).filter(r => r.tipo === 'USCITA' && r.data === giorno));
+                          if (!(cg.totale > 0)) return '';
                           return `
                             <div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-800 leading-relaxed">
-                                <strong>Questa giornata costa ${formatCurrency(q.quota)}</strong>: ${formatCurrency(q.budget)} di budget,
-                                ${formatCurrency(q.altre)} di media delle spese fuori budget${q.irpef > 0 ? ` e ${formatCurrency(q.irpef)} di IRPEF stimata` : ''}.
+                                <strong>Questa giornata costa ${formatCurrency(cg.totale)}</strong>: ${formatCurrency(cg.budget)} di budget,
+                                ${formatCurrency(cg.fuoriBudget)} di spese di giornata${cg.irpef > 0 ? ` e ${formatCurrency(cg.irpef)} di IRPEF stimata` : ''}.
                                 Il budget non è fatto di movimenti — pesa ogni giorno anche quando non paghi niente —
                                 quindi in questo elenco non lo trovi. Il conto giornata per giornata è nella Dashboard,
                                 il confronto con quello che hai speso davvero in Spese &amp; Fisco.

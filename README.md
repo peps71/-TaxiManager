@@ -69,6 +69,64 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una cifra sola per il pareggio (versione 126)
+
+La testata scura diceva **Spese 83,90** e la scheda sotto **Costo fisso al
+giorno 93,61**: due numeri diversi per la stessa giornata. Per sapere quanto
+serviva per andare a pari bisognava guardare in due posti e capire perche' non
+coincidevano.
+
+Adesso c'è una funzione sola, `costoGiornata`, e la leggono tutte e due. Tre
+pezzi:
+
+1. la **quota dei costi a budget** di quel giorno — l'assicurazione pesa ogni
+   giorno, non solo il giorno in cui la paghi;
+2. le **spese fuori budget di quel giorno** — se oggi hai fatto il pieno, oggi
+   devi incassare quei soldi in più per andare a pari;
+3. la **quota dell'IRPEF** che l'anno promette.
+
+La casella si chiama **«Costo giorno»** invece di «Spese»: dentro c'è anche una
+tassa, e una tassa non è una spesa già uscita. Di conseguenza il **«ti resta»**
+della testata è ora esattamente il **«sopra / sotto il pareggio»** della scheda:
+
+    COSTO GIORNO  −88,77        PAREGGIO            88,77
+    TI RESTA       −0,47        SOTTO IL PAREGGIO   −0,47
+
+Un'occhiata sola, a fine turno, dice quanto manca.
+
+Il cambio vale anche in **Giornate**, perché lo stesso giorno non può dire due
+numeri diversi in due schermate. Su un periodo intero — un mese, tutte le
+giornate — la casella resta **«Spese»** con le spese vere: lì non c'è un
+pareggio da leggere, ci sono soldi usciti.
+
+### Un primo tentativo sbagliato, e come è saltato fuori
+
+La prima versione di questo cambio faceva entrare nel costo del giorno la
+**media mensile** delle spese fuori budget, perché era quello che la scheda
+faceva già. Le prove hanno bocciato il risultato: in `testCoperto`, una
+giornata con 50 € di gasolio registrato mostrava «Costo giorno −1,61» e «Ti
+resta 198,39» — ma in tasca c'erano 150 €, non 198. Quei 50 € erano usciti
+davvero, quel giorno.
+
+Quindi il modello è cambiato: le spese fuori budget restano sul giorno in cui
+le hai fatte, come ha sempre fatto la testata. Solo le voci a **budget** si
+spalmano — che poi era il senso della versione 109. E la domanda «quanto devo
+guadagnare oggi per andare a pari» trova una risposta letterale: se oggi hai
+speso 50 € di gasolio, oggi te ne servono 50 in più.
+
+### Un meno solo in tutta l'app
+
+Mettendo le due cifre una accanto all'altra e' saltato fuori che erano scritte
+con due segni diversi. `Intl` scrive il negativo con il trattino (`-`), mentre
+l'app scrive il meno tipografico (`−`) dove lo mette a mano. Nella stessa riga
+si leggeva «−88,77» e «-0,47», di lunghezza e altezza diverse. Adesso i tre
+formattatori lo uniformano una volta per tutte. I CSV e i backup non passano da
+li': scrivono i numeri grezzi, quindi nessun file cambia.
+
+Cinque controlli nuovi in `prove/testPareggio.mjs` (diciassette in tutto): le
+due cifre devono coincidere, la casella deve cambiare nome fra giorno e
+periodo, e il meno dev'essere sempre lo stesso.
+
 ## L'IRPEF entra nel costo della giornata (versione 125)
 
 ### «Sopra il pareggio: −32,00» non voleva dire niente

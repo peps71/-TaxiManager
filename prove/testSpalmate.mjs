@@ -70,11 +70,16 @@ tutto &= ok('totale anno: resta quello vero', conti.annoVero, 1885);
 // e adesso a video: la scheda di «Oggi» filtrata sul giorno della rata
 await p.evaluate(g => { switchTab('giornata'); applyFilterGiornoGiornate(g); }, GIORNO_RATA);
 await p.waitForTimeout(400);
+// Dalla v126 la casella si chiama «Costo giorno» e porta il costo pieno della
+// giornata: quota del budget + spese di quel giorno + quota IRPEF. Nel giorno
+// della rata le altre due parti sono zero, quindi resta la sola quota - che e'
+// poi quello che questa prova vuole dimostrare: la rata da 1825 non casca sul
+// giorno in cui la paghi.
 const video = await p.evaluate(() => {
   const t = document.getElementById('main-container').innerText;
-  return { spese: (t.match(/SPESE\s+(\u2212[\d.,]+)/i) || [])[1] || '?', aBudget: /a budget/.test(t), nota: /spalmat/i.test(t) };
+  return { spese: (t.match(/(?:COSTO GIORNO|SPESE)\s+(\u2212[\d.,]+)/i) || [])[1] || '?', aBudget: /a budget/.test(t), nota: /spalmat/i.test(t) };
 });
-console.log(`\n  testata «Oggi» del giorno della rata: Spese ${video.spese}`);
+console.log(`\n  testata «Oggi» del giorno della rata: costo ${video.spese}`);
 console.log(`  marchio «a budget» sulla riga: ${video.aBudget ? 'sì' : 'NO ***'}`);
 console.log(`  spiegazione dello spalmare: ${video.nota ? 'sì' : 'NO ***'}`);
 const atteso = '−' + quota.toFixed(2).replace('.', ',');
@@ -86,9 +91,9 @@ await p.evaluate(g => { switchTab('dashboard'); cambiaPeriodoDash('giorno'); set
 await p.waitForTimeout(400);
 const vid2 = await p.evaluate(() => {
   const t = document.getElementById('main-container').innerText;
-  return (t.match(/SPESE\s+(\u2212[\d.,]+)/i) || [])[1] || '?';
+  return (t.match(/(?:COSTO GIORNO|SPESE)\s+(\u2212[\d.,]+)/i) || [])[1] || '?';
 });
-console.log(`  riepilogo di Andamento: Spese ${vid2}`);
+console.log(`  riepilogo di Andamento: costo ${vid2}`);
 const bene2 = vid2.replace(/\s/g, ' ').includes(atteso);
 console.log(`  ${bene2 ? 'ok ' : '***'} le due schermate dicono lo stesso numero${bene2 ? '' : '  *** SBAGLIATO ***'}`);
 

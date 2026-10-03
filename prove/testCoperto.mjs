@@ -45,10 +45,26 @@ for (const [scheda, vai] of [['Oggi', g => { switchTab('giornata'); applyFilterG
   const asterischi = (t.match(/∗/g) || []).length;
   tutto &= prova(`${scheda}: il totale e' coperto (5 asterischi, trovati ${asterischi})`, asterischi === 5);
   tutto &= prova(`${scheda}: 200,00 non si legge`, !/200,00/.test(t));
-  tutto &= prova(`${scheda}: Spese in chiaro (−50,00)`, /−50,00/.test(t));
-  tutto &= prova(`${scheda}: Ti resta in chiaro (150,00)`, /150,00/.test(t));
-  tutto &= prova(`${scheda}: a corsa in chiaro (100,00)`, /100,00/.test(t));
-  tutto &= prova(`${scheda}: all'ora in chiaro (25,00)`, /25,00/.test(t));
+  // Le caselle accanto al totale si leggono per etichetta, non per importo:
+  // quanto valgono dipende dal modello dei costi (dalla v126 la prima casella
+  // porta il costo pieno della giornata, non le sole spese), mentre quello che
+  // questa prova deve garantire e' che NON siano coperte.
+  const caselle = await p.evaluate(() => {
+    const out = {};
+    document.querySelectorAll('#main-container p').forEach(l => {
+      const k = (l.innerText || '').trim().toUpperCase();
+      if (!/^(SPESE|COSTO GIORNO|TI RESTA|A CORSA|ALL'ORA)$/.test(k)) return;
+      if (l.nextElementSibling) out[k] = l.nextElementSibling.innerText.trim();
+    });
+    return out;
+  });
+  const inChiaro = (nomi) => {
+    const k = nomi.find(n => caselle[n] !== undefined);
+    return k !== undefined && /\d/.test(caselle[k]) && !/∗/.test(caselle[k]);
+  };
+  tutto &= prova(`${scheda}: la casella del costo in chiaro (${caselle['COSTO GIORNO'] || caselle['SPESE'] || '?'})`, inChiaro(['COSTO GIORNO', 'SPESE']));
+  tutto &= prova(`${scheda}: Ti resta in chiaro (${caselle['TI RESTA'] || '?'})`, inChiaro(['TI RESTA']));
+  tutto &= prova(`${scheda}: la terza casella in chiaro (${caselle['A CORSA'] || caselle["ALL'ORA"] || '?'})`, inChiaro(['A CORSA', "ALL'ORA"]));
   // e scoperto si legge tutto
   await p.evaluate(() => alternaIncassoVisibile());
   await p.waitForTimeout(350);
