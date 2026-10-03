@@ -1156,7 +1156,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 127;
+        const VERSIONE_APP = 128;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4591,16 +4591,42 @@
         // Forza il passaggio alla versione nuova senza chiudere l'app: si chiede
         // al telefono di ricontrollare, e se ce n'e' una in attesa le si dice di
         // prendere il comando subito.
+        // Chiede al service worker di riscaricare i file dell'app dalla rete,
+        // scavalcando la cache del browser. Serve quando la copia salvata e'
+        // rimasta indietro: senza questo, «Aggiorna adesso» non trovava niente
+        // da aggiornare, ricaricava, e si riapriva la stessa versione di prima.
+        function riscaricaDalServiceWorker(reg) {
+            const attivo = (reg && reg.active) || (navigator.serviceWorker && navigator.serviceWorker.controller);
+            if (!attivo || typeof MessageChannel === 'undefined') return Promise.resolve(null);
+            return new Promise((risolvi) => {
+                const canale = new MessageChannel();
+                const scadenza = setTimeout(() => risolvi(null), 12000);
+                canale.port1.onmessage = (e) => { clearTimeout(scadenza); risolvi(e.data || null); };
+                try { attivo.postMessage({ tipo: 'RISCARICA_APP' }, [canale.port2]); }
+                catch (err) { clearTimeout(scadenza); risolvi(null); }
+            });
+        }
+
         async function aggiornaApp() {
-            showToast('Cerco una versione nuova...');
+            showToast('Controllo se c\'e\' una versione nuova...');
             try {
                 const reg = window.registrazioneSW
                     || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration());
                 if (reg) {
                     await reg.update();
                     if (reg.waiting) {
+                        showToast('Versione nuova trovata: la installo.');
                         reg.waiting.postMessage({ tipo: 'AGGIORNA_SUBITO' });
                         return;   // al cambio di comando la pagina si ricarica da sola
+                    }
+                    // Nessuna versione in attesa: o sei gia' all'ultima, o la copia
+                    // salvata e' rimasta indietro. Nel dubbio si riscarica: costa
+                    // pochi secondi e toglie di mezzo il caso peggiore.
+                    const esito = await riscaricaDalServiceWorker(reg);
+                    if (esito && esito.fatto) {
+                        showToast('File riscaricati: riapro l\'app.');
+                        setTimeout(() => window.location.reload(), 600);
+                        return;
                     }
                 }
             } catch (err) {
@@ -11653,7 +11679,10 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-                navigator.serviceWorker.register('sw.js')
+                // updateViaCache: 'none' - nemmeno il service worker stesso va
+                // mai letto dalla cache del browser, o il controllo della
+                // versione nuova puo' rispondere con quello vecchio.
+                navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
                     .then(function (reg) {
                         window.registrazioneSW = reg;
 

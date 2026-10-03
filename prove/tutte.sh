@@ -37,6 +37,7 @@ titolo "iniezione dal backup";    giro testIniezione.mjs
 titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "disegni accodati";        giro testDisegni.mjs
 titolo "service worker";          giro testSW.mjs
+titolo "arrivo degli aggiornamenti"; giro testAggiorna.mjs
 titolo "prestazioni";             giro avvio.mjs
 titolo "profilo delle schermate"; giro profilo2.mjs
 echo

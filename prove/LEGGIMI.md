@@ -47,6 +47,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testIniezione.mjs` | un backup confezionato male non esegue niente |
 | `testCspViva.mjs` | la protezione sugli indirizzi è davvero applicata, e l'interruttore la toglie |
 | `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei |
+| `testAggiorna.mjs` | con un server che si comporta come GitHub Pages (`max-age=600`), la versione nuova si porta la pagina nuova e non quella rimasta nella cache HTTP |
 | `testSW.mjs` | il service worker su HTTP: apertura dalla copia salvata, versione nuova in attesa |
 | `avvio.mjs`, `profilo2.mjs` | quanto costa avviare l'app e disegnare ogni schermata |
 

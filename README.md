@@ -69,6 +69,53 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'aggiornamento non arrivava sul telefono (versione 128)
+
+«L'hai rilasciata la v127? Perché anche se aggiorno rimane alla precedente.»
+La versione era pubblicata davvero — GitHub Pages l'aveva messa online — ma
+sul telefono non arrivava. Il difetto era nel service worker, ed era vero.
+
+### Cosa succedeva
+
+Installandosi, il service worker si scarica i file dell'app con `cache.add`.
+`cache.add` fa una **fetch normale**, e una fetch normale può essere servita
+dalla **cache HTTP del browser**. GitHub Pages manda `Cache-Control:
+max-age=600`: per dieci minuti dopo uno scarico, la stessa richiesta torna
+dalla cache senza toccare la rete.
+
+Quindi: due versioni pubblicate a meno di dieci minuti l'una dall'altra (v126
+alle 11:32, v127 alle 11:42) e il service worker **nuovo** si salvava la pagina
+**vecchia**. Il numero di versione del service worker cambiava, l'app no.
+
+Il tasto «Aggiorna adesso» peggiorava le cose: `registration.update()` non
+trovava niente di nuovo da installare, la pagina si ricaricava, e si riapriva
+la stessa versione. Da fuori sembrava che il tasto non facesse niente.
+
+### Le tre correzioni
+
+1. **I file si scaricano dalla rete, per forza**: `cache.add(new Request(file,
+   { cache: 'reload' }))`. Se un browser vecchio non conosce l'opzione si
+   riprova alla maniera di prima — meglio una copia dubbia che nessuna copia
+   offline.
+2. **Il service worker si registra con `updateViaCache: 'none'`**, così nemmeno
+   lui può essere letto da una cache.
+3. **«Aggiorna adesso» ha una via d'uscita.** Quando non trova una versione in
+   attesa non si limita più a ricaricare: chiede al service worker di
+   riscaricare i file dalla rete (messaggio `RISCARICA_APP`) e poi ricarica.
+   Costa pochi secondi e toglie di mezzo il caso peggiore, cioè una copia
+   vecchia già finita in cache. I messaggi dicono cosa sta succedendo invece di
+   tacere.
+
+### La prova che mancava
+
+`prove/testSW.mjs` non poteva vedere questo difetto: il suo server serve i file
+con `no-cache`. La prova nuova, `prove/testAggiorna.mjs`, si comporta come
+GitHub Pages (`max-age=600`), pubblica una versione A, scalda la cache HTTP,
+pubblica una B entro i dieci minuti e controlla che in cache finisca la B.
+
+Verificata nell'unico modo che conta: **con il service worker della v127 la
+prova fallisce**, con quello nuovo passa.
+
 ## Le diciture, riscritte da gestionale (versione 127)
 
 L'app parlava come un amico al bar: «Come va il 2026», «Ti resta», «Quanto?»,

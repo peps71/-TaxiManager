@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v127';
+const VERSIONE = 'taximanager-v128';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -40,17 +40,30 @@ div{padding:2rem}h1{font-size:1.5rem;margin:0 0 .5rem}p{margin:0;opacity:.75}</s
 <body><div><h1>TaxiManager non è ancora disponibile offline</h1>
 <p>Collegati una volta alla rete: da lì in poi l'app si aprirà anche senza campo.</p></div></body></html>`;
 
+// SCARICARE DALLA RETE, NON DALLA CACHE DEL BROWSER
+// cache.add fa una fetch normale, e una fetch normale puo' essere servita
+// dalla cache HTTP del browser. GitHub Pages manda Cache-Control: max-age=600,
+// quindi per dieci minuti dopo uno scarico la stessa richiesta torna dalla
+// cache senza toccare la rete. Risultato: due versioni pubblicate a meno di
+// dieci minuti l'una dall'altra, e il service worker NUOVO si salvava la
+// pagina VECCHIA. Il numero di versione del service worker cambiava, ma
+// l'app restava indietro - e dal telefono sembrava che l'aggiornamento non
+// funzionasse. Con cache: 'reload' la rete si interroga per forza.
+// Se un browser vecchio non conosce l'opzione, si riprova alla maniera di
+// prima: meglio una copia dubbia che nessuna copia offline.
+function scaricaFresco(cache, file) {
+  return cache.add(new Request(file, { cache: 'reload' }))
+    .catch(() => cache.add(file))
+    .catch((err) => { console.warn('[SW] file non messo in cache:', file, err); });
+}
+
 // Installazione: scarico e metto in cache i file dell'app.
 // Ogni file si scarica per conto suo: con cache.addAll bastava una sola icona
 // mancante per far fallire l'intera installazione, e l'app restava senza offline.
 self.addEventListener('install', (evento) => {
   evento.waitUntil(
     caches.open(VERSIONE)
-      .then((cache) => Promise.all(
-        FILE_APP.map((file) => cache.add(file).catch((err) => {
-          console.warn('[SW] file non messo in cache:', file, err);
-        }))
-      ))
+      .then((cache) => Promise.all(FILE_APP.map((file) => scaricaFresco(cache, file))))
   );
   // Niente skipWaiting qui: la versione nuova resta in attesa e prende il
   // comando solo quando la pagina glielo dice (AGGIORNA_SUBITO, dal tasto
@@ -69,9 +82,24 @@ self.addEventListener('activate', (evento) => {
   );
 });
 
-// Permette alla pagina di far passare subito una versione nuova senza chiudere l'app
+// Permette alla pagina di far passare subito una versione nuova senza chiudere
+// l'app, e di farsi riscaricare i file quando la copia salvata e' rimasta
+// indietro (vedi «scaricaFresco» qui sopra): e' la via d'uscita se una copia
+// vecchia e' gia' finita in cache.
 self.addEventListener('message', (evento) => {
-  if (evento.data && evento.data.tipo === 'AGGIORNA_SUBITO') self.skipWaiting();
+  const dati = evento.data || {};
+  if (dati.tipo === 'AGGIORNA_SUBITO') { self.skipWaiting(); return; }
+  if (dati.tipo === 'RISCARICA_APP') {
+    const rispondi = (esito) => {
+      if (evento.ports && evento.ports[0]) evento.ports[0].postMessage(esito);
+    };
+    evento.waitUntil(
+      caches.open(VERSIONE)
+        .then((cache) => Promise.all(FILE_APP.map((file) => scaricaFresco(cache, file))))
+        .then(() => rispondi({ fatto: true, versione: VERSIONE }))
+        .catch((err) => rispondi({ fatto: false, errore: String(err) }))
+    );
+  }
 });
 
 // Richieste che NON devono mai passare dalla cache:
