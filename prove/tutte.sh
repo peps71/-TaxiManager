@@ -12,6 +12,7 @@ titolo "sintassi";                python3 "$P/verifica.py" || exit 1
 titolo "classi CSS";              python3 "$P/classi.py"   || exit 1
 titolo "le dieci schermate";      giro smoke.mjs
 titolo "impaginazione";           giro sbordo.mjs
+titolo "testo tagliato";          giro troncati.mjs
 titolo "uso vero dell'app";       giro testUso.mjs
 titolo "casi limite";             giro testLimiti.mjs
 titolo "coerenza dei conti";      giro coerenza.mjs

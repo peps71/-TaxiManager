@@ -69,6 +69,90 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Meno decorazione, piu' chiarezza (versione 124)
+
+Niente di nuovo in questa versione: e' un giro di pulizia su quello che si vede
+e si legge.
+
+### Le emoji nei pulsanti sono andate via
+
+I pulsanti dicevano «💾 Salva e comincia», «📥 Scarica Backup Completo (.json)»,
+«🗑️ Cancella tutto». Un'emoji non la disegna l'app: la disegna il telefono, con
+il suo stile e la sua eta', e cambia da un modello all'altro. Nell'app le icone
+sono disegnate a mano, tutte dello stesso tratto: un'emoji accanto a una di
+quelle stona, e dentro un pulsante non aggiunge niente che il testo non dica
+gia'. Adesso i pulsanti sono solo testo.
+
+Erano in tutti i messaggi di conferma, dove ogni riga cominciava con ⚡ o ✅.
+Anche quelli sono puliti: «Corsa salvata e sincronizzata.» invece di «⚡ Corsa
+salvata e sincronizzata!».
+
+### I messaggi di avviso si riconoscono dal colore
+
+I messaggi che segnalano un guaio cominciavano con ⚠️. Al posto dell'emoji c'e'
+un secondo tipo di messaggio: `showToast(testo, 'avviso')` lo scrive in rosso
+chiaro con il bordo in tinta, mentre quello normale resta giallo. Si distingue
+anche di sfuggita, e non dipende da come il telefono disegna un simbolo.
+
+I sedici avvisi dell'app sono passati al nuovo tipo.
+
+### Le cifre tagliate
+
+Una prova nuova, `prove/troncati.mjs`, cerca in tutte le schermate gli elementi
+il cui contenuto non ci sta nel riquadro - `scrollWidth` piu' largo di
+`clientWidth` - a 320, 390 e 768 px di larghezza. Il controllo di impaginazione
+che c'era non li vedeva: il testo non esce dal riquadro, ci sta dentro tagliato
+con i puntini.
+
+Ne ha trovati **venti**, e fra questi delle cifre: «−6.026,...», «39.673,00»
+tagliato a meta'. Una cifra con i puntini non e' un'informazione incompleta, e'
+un numero che non si puo' leggere.
+
+Sono state risolte con due classi che adattano il corpo del carattere alla
+larghezza invece di tagliare (`.cifra-casella` per le tre caselle della scheda
+scura, `.cifra-riquadro` per i riquadri), con `.titolo-schermata` sui dieci
+titoli di schermata, mandando a capo i sottotitoli invece di troncarli, e
+rifacendo le righe del confronto fra anni su due livelli invece di tre colonne
+strette. La prova ora sta nel giro di `prove/tutte.sh`: adesso non c'e' piu'
+niente di tagliato.
+
+### Un solo selettore dell'anno per schermata
+
+In Andamento c'erano due tendine dell'anno a mezzo schermo di distanza: una
+nella testata, una dentro la scheda scura del riepilogo annuale - e il titolo
+diceva comunque «Come va il 2026». Tre volte la stessa cosa. E' rimasta quella
+della testata.
+
+### I nomi dei metodi di pagamento nelle tendine
+
+Nelle tendine i metodi avevano un pallino colorato davanti: «🟢 Contanti»,
+«⚫ POS / Carta». Dentro una `<option>` non si puo' colorare niente, e il
+pallino era il trucco per avere comunque un colore - ma e' un'emoji come le
+altre. Adesso c'e' il nome scritto per intero. I badge e i pulsanti, dove il
+colore lo fa il CSS, non cambiano.
+
+Ne e' venuto fuori un difetto: il pulsante dei corrispettivi componeva la sua
+etichetta prendendo la prima parola da quella mappa, cioe' il pallino. Senza
+pallino avrebbe scritto «Contanti Contanti». Sistemato, e la mappa che era
+rimasta identica a un'altra e' stata cancellata.
+
+### Un nome che non ci stava
+
+La prova dell'impaginazione, a 320 px, trovava «Carburante» tagliato nel
+riquadro delle voci che l'app propone per il budget: accanto ai due pulsanti a
+quel nome restano 82 px e gliene servono 89. Una parola sola non va a capo, e
+spezzarla a meta' si legge peggio. Adesso il corpo del carattere si adatta,
+come per le cifre, e la parola resta intera.
+
+### Le diciture
+
+I titoli in Maiuscolo Come In Inglese sono passati all'italiano: «Registra
+Nuova Corsa (Incasso)» → «Registra una corsa», «Dettaglio Spese per Categoria»
+→ «Spese per categoria», «2. Indicatori di Performance Turni & Veicolo» →
+«2. Turni e veicolo», «Report Economico & Operativo Servizio Taxi» →
+«Riepilogo economico e operativo del servizio taxi». Anche «Ora Inizio» →
+«Ora di inizio» e «Incasso / Ora» → «Incasso all'ora».
+
 ## Quattro cose che mancavano (versione 123)
 
 ### Riassegnare una spesa a una voce di budget

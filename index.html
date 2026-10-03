@@ -281,6 +281,58 @@
            sono grandi, colorati e soli sulla riga. */
         .tasto-metodo { font-weight: 650; }
 
+        /* Lo stesso criterio per i riquadri con un dato solo e per i titoli
+           delle schermate: il corpo si adatta alla larghezza invece di uscire
+           dal riquadro. «Commercialista» e' una parola sola e lunga: a 320px
+           non ci stava, e una parola sola non va a capo. */
+        .cifra-riquadro {
+            font-size: clamp(0.8125rem, 4.1vw, 1rem);
+            font-weight: 800;
+            line-height: 1.25;
+        }
+        @media (min-width: 420px) { .cifra-riquadro { font-size: 1rem; } }
+        @media (min-width: 1280px) { .cifra-riquadro { font-size: 1.125rem; } }
+
+        .titolo-schermata {
+            font-size: clamp(1.25rem, 6.2vw, 1.5rem);
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+        @media (min-width: 420px) { .titolo-schermata { font-size: 1.5rem; } }
+
+        /* LE CIFRE DELLE TRE CASELLE
+           Una cifra tagliata con i puntini - «−6.026,...» - non e'
+           un'informazione: e' un numero che non si puo' leggere. Queste
+           caselle stanno in tre su una riga, e su un telefono stretto, con le
+           cifre di un anno intero, non ci stavano. Il corpo si adatta alla
+           larghezza: resta 17px dove c'e' posto e scende dove non ce n'e',
+           senza tagliare mai. */
+        .cifra-casella {
+            font-size: clamp(0.7rem, 3.9vw, 1.0625rem);
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        @media (min-width: 420px) { .cifra-casella { font-size: 1.0625rem; } }
+
+        /* IL MESSAGGIO CHE AVVISA DI UN GUAIO
+           Prima ogni messaggio di errore cominciava con un'emoji di
+           avvertimento. Un'emoji la disegna il telefono, non l'app: cambia
+           forma su ogni modello e invecchia male. Il colore dice la stessa
+           cosa in modo piu' sobrio e si legge anche di sfuggita: il messaggio
+           normale resta giallo, quello che avvisa diventa rosso chiaro con
+           il bordo in tinta. */
+        .messaggio-avviso { color: #fca5a5; border-color: rgba(248, 113, 113, 0.55); }
+
+        /* IL NOME DI UNA VOCE DI BUDGET
+           Sta accanto a due pulsanti, e a 320px gli restano 82px: «Carburante»
+           ne chiede 89 e veniva tagliato. Una parola sola non va a capo, e
+           spezzarla a meta' («Carburan-te») si legge peggio di un corpo un po'
+           piu' piccolo. Come per le cifre: il corpo si adatta, il testo resta
+           intero. */
+        .nome-voce { font-size: clamp(0.75rem, 3.6vw, 0.875rem); line-height: 1.25; }
+        @media (min-width: 390px) { .nome-voce { font-size: 0.875rem; } }
+
         /* ============================================================
            NOVE CLASSI CHE TAILWIND NON AVEVA GENERATO
            Il foglio di stile incorporato si rigenera leggendo le classi usate
@@ -474,7 +526,7 @@
                         isCloudActive = true;
                         window.isCloudSyncing = true;
                         window.cloudUtente = { nome: user.displayName || '', email: user.email || '' };
-                        window.showToast(`⚡ Cloud attivo per ${user.email || 'il tuo account'}`);
+                        window.showToast(`Cloud attivo per ${user.email || 'il tuo account'}`);
                         subscribeToFirestore();
                         // I dati dal Cloud arrivano poco dopo: la copia automatica
                         // si controlla quando sono in casa, non prima, o si
@@ -511,7 +563,7 @@
             const ora = Date.now();
             if (ora - ultimoAvvisoSyncBloccato > 8000) {
                 ultimoAvvisoSyncBloccato = ora;
-                if (window.showToast) window.showToast('🔄 Nuovi dati dal Cloud: verranno mostrati alla chiusura del modulo aperto.');
+                if (window.showToast) window.showToast('Nuovi dati dal Cloud: verranno mostrati alla chiusura del modulo aperto.');
             }
         }
 
@@ -524,7 +576,7 @@
                 'auth/operation-not-allowed': 'L\'accesso con Google non è ancora attivo nella console Firebase (Authentication → Sign-in method).',
                 'auth/network-request-failed': 'Senza rete non si può fare l\'accesso: l\'app intanto continua a funzionare in locale.'
             };
-            if (window.showToast) window.showToast('⚠️ ' + (messaggi[codice] || ('Accesso non riuscito: ' + codice)));
+            if (window.showToast) window.showToast((messaggi[codice] || ('Accesso non riuscito: ' + codice)), 'avviso');
         }
 
         // Entrare e uscire dal Cloud. Il popup e' la strada che funziona meglio
@@ -588,7 +640,7 @@
             } catch (err) {
                 giaMigrate[nomeCol] = false;   // riproveremo al prossimo giro
                 console.error('Errore migrazione ' + nomeCol + ':', err);
-                if (window.showToast) window.showToast('⚠️ Caricamento sul Cloud non riuscito: i dati restano qui e riproverà da solo.');
+                if (window.showToast) window.showToast('Caricamento sul Cloud non riuscito: i dati restano qui e riproverà da solo.', 'avviso');
             }
         }
 
@@ -682,10 +734,10 @@
                             await setDoc(docDati('taxi_scadenze', String(sc.id)), sc);
                         }
                         scadenzeCloudOk = true;
-                        if (window.showToast) window.showToast('☁️ Scadenze caricate sul Cloud.');
+                        if (window.showToast) window.showToast('Scadenze caricate sul Cloud.');
                     } catch (err) {
                         console.error("Errore migrazione scadenze:", err);
-                        if (window.showToast) window.showToast('⚠️ Scadenze salvate solo qui: il Cloud ha rifiutato la scrittura.');
+                        if (window.showToast) window.showToast('Scadenze salvate solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
                     }
                     return;
                 }
@@ -713,10 +765,10 @@
                             await setDoc(docDati('taxi_veicoli', String(v.id)), v);
                         }
                         veicoliCloudOk = true;
-                        if (window.showToast) window.showToast('☁️ Parco auto caricato sul Cloud.');
+                        if (window.showToast) window.showToast('Parco auto caricato sul Cloud.');
                     } catch (err) {
                         console.error("Errore migrazione veicoli:", err);
-                        if (window.showToast) window.showToast('⚠️ Parco auto salvato solo qui: il Cloud ha rifiutato la scrittura.');
+                        if (window.showToast) window.showToast('Parco auto salvato solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
                     }
                     return;
                 }
@@ -847,7 +899,7 @@
                 await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'), profilo);
             } catch (err) {
                 console.error('Errore scrittura profilo:', err);
-                if (window.showToast) window.showToast('⚠️ Profilo salvato solo su questo dispositivo.');
+                if (window.showToast) window.showToast('Profilo salvato solo su questo dispositivo.', 'avviso');
             }
         };
 
@@ -858,7 +910,7 @@
                     await setDoc(docRef, scadenza);
                 } catch (err) {
                     console.error("Errore scrittura Cloud scadenza:", err);
-                    if (window.showToast) window.showToast('⚠️ Scadenza salvata solo su questo dispositivo.');
+                    if (window.showToast) window.showToast('Scadenza salvata solo su questo dispositivo.', 'avviso');
                 }
             }
         };
@@ -870,7 +922,7 @@
                     await deleteDoc(docRef);
                 } catch (err) {
                     console.error("Errore eliminazione Cloud scadenza:", err);
-                    if (window.showToast) window.showToast('⚠️ Eliminata solo su questo dispositivo.');
+                    if (window.showToast) window.showToast('Eliminata solo su questo dispositivo.', 'avviso');
                 }
             }
         };
@@ -904,7 +956,7 @@
                     await setDoc(docRef, veicolo);
                 } catch (err) {
                     console.error("Errore scrittura Cloud veicolo:", err);
-                    if (window.showToast) window.showToast('⚠️ Vettura salvata solo su questo dispositivo.');
+                    if (window.showToast) window.showToast('Vettura salvata solo su questo dispositivo.', 'avviso');
                 }
             }
         };
@@ -916,7 +968,7 @@
                     await deleteDoc(docRef);
                 } catch (err) {
                     console.error("Errore eliminazione Cloud veicolo:", err);
-                    if (window.showToast) window.showToast('⚠️ Eliminata solo su questo dispositivo.');
+                    if (window.showToast) window.showToast('Eliminata solo su questo dispositivo.', 'avviso');
                 }
             }
         };
@@ -934,7 +986,7 @@
                     await setDoc(docRef, record);
                 } catch (err) {
                     console.error("Errore scrittura Cloud record:", err);
-                    if (window.showToast) window.showToast('⚠️ Corsa salvata solo in locale: sync Cloud fallita.');
+                    if (window.showToast) window.showToast('Corsa salvata solo in locale: sync Cloud fallita.', 'avviso');
                 }
             }
         };
@@ -952,7 +1004,7 @@
                     await setDoc(docRef, shift);
                 } catch (err) {
                     console.error("Errore scrittura Cloud turno:", err);
-                    if (window.showToast) window.showToast('⚠️ Turno salvato solo in locale: sync Cloud fallita.');
+                    if (window.showToast) window.showToast('Turno salvato solo in locale: sync Cloud fallita.', 'avviso');
                 }
             }
         };
@@ -967,7 +1019,7 @@
                     await deleteDoc(docRef);
                 } catch (err) {
                     console.error("Errore eliminazione Cloud record:", err);
-                    if (window.showToast) window.showToast('⚠️ Eliminato solo in locale: sync Cloud fallita.');
+                    if (window.showToast) window.showToast('Eliminato solo in locale: sync Cloud fallita.', 'avviso');
                 }
             }
         };
@@ -992,7 +1044,7 @@
                     }
                 } catch (err) {
                     console.error("Errore eliminazione multipla Cloud:", err);
-                    if (window.showToast) window.showToast('⚠️ Eliminate solo in locale: sync Cloud fallita.');
+                    if (window.showToast) window.showToast('Eliminate solo in locale: sync Cloud fallita.', 'avviso');
                 }
             }
         };
@@ -1007,7 +1059,7 @@
                     await deleteDoc(docRef);
                 } catch (err) {
                     console.error("Errore eliminazione Cloud turno:", err);
-                    if (window.showToast) window.showToast('⚠️ Eliminato solo in locale: sync Cloud fallita.');
+                    if (window.showToast) window.showToast('Eliminato solo in locale: sync Cloud fallita.', 'avviso');
                 }
             }
         };
@@ -1059,7 +1111,7 @@
                 return { cloud: true, scritti: fatti };
             } catch (err) {
                 console.error("Errore scrittura Cloud (bulkSave):", err);
-                if (window.showToast) window.showToast('⚠️ Salvato solo in locale: sync Cloud fallita (rete debole?). Riproverai al prossimo salvataggio.');
+                if (window.showToast) window.showToast('Salvato solo in locale: sync Cloud fallita (rete debole?). Riproverai al prossimo salvataggio.', 'avviso');
                 return { cloud: false, errore: true, scritti: fatti };
             }
         };
@@ -1083,7 +1135,7 @@
                     }
                 } catch (err) {
                     console.error("Errore azzeramento Cloud:", err);
-                    if (window.showToast) window.showToast('⚠️ Azzerato solo in locale: sync Cloud fallita (rete debole?).');
+                    if (window.showToast) window.showToast('Azzerato solo in locale: sync Cloud fallita (rete debole?).', 'avviso');
                 }
             }
         };
@@ -1104,7 +1156,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 123;
+        const VERSIONE_APP = 124;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1301,7 +1353,7 @@
         // telefono nel supporto lo legge anche chi sta dietro. Di suo resta
         // coperto, si scopre con l'occhio e si ricopre da solo alla riapertura.
         window.incassoVisibile = localStorage.getItem('taxi_incasso_visibile') === 'si';
-        // Bozze dei km digitati a mano nel form "+ Registra Turno" (null = usa il suggerimento
+        // Bozze dei km digitati a mano nel modulo «+ Registra un turno» (null = usa il suggerimento
         // automatico dal turno precedente). Si azzerano ogni volta che il form si riapre, cosi'
         // il valore digitato non va perso se il form si ridisegna (es. cambio tipo di turno).
         window.kmIniDraft = null;
@@ -1624,11 +1676,12 @@
         // Un solo messaggio alla volta: senza azzerare il timer precedente, due avvisi
         // ravvicinati facevano sparire il secondo dopo una frazione di secondo.
         let timerToast = null;
-        function showToast(msg) {
+        function showToast(msg, tipo) {
             const toast = document.getElementById('toast');
             const text = document.getElementById('toast-text');
             if (!toast || !text) return;
             text.textContent = msg;
+            toast.classList.toggle('messaggio-avviso', tipo === 'avviso');
             toast.classList.remove('hidden');
             toast.classList.add('flex');
             if (timerToast) clearTimeout(timerToast);
@@ -1832,8 +1885,8 @@
             salvaProfilo(dati);
             window.bozzaProfilo = null;   // salvata: la bozza non serve piu'
             showToast(pivaStorta
-                ? '✅ Scheda salvata. Controlla la partita IVA: le 11 cifre non tornano.'
-                : `✅ Ciao ${esc(dati.nome || dati.cognome)}, scheda salvata!`);
+                ? 'Scheda salvata. Controlla la partita IVA: le 11 cifre non tornano.'
+                : `Ciao ${esc(dati.nome || dati.cognome)}, scheda salvata!`);
             renderNav();
             renderContent();
         }
@@ -1853,16 +1906,16 @@
                         return `<option value="${esc(val)}" ${window.ultimaCategoriaUscita === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
                     }).join('')}
                 </optgroup>`;
-            return base + fissi + (conAltro ? '<option value="__altro__">✏️ Altro (scrivi tu)</option>' : '');
+            return base + fissi + (conAltro ? '<option value="__altro__">Altro (scrivi tu)</option>' : '');
         }
 
         // Opzioni del menu metodo, condivise da form di inserimento e modifica in riga
         function opzioniMetodo(selezionato, tipo) {
             const voci = tipo === 'USCITA'
-                ? [['Contanti', '🟢 Contanti'], ['POS', '⚫ POS / Carta'], ['Satispay', '🔴 Satispay'],
-                   ['Carta Carburante', '🔵 Carta Carburante'], ['Conto', '🔵 Conto'], ['Bonifico', '🔵 Bonifico']]
-                : [['Contanti', '🟢 Contanti'], ['POS', '⚫ POS / Carta'], ['Satispay', '🔴 Satispay'],
-                   ['App/Nexi', '🔵 App / Voucher'], ['Conto', '🔵 Conto']];
+                ? [['Contanti', 'Contanti'], ['POS', 'POS / Carta'], ['Satispay', 'Satispay'],
+                   ['Carta Carburante', 'Carta Carburante'], ['Conto', 'Conto'], ['Bonifico', 'Bonifico']]
+                : [['Contanti', 'Contanti'], ['POS', 'POS / Carta'], ['Satispay', 'Satispay'],
+                   ['App/Nexi', 'App / Voucher'], ['Conto', 'Conto']];
             // Un movimento vecchio puo' avere un metodo che non e' piu' in
             // elenco («Fattura» prima della v104): se sparisse dalla tendina,
             // aprendo la modifica il menu mostrerebbe un'altra voce e al primo
@@ -2146,7 +2199,7 @@
                 addizionaliPerc: add, sogliaForfettario: soglia, accantonamentoPerc: accantonamento
             };
             localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings));
-            showToast('⚡ Impostazioni fiscali salvate!');
+            showToast('Impostazioni fiscali salvate.');
             renderContent();
         }
 
@@ -2352,7 +2405,7 @@
             window.scadenze.sort((a, b) => String(a.data).localeCompare(String(b.data)));
             salvaScadenze();
             if (window.saveScadenzaToCloud) window.saveScadenzaToCloud(nuova);
-            showToast('⚡ Scadenza aggiunta.');
+            showToast('Scadenza aggiunta.');
             renderContent();
         }
 
@@ -2392,7 +2445,7 @@
             window.scadenze.sort((a, b) => String(a.data).localeCompare(String(b.data)));
             salvaScadenze();
             if (window.saveScadenzaToCloud) window.saveScadenzaToCloud(nuova);
-            showToast(`⚡ Promemoria creato: te lo ricordo il ${ggMmAaaa(data)}, e poi ogni tre mesi.`);
+            showToast(`Promemoria creato: te lo ricordo il ${ggMmAaaa(data)}, e poi ogni tre mesi.`);
             renderContent();
         }
 
@@ -2542,7 +2595,7 @@
             window.scadenze.sort((a, b) => String(a.data).localeCompare(String(b.data)));
             salvaScadenze();
             if (window.saveScadenzaToCloud) nuove.forEach(x => window.saveScadenzaToCloud(x));
-            showToast(`⚡ ${nuove.length} ${nuove.length === 1 ? 'scadenza riproposta' : 'scadenze riproposte'} nel ${anno}.`);
+            showToast(`${nuove.length} ${nuove.length === 1 ? 'scadenza riproposta' : 'scadenze riproposte'} nel ${anno}.`);
             renderContent();
         }
 
@@ -2931,7 +2984,7 @@
             if (window.saveVeicoloToCloud) window.saveVeicoloToCloud(veicolo);
             window.veicoloInModifica = null;
             window.bozzaVeicolo = null;
-            showToast(esistente ? 'Vettura aggiornata.' : '⚡ Vettura aggiunta al parco auto.');
+            showToast(esistente ? 'Vettura aggiornata.' : 'Vettura aggiunta al parco auto.');
             renderNav();
             renderContent();
         }
@@ -3328,13 +3381,6 @@
             // Nella testata di una schermata: un comando quieto accanto al titolo.
             // Il blocco nero di prima pesava piu' del titolo che gli stava
             // accanto, e diceva una cosa che il titolo dice gia'.
-            if (stile === 'inScheda') {
-                return `
-                    <div class="inline-flex items-center gap-1.5 eroe-campo rounded-xl pl-2.5 pr-1.5 py-1 shrink-0">
-                        <label for="scelta-anno-${stile}" class="text-[11px] font-bold uppercase tracking-wider text-white/45">Anno</label>
-                        <select id="scelta-anno-${stile}" onchange="cambiaAnno(this.value)" class="p-1 rounded-lg text-sm font-black bg-transparent text-white outline-none">${opzioni}</select>
-                    </div>`;
-            }
             return `
                 <div class="inline-flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl pl-2.5 pr-1.5 py-1 shrink-0">
                     <label for="scelta-anno-${stile}" class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Anno</label>
@@ -3628,15 +3674,15 @@
                     <div class="flex border-t border-white/10 pt-3.5">
                         <div class="flex-1 min-w-0"${spiegaSpese ? ` title="${esc(spiegaSpese)}"` : ''}>
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
-                            <p class="text-[17px] font-black ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${d.uscite ? '−' + soldi(d.uscite) : '—'}</p>
+                            <p class="cifra-casella ${d.uscite ? 'text-red-400' : 'text-white/30'} mt-0.5">${d.uscite ? '−' + soldi(d.uscite) : '—'}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Ti resta</p>
-                            <p class="text-[17px] font-black ${resta >= 0 ? 'text-white' : 'text-red-400'} mt-0.5 truncate">${soldi(resta)}</p>
+                            <p class="cifra-casella ${resta >= 0 ? 'text-white' : 'text-red-400'} mt-0.5">${soldi(resta)}</p>
                         </div>
                         <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                             <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">A corsa</p>
-                            <p class="text-[17px] font-black ${d.nCorse ? 'text-yellow-400' : 'text-white/30'} mt-0.5 truncate">${d.nCorse ? soldi(d.mediaCorsa) : '—'}</p>
+                            <p class="cifra-casella ${d.nCorse ? 'text-yellow-400' : 'text-white/30'} mt-0.5">${d.nCorse ? soldi(d.mediaCorsa) : '—'}</p>
                         </div>
                     </div>
                 </div>`;
@@ -4656,14 +4702,14 @@
                         <div class="flex flex-wrap gap-2 p-4 no-print">
                             <button onclick="cambiaMetodoCorrispettivi('ALL')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === 'ALL' ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">Tutti</button>
                             ${c.usati.map(k => `
-                                <button onclick="cambiaMetodoCorrispettivi('${k}')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === k ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${ETICHETTE_METODO[k].split(' ')[0]} ${METODI_BREVI[k]}</button>
+                                <button onclick="cambiaMetodoCorrispettivi('${k}')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === k ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${METODI_BREVI[k]}</button>
                             `).join('')}
                         </div>` : ''}
                         ${corpo}
                         ${c.righe.length ? `
                         <div class="p-4 no-print">
                             <button onclick="scaricaCorrispettivi('${ym}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm">
-                                📊 Scarica questo prospetto (.csv)
+                                Scarica questo prospetto (.csv)
                             </button>
                             <p class="text-xs text-gray-400 mt-2">Si apre in Excel o Numeri, con la virgola decimale e il punto e virgola come separatore.</p>
                         </div>` : ''}
@@ -4700,7 +4746,7 @@
             return `
                 <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
                     <p class="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">${etichetta}</p>
-                    <p class="text-base xl:text-lg font-black ${classe || 'text-gray-900'} leading-tight">${valore}</p>
+                    <p class="cifra-riquadro ${classe || 'text-gray-900'}">${valore}</p>
                 </div>`;
         }
 
@@ -4980,13 +5026,15 @@
             const riga = (nome, ora, prima, perc, megioSeSale, formato) => {
                 const f = frecciaVariazione(perc, megioSeSale);
                 return `
-                    <div class="px-3 py-2.5 flex items-center gap-3">
-                        <span class="min-w-0 flex-1">
-                            <span class="block text-xs font-bold text-gray-700">${nome}</span>
-                            <span class="block text-[11px] font-medium text-gray-400">${formato(prima)} nel ${esc(c.annoPrima)}</span>
-                        </span>
-                        <span class="text-sm font-black text-gray-900 whitespace-nowrap">${formato(ora)}</span>
-                        <span class="text-xs font-black whitespace-nowrap w-20 text-right ${f.classe}">${f.testo}</span>
+                    <div class="px-3 py-2.5">
+                        <div class="flex items-baseline justify-between gap-3">
+                            <span class="text-xs font-bold text-gray-700">${nome}</span>
+                            <span class="text-sm font-black text-gray-900 whitespace-nowrap">${formato(ora)}</span>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-3 mt-0.5">
+                            <span class="text-[11px] font-medium text-gray-400">${formato(prima)} nel ${esc(c.annoPrima)}</span>
+                            <span class="text-xs font-black whitespace-nowrap ${f.classe}">${f.testo}</span>
+                        </div>
                     </div>`;
             };
             const euro = (x) => formatCurrency(x);
@@ -5130,9 +5178,11 @@
 
             return `
                 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden print-card print-break">
-                    ${testataPeriodo('', `
-                            ${pillolaAnno('inScheda')}
-                        `, d, `${giorniLavorati} giorni lavorati`)}
+                    <!-- Nessuna pastiglia dell'anno qui dentro: la testata della
+                         schermata ne ha gia' una, e il titolo dice l'anno. Due
+                         comandi identici a mezzo schermo di distanza facevano
+                         solo chiedere quale dei due contasse. -->
+                    ${testataPeriodo('', '', d, `${giorniLavorati} giorni lavorati`)}
 
                     <div class="p-5 space-y-5">
                         <p class="text-sm font-bold text-gray-500">${formatCurrency(mediaMese)} al mese · ${riposi} giorni di riposo</p>
@@ -5261,7 +5311,7 @@
         // ============================================================
 
         function moduloTurnoHTML() {
-        // --- valori proposti dal modulo "Registra Turno" ---
+        // --- valori proposti dal modulo «+ Registra un turno» ---
         const presetAttivo = SHIFT_PRESETS[window.selectedShiftType];
         // Attenzione al nome: giornataNonLavorata() e' la funzione che dice se un
         // giorno e' segnato come riposo. Qui serve un'altra cosa: se il TIPO di
@@ -5313,11 +5363,11 @@
                     </div>
                     ${window.selectedShiftType === 'custom' && !tipoNonLavorato ? `
                     <div>
-                        <label for="sh-inizio" class="block text-xs font-bold text-gray-700 mb-1">Ora Inizio</label>
+                        <label for="sh-inizio" class="block text-xs font-bold text-gray-700 mb-1">Ora di inizio</label>
                         <input type="time" id="sh-inizio" required value="08:00" oninput="ricalcolaOreCustom()" class="w-full p-2.5 border rounded-lg outline-none" />
                     </div>
                     <div>
-                        <label for="sh-fine" class="block text-xs font-bold text-gray-700 mb-1">Ora Fine</label>
+                        <label for="sh-fine" class="block text-xs font-bold text-gray-700 mb-1">Ora di fine</label>
                         <input type="time" id="sh-fine" required value="17:00" oninput="ricalcolaOreCustom()" class="w-full p-2.5 border rounded-lg outline-none" />
                     </div>
                     ` : ''}
@@ -5347,7 +5397,7 @@
                     </div>
                     `}
                     <div class="lg:col-span-5">
-                        <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 font-bold py-3 rounded-xl transition-colors text-gray-900">${tipoNonLavorato ? 'Registra giornata di riposo' : 'Salva Turno & Sincronizza'}</button>
+                        <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 font-bold py-3 rounded-xl transition-colors text-gray-900">${tipoNonLavorato ? 'Registra giornata di riposo' : 'Salva il turno'}</button>
                     </div>
                 </form>
             </div>`;
@@ -5361,7 +5411,7 @@
                         <p class="etichetta block">Turno</p>
                         <p class="text-sm font-bold text-gray-400">Non registrato</p>
                     </div>
-                    ${conPulsante ? `<button onclick="apriFormTurno('${g.iso}')" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg">+ Registra turno</button>` : ''}
+                    ${conPulsante ? `<button onclick="apriFormTurno('${g.iso}')" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg">+ Registra un turno</button>` : ''}
                 </div>`;
             const editing = !isRiposo(t) && String(window.editKmId) === String(t.id);
             // Compilando i km a posteriori, i km inizio si ereditano dal turno
@@ -5428,7 +5478,7 @@
         function moduloCorsa(giorno, metodo) {
         return `
             <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-green-500 slide-in">
-                <h3 class="text-lg font-bold mb-4 text-green-800">Registra Nuova Corsa (Incasso)</h3>
+                <h3 class="text-lg font-bold mb-4 text-green-800">Registra una corsa</h3>
                 <form onsubmit="addCorsa(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label for="corsa-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
@@ -5681,7 +5731,7 @@
                         <div class="px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-100">
                             <p class="etichetta">${riposo ? 'Giornata non lavorata' : 'Il registro della giornata'}</p>
                             <span class="flex items-center gap-1.5 min-w-0">
-                                <span class="text-xs font-bold text-gray-500 min-w-0 truncate">${sottotitolo}</span>
+                                <span class="text-xs font-bold text-gray-500 min-w-0 leading-relaxed">${sottotitolo}</span>
                                 ${lavorati.some(kmMancanti) ? '<span class="shrink-0 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[11px] font-black uppercase whitespace-nowrap">senza km</span>' : ''}
                             </span>
                         </div>
@@ -5967,20 +6017,20 @@
                         <div class="flex mt-4 pt-3.5 border-t border-white/10">
                             <div class="flex-1 min-w-0" ${spalm ? `title="Spese del giorno ${formatCurrency(spalm.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalm.quotaBudget)}"` : ''}>
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Spese</p>
-                                <p class="text-[17px] font-black ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5 truncate">${totSpese > 0 ? '−' + soldi(totSpese) : '—'}</p>
+                                <p class="cifra-casella ${totSpese > 0 ? 'text-red-400' : 'text-white/30'} mt-0.5">${totSpese > 0 ? '−' + soldi(totSpese) : '—'}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">Ti resta</p>
-                                <p class="text-[17px] font-black text-white mt-0.5 truncate">${soldi(totCorse - totSpese)}</p>
+                                <p class="cifra-casella text-white mt-0.5">${soldi(totCorse - totSpese)}</p>
                             </div>
                             <div class="flex-1 min-w-0 border-l border-white/10 pl-3.5">
                                 <p class="text-[10.5px] font-bold uppercase tracking-wider text-white/40">All'ora</p>
                                 ${eo.vivo ? `
                                     <p id="euro-ora-vivo" class="mt-0.5" title="Incasso diviso le ore che hai fatto finora in questo turno">
-                                        <span class="block text-[17px] font-black text-yellow-400 truncate">${eo.troppoPresto ? '—' : soldi(euroOra)}</span>
+                                        <span class="block cifra-casella text-yellow-400">${eo.troppoPresto ? '—' : soldi(euroOra)}</span>
                                         <span class="block text-[10.5px] font-medium text-white/35 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>
                                     </p>`
-                                  : `<p class="text-[17px] font-black ${oreTot > 0 ? 'text-yellow-400' : 'text-white/30'} mt-0.5 truncate" title="Incasso del periodo diviso le ore dei turni">${oreTot > 0 ? soldi(euroOra) : '—'}</p>`}
+                                  : `<p class="cifra-casella ${oreTot > 0 ? 'text-yellow-400' : 'text-white/30'} mt-0.5" title="Incasso del periodo diviso le ore dei turni">${oreTot > 0 ? soldi(euroOra) : '—'}</p>`}
                             </div>
                         </div>
                     </div>
@@ -6332,7 +6382,7 @@
                             ${t ? `<button onclick="deleteShift('${escJs(t.id)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white">Elimina</button>` : ''}
                             <button onclick="apriNellElenco('${iso}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">Apri nelle giornate</button>
                         </div>
-                        <p class="text-xs text-gray-500 leading-tight">I km si aggiungono qui sopra, quando li sai. Per un orario diverso da questi usa "+ Registra Turno".</p>
+                        <p class="text-xs text-gray-500 leading-tight">I km si aggiungono qui sopra, quando li sai. Per un orario diverso da questi usa «+ Registra un turno».</p>
                     </div>`;
             };
 
@@ -6343,12 +6393,12 @@
             return `
                 <div class="space-y-4">
                     <header>
-                        <h2 class="text-2xl font-black text-gray-900 tracking-tight">Calendario</h2>
-                        <p class="text-gray-500">Giornate, orari e chilometri. Le corse stanno in «Giornate».</p>
+                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Calendario</h2>
+                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Turni, orari e chilometri. Le corse si registrano in «Giornate».</p>
                     </header>
 
                     <button onclick="toggleShiftForm()" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white font-bold px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
-                        ${window.showShiftForm ? 'Annulla' : '+ Registra Turno'}
+                        ${window.showShiftForm ? 'Annulla' : '+ Registra un turno'}
                     </button>
 
                     ${window.showShiftForm ? moduloTurnoHTML() : ''}
@@ -6422,7 +6472,7 @@
                     ${moduloProfiloHTML(
                         'Benvenuto: dicci chi sei',
                         'Lo chiediamo una volta sola. Nome e cognome per l\'app, licenza, codice radio e partita IVA per le carte che vanno al commercialista. Puoi anche saltare e compilarla dopo, da «Gestione → Backup e impostazioni».',
-                        '💾 Salva e comincia')}
+                        'Salva e comincia')}
                     <button onclick="rimandaLaScheda()" class="mt-3 text-xs font-black text-gray-400 hover:text-gray-700 underline underline-offset-2">
                         Lo faccio dopo
                     </button>
@@ -6537,8 +6587,8 @@
                 <div class="fade-in space-y-4 max-w-3xl mx-auto">
                     <header class="flex items-center justify-between gap-x-3 mb-2">
                         <div class="min-w-0 flex-1">
-                            <h2 class="text-2xl font-black text-gray-900 tracking-tight">Gestione</h2>
-                            <p class="text-gray-500 text-[13px] font-medium mt-0.5 truncate">Il lavoro dalla parte della scrivania.</p>
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Gestione</h2>
+                            <p class="text-gray-500 text-[13px] font-medium mt-0.5 leading-relaxed">Spese, scadenze, auto, rendimento, commercialista e backup.</p>
                         </div>
                         ${pillolaAnno('altro')}
                     </header>
@@ -6628,7 +6678,7 @@
                 <div class="fade-in space-y-6 max-w-7xl mx-auto">
                     <header class="flex justify-between items-center gap-x-3">
                         <div class="min-w-0 flex-1">
-                            <h2 class="text-2xl font-black text-gray-900 tracking-tight truncate">Come va il ${annoAttivo()}</h2>
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight leading-tight">Come va il ${annoAttivo()}</h2>
                             <p class="text-gray-500 text-[13px] font-medium mt-0.5 flex items-center gap-1.5 truncate">
                                 <span class="w-1.5 h-1.5 rounded-full ${window.isCloudSyncing ? 'bg-green-500' : 'bg-yellow-500'}"></span>
                                 ${window.isCloudSyncing ? 'dati al sicuro sul Cloud' : 'solo su questo dispositivo'}
@@ -6728,7 +6778,7 @@
 
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                            <h2 class="text-2xl font-black text-gray-900 tracking-tight">Registro spese</h2>
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Registro spese</h2>
                             <p class="text-gray-500 text-[13px] font-medium mt-0.5">Carburante, manutenzione, tutto quello che esce.</p>
                         </div>
                         <button onclick="toggleUscitaForm()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm">
@@ -6847,7 +6897,7 @@
                                 <thead class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
                                     <tr>
                                         <th class="p-4 font-bold">Data</th>
-                                        <th class="p-4 font-bold">Descrizione Spesa</th>
+                                        <th class="p-4 font-bold">Descrizione</th>
                                         <th class="p-4 font-bold">Come hai pagato?</th>
                                         <th class="p-4 font-bold text-right">Importo</th>
                                         <th class="p-4 font-bold text-center">Azione</th>
@@ -6925,7 +6975,7 @@
 
                     <header class="mb-2 flex flex-wrap items-start justify-between gap-3">
                         <div>
-                        <h2 class="text-2xl font-black text-gray-900 tracking-tight">Rendimento</h2>
+                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Rendimento</h2>
                         <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quale turno e quale giorno della settimana ti rendono di più, nel ${annoAttivo()}.</p>
                         </div>
                         ${pillolaAnno('rend')}
@@ -7057,7 +7107,7 @@
                 const tutta = totale > 0 && fuori < 0.005;
                 return `
                     <div class="bg-white p-5 rounded-[1.25rem] shadow-sm border border-gray-100">
-                        <h3 class="font-bold text-gray-800 text-base">${titolo}</h3>
+                        <h3 class="font-bold text-gray-800 text-base leading-tight min-w-0">${titolo}</h3>
                         <p class="cifra text-[1.75rem] text-gray-900 mt-1">${cifraEuro(totale)}</p>
                         ${totale > 0 ? `
                             <p class="mt-2.5">
@@ -7077,7 +7127,7 @@
 
                     <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
                         <div>
-                        <h2 class="text-2xl font-black text-gray-900 tracking-tight">Spese e tasse</h2>
+                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Spese e tasse</h2>
                         <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quanto ti costa un giorno di lavoro, dove vanno i soldi e quanto è già del fisco.</p>
                         </div>
                         ${pillolaAnno('spese')}
@@ -7102,7 +7152,7 @@
                     ${sezioneBudgetFissi()}
                     ${sezioneConguaglio()}
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         ${schedaSpesa('Carburante', carbo, spese.carburanteDed)}
                         ${schedaSpesa('Manutenzione &amp; cura', man, spese.manutenzioneDed)}
                         ${schedaSpesa('Altre spese operative', altro, spese.altroSpeseDed)}
@@ -7389,11 +7439,11 @@
 
                     <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                            <h2 class="text-2xl font-black text-gray-900 tracking-tight">Le mie auto</h2>
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Le mie auto</h2>
                             <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quelle che hai avuto, quella che usi: quanto sono costate e quanta strada hanno fatto.</p>
                         </div>
                         <button onclick="apriFormVeicolo('nuovo')" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm no-print">
-                            + Aggiungi vettura
+                            + Aggiungi una vettura
                         </button>
                     </header>
 
@@ -7476,7 +7526,7 @@
                     ${intestazioneGestione('scadenze')}
 
                     <header>
-                        <h2 class="text-2xl font-black text-gray-900 tracking-tight">Scadenze</h2>
+                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Scadenze</h2>
                         <p class="text-gray-500 text-[13px] font-medium mt-0.5">Revisione, RCA, bollo, tassametro, licenza: le date da non dimenticare.</p>
                     </header>
 
@@ -7649,7 +7699,7 @@
                     <header class="space-y-3 no-print">
                         <div class="flex items-center justify-between gap-x-3">
                             <div class="min-w-0 flex-1">
-                                <h2 class="text-2xl font-black text-gray-900 tracking-tight">Commercialista</h2>
+                                <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Commercialista</h2>
                                 <p class="text-gray-500 text-[13px] font-medium mt-0.5">Il riepilogo del mese o dell'anno, da stampare o da salvare.</p>
                             </div>
                             ${pillolaAnno('rep')}
@@ -7675,7 +7725,7 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
                                     <span class="text-2xl font-black text-gray-900">TaxiManager Pro</span>
                                 </div>
-                                <p class="text-xs text-gray-500 font-bold uppercase tracking-wider">Report Economico & Operativo Servizio Taxi</p>
+                                <p class="text-xs text-gray-500 font-bold uppercase tracking-wider">Riepilogo economico e operativo del servizio taxi</p>
                             </div>
                             <div class="sm:text-right flex items-center gap-3 sm:block flex-wrap">
                                 <span class="bg-gray-100 text-gray-800 text-xs font-bold px-3 py-1 rounded-full uppercase border whitespace-nowrap">${window.filterMonthReport === 'ALL' ? 'Anno ' + annoAttivo() : nomeMese(window.filterMonthReport) + ' ' + annoAttivo()}</span>
@@ -7685,9 +7735,9 @@
 
                         ${intestazioneTassista()}
 
-                        <!-- Sintesi Economica Globale -->
+                        <!-- La sintesi economica dell'anno -->
                         <div>
-                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">1. Sintesi Economica Generale</h3>
+                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">1. Sintesi economica</h3>
                             <!-- Le quattro caselle della sintesi. Prima provavano a stare
                                  orizzontali sul telefono per risparmiare spazio: etichetta a
                                  sinistra, numero a destra. Con le righe nuove (tracciati,
@@ -7728,10 +7778,10 @@
                             </div>
                         </div>
 
-                        <!-- Dettaglio Incassi per Metodo -->
+                        <!-- Gli incassi e le spese, divisi per metodo e per categoria -->
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 print-break">
                             <div class="border border-gray-100 rounded-xl p-5 bg-gray-50/50">
-                                <h4 class="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">Dettaglio Incassi per Pagamento</h4>
+                                <h4 class="font-bold text-gray-900 mb-3 text-sm uppercase tracking-wide">Incassi per metodo di pagamento</h4>
                                 <div class="space-y-2 text-sm">
                                     <div class="flex justify-between py-1 border-b border-gray-200/60">
                                         <span class="text-gray-600 font-medium flex items-start gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0 mt-1.5"></span><span class="min-w-0">Contanti:</span></span>
@@ -7763,7 +7813,7 @@
 
                             <div class="border border-gray-100 rounded-xl p-5 bg-gray-50/50">
                                 <div class="mb-3">
-                                    <h4 class="font-bold text-gray-900 text-sm uppercase tracking-wide">Dettaglio Spese per Categoria</h4>
+                                    <h4 class="font-bold text-gray-900 text-sm uppercase tracking-wide">Spese per categoria</h4>
                                     ${rep.speseCategorie.length ? '<p class="text-xs font-medium text-gray-400 no-print mt-0.5">tocca una voce per aprirla</p>' : ''}
                                 </div>
                                 <div class="space-y-2 text-sm">
@@ -7807,12 +7857,12 @@
                             </div>
                         </div>
 
-                        <!-- Indicatori di Efficienza e Performance Veicolo -->
+                        <!-- Gli indicatori dei turni e del veicolo -->
                         <div class="border-t border-gray-200 pt-6 print-break">
-                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">2. Indicatori di Performance Turni & Veicolo</h3>
+                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">2. Turni e veicolo</h3>
                             <div class="grid grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3 text-center">
                                 <div class="p-3 bg-gray-50 rounded-xl border border-gray-200/80">
-                                    <p class="text-xs text-gray-500 font-bold">Ore Guida</p>
+                                    <p class="text-xs text-gray-500 font-bold">Ore di guida</p>
                                     <p class="text-base xl:text-lg font-black text-gray-900 mt-0.5">${oreScritte(rep.oreTot)} h</p>
                                 </div>
                                 <div class="p-3 bg-gray-50 rounded-xl border border-gray-200/80">
@@ -7820,7 +7870,7 @@
                                     <p class="text-base xl:text-lg font-black text-gray-900 mt-0.5">${rep.kmTot} km</p>
                                 </div>
                                 <div class="p-3 bg-yellow-50 rounded-xl border border-yellow-200">
-                                    <p class="text-xs text-yellow-800 font-bold">Incasso / Ora</p>
+                                    <p class="text-xs text-yellow-800 font-bold">Incasso all'ora</p>
                                     <p class="text-base xl:text-lg font-black text-yellow-900 mt-0.5">${formatCurrency(rep.mediaOra)}/h</p>
                                 </div>
                                 <div class="p-3 bg-yellow-50 rounded-xl border border-yellow-200">
@@ -7850,7 +7900,7 @@
                     ${intestazioneGestione('cloud')}
 
                     <header class="mb-6">
-                        <h2 class="text-2xl font-black text-gray-900 tracking-tight">Backup e impostazioni</h2>
+                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Backup e impostazioni</h2>
                         <p class="text-gray-500 text-[13px] font-medium mt-0.5">Le copie dei tuoi dati, l'accesso, le aliquote per la stima delle tasse.</p>
                     </header>
 
@@ -7891,7 +7941,7 @@
 
                         <div class="pt-3 border-t border-gray-100">
                             <button onclick="aggiornaApp()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
-                                ⬆️ Aggiorna adesso
+                                Aggiorna adesso
                             </button>
                             <p class="text-xs text-gray-400 mt-2 leading-relaxed">
                                 Cerca una versione più recente e la mette in uso senza chiudere l'app. I dati registrati
@@ -7908,11 +7958,11 @@
                         ${moduloProfiloHTML(
                             'La tua scheda',
                             'Nome, licenza, codice radio e partita IVA. Servono soprattutto sulle carte che escono dall\'app: il riepilogo per il commercialista li porta in testa. Restano nella tua cartella privata sul Cloud, come tutto il resto.',
-                            '💾 Salva la scheda')}
+                            'Salva la scheda')}
                     </div>
 
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                        <h3 class="text-lg font-bold text-gray-900">Impostazioni Fiscali (Regime Ordinario)</h3>
+                        <h3 class="text-lg font-bold text-gray-900">Impostazioni fiscali (regime ordinario)</h3>
                         <p class="text-xs text-gray-500 leading-relaxed">
                             Le tasse vengono stimate così: sull'utile si calcolano i contributi INPS — le rate fisse del minimale, dovute comunque, più la percentuale su quello che supera il minimale — poi l'IRPEF a scaglioni sul reddito residuo (23% fino a 28.000€, ${(aliquotaSecondoScaglione(annoAttivo()) * 100).toFixed(0)}% fino a 50.000€, 43% oltre — dal 2026 il secondo scaglione scende dal 35% al 33%), più le addizionali regionali/comunali. È una stima indicativa: per gli importi esatti verifica sempre con il tuo commercialista.
                         </p>
@@ -7938,11 +7988,11 @@
                                 <p class="text-xs text-gray-400 mt-1 leading-relaxed">Si applica solo a quello che supera il minimale.</p>
                             </div>
                             <div>
-                                <label for="set-add" class="text-xs font-bold text-gray-600 uppercase">Addizionali Reg./Com. (%)</label>
+                                <label for="set-add" class="text-xs font-bold text-gray-600 uppercase">Addizionali regionali e comunali (%)</label>
                                 <input type="text" inputmode="decimal" id="set-add" value="${window.fiscalSettings.addizionaliPerc}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
                             </div>
                             <div>
-                                <label for="set-soglia" class="text-xs font-bold text-gray-600 uppercase">Soglia Regime Forfettario (€)</label>
+                                <label for="set-soglia" class="text-xs font-bold text-gray-600 uppercase">Soglia regime forfettario (€)</label>
                                 <input type="text" inputmode="decimal" id="set-soglia" value="${window.fiscalSettings.sogliaForfettario || 85000}" class="w-full mt-1 p-2.5 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-yellow-400" />
                             </div>
                             <div>
@@ -7951,31 +8001,31 @@
                                 <p class="text-xs text-gray-400 mt-1 leading-relaxed">Quanta parte del margine di una giornata è già del fisco. Lascialo vuoto e lo calcola l'app sull'utile dell'anno.</p>
                             </div>
                         </div>
-                        <button onclick="saveFiscalSettings()" class="bg-gray-900 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">💾 Salva Impostazioni Fiscali</button>
+                        <button onclick="saveFiscalSettings()" class="bg-gray-900 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Salva le impostazioni fiscali</button>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                            <h3 class="text-lg font-bold text-gray-900">Esporta Dati</h3>
+                            <h3 class="text-lg font-bold text-gray-900">Esporta i dati</h3>
                             <p class="text-xs text-gray-500 leading-relaxed">Scarica una copia dei tuoi movimenti da salvare su iCloud Drive o Google Drive per sicurezza, oppure in CSV per il commercialista.</p>
                             <button onclick="exportBackup()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors">
-                                📥 Scarica Backup Completo (.json)
+                                Scarica il backup completo (.json)
                             </button>
                             <button onclick="exportCSV()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors">
-                                📊 Scarica CSV ${annoAttivo()} (per il commercialista)
+                                Scarica il CSV ${annoAttivo()} per il commercialista
                             </button>
 
                             <div class="pt-3 border-t border-gray-100">
                                 ${(() => {
                                     const gia = promemoriaBackupEsistente();
                                     return gia ? `
-                                        <p class="text-xs font-bold text-green-700">✅ Te lo ricordo il ${ggMmAaaa(gia.data)}, e poi ogni tre mesi.</p>
+                                        <p class="text-xs font-bold text-green-700">Te lo ricordo il ${ggMmAaaa(gia.data)}, e poi ogni tre mesi.</p>
                                         <button onclick="switchTab('scadenze')" class="text-xs font-black text-gray-500 hover:text-gray-900 underline underline-offset-2 mt-1">
                                             Vedilo in Scadenze
                                         </button>`
                                     : `
                                         <button onclick="creaPromemoriaBackup()" class="w-full bg-white hover:bg-yellow-50 border-2 border-yellow-400 text-gray-900 font-black py-3 px-4 rounded-xl transition-colors">
-                                            ⏰ Ricordamelo ogni 3 mesi
+                                            Ricordamelo ogni tre mesi
                                         </button>
                                         <p class="text-xs text-gray-400 mt-2 leading-relaxed">
                                             Le copie automatiche qui sotto vivono nello stesso account Google dell'app: bastano per un guaio tuo,
@@ -7987,10 +8037,10 @@
                         </div>
 
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                            <h3 class="text-lg font-bold text-gray-900">Ripristina da Backup</h3>
+                            <h3 class="text-lg font-bold text-gray-900">Ripristina da backup</h3>
                             <p class="text-xs text-gray-500 leading-relaxed">Carica un file di backup salvato in precedenza per ripristinare o importare movimenti.</p>
                             <label class="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 px-4 rounded-xl flex justify-center items-center cursor-pointer transition-colors">
-                                <span>📤 Seleziona File Backup (.json)</span>
+                                <span>Scegli un file di backup (.json)</span>
                                 <input type="file" accept=".json" onchange="importBackup(event)" class="hidden" />
                             </label>
                             <p class="text-xs text-gray-400 leading-relaxed">L'import unisce i dati esistenti con quelli del file: i movimenti con lo stesso identificativo vengono aggiornati, non duplicati.</p>
@@ -8036,7 +8086,7 @@
                     <div class="bg-white p-6 rounded-2xl shadow-sm border-2 border-red-200 space-y-4">
                         <h3 class="text-lg font-bold text-red-700">Azzera tutti i dati</h3>
                         <p class="text-xs text-gray-500 leading-relaxed">Cancella tutti i movimenti e i turni, sia in locale sia sul Cloud. Utile per rimuovere i dati di esempio prima di importare l'archivio dell'anno. Scarica prima un backup!</p>
-                        <button onclick="resetAllData()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">🗑️ Cancella tutto</button>
+                        <button onclick="resetAllData()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm transition-colors">Cancella tutto</button>
                     </div>
                 </div>
             `;
@@ -8257,7 +8307,7 @@
         function moduloUscitaHTML(dataProposta) {
             return `
             <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-red-500 slide-in">
-                <h3 class="text-lg font-bold mb-4 text-red-800">Registra Nuova Spesa</h3>
+                <h3 class="text-lg font-bold mb-4 text-red-800">Registra una spesa</h3>
                 <form onsubmit="addUscita(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label for="uscita-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
@@ -8381,7 +8431,7 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'USCITA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`✅ ${esc(categoria)} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`);
+            showToast(`${esc(categoria)} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`);
             renderContent();
             setTimeout(() => {
                 const nuovo = document.getElementById('spesa-lampo');
@@ -8441,7 +8491,7 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'ENTRATA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`✅ ${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`);
+            showToast(`${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`);
             renderContent();
             // Il campo torna vuoto e tiene il cursore: la corsa dopo si scrive
             // senza toccare altro.
@@ -8479,7 +8529,7 @@
             // per la corsa successiva, invece di richiuderlo ad ogni inserimento.
             const continua = !!(e.submitter && e.submitter.value === 'nuova');
             window.showCorsaForm = continua;
-            showToast(continua ? '⚡ Corsa salvata! Pronta per la prossima.' : '⚡ Corsa salvata e sincronizzata!');
+            showToast(continua ? 'Corsa salvata. Pronta per la prossima.' : 'Corsa salvata e sincronizzata.');
             renderContent();
             if (continua) {
                 setTimeout(() => {
@@ -8599,7 +8649,7 @@
             }
 
             window.showUscitaForm = continua;
-            if (!ripeti) showToast(continua ? '⚡ Spesa salvata! Pronta per la prossima.' : '⚡ Spesa salvata e sincronizzata!');
+            if (!ripeti) showToast(continua ? 'Spesa salvata. Pronta per la prossima.' : 'Spesa salvata e sincronizzata.');
             renderContent();
             if (continua) {
                 setTimeout(() => {
@@ -8699,8 +8749,8 @@
             window.kmIniDraft = null;
             window.kmFineDraft = null;
             showToast(shift.kmTot === null
-                ? '⚡ Turno salvato senza km: completali quando vuoi dall\'elenco.'
-                : '⚡ Turno salvato e sincronizzato!');
+                ? 'Turno salvato senza km: completali quando vuoi dall\'elenco.'
+                : 'Turno salvato e sincronizzato.');
             renderContent();
         }
 
@@ -9171,10 +9221,6 @@
             return 'App';
         }
 
-        // Gli stessi nomi senza il pallino: dentro un pulsante o una scheda il
-        // colore lo fa il CSS, e l'emoji cambia faccia da un telefono all'altro.
-        // Con le <option> non si puo': li' il pallino resta l'unico colore
-        // possibile, e ETICHETTE_METODO serve a quello.
         // I colori dei metodi di pagamento sul fondo scuro. Sono gli stessi dei
         // tasti con cui si salva una corsa - verde contanti, rosso Satispay,
         // blu app - cosi' il riquadro «hai preso tanto in contanti» e il tasto
@@ -9198,20 +9244,16 @@
             return f === 'Bonifico' ? 'Bonifico' : (METODI_BREVI[f] || f);
         }
 
+        // I nomi per esteso dei metodi di pagamento. Il colore lo fa il CSS
+        // dove si puo' (badge, pulsanti, riquadri); dentro una <option> non si
+        // puo' colorare nulla, e li' il nome scritto per intero e' piu'
+        // leggibile di un pallino che ogni telefono disegna a modo suo.
         const NOMI_METODO = {
             'Contanti': 'Contanti',
             'POS': 'POS / Carta',
             'Satispay': 'Satispay',
             'App': 'App / Voucher',
             'Conto': 'Conto'
-        };
-
-        const ETICHETTE_METODO = {
-            'Contanti': '🟢 Contanti',
-            'POS': '⚫ POS / Carta',
-            'Satispay': '🔴 Satispay',
-            'App': '🔵 App / Voucher',
-            'Conto': '🔵 Conto'
         };
 
         function applyFilterUscite(val) {
@@ -9569,7 +9611,7 @@
 
             if (!records.length && !shifts.length && !scadenze.length && !veicoli.length && !vociImportate.length) {
                 showToast(schedaTornata
-                    ? '✅ Rimessa la tua scheda. Di movimenti e turni in questo backup non ce n\'erano.'
+                    ? 'Rimessa la tua scheda. Di movimenti e turni in questo backup non ce n\'erano.'
                     : 'Non ci sono movimenti, turni o scadenze validi da rimettere.');
                 if (schedaTornata) { renderNav(); renderContent(); }
                 return;
@@ -9647,8 +9689,8 @@
             if (schedaTornata) pezzi.push('la tua scheda');
             const coda = pezzi.length ? ' e ' + pezzi.join(', ') : '';
             showToast(esito.cloud
-                ? `⚡ Importati ${nRec} movimenti, ${nTur} turni${coda} (locale + Cloud)!`
-                : `✅ Importati ${nRec} movimenti, ${nTur} turni${coda} (memoria locale)`);
+                ? `Importati ${nRec} movimenti, ${nTur} turni${coda} (locale + Cloud)!`
+                : `Importati ${nRec} movimenti, ${nTur} turni${coda} (memoria locale)`);
             if (scartati > 0) {
                 setTimeout(() => showToast(`${scartati} righe sono state ignorate perché incomplete.`), 3200);
             }
@@ -9768,7 +9810,7 @@
                 if (!formConDatiNonSalvatiLocale()) renderContent();
                 return;
             }
-            el.innerHTML = `<span class="block text-[17px] font-black text-yellow-400 truncate">${eo.troppoPresto ? '—' : soldi(eo.valore)}</span>`
+            el.innerHTML = `<span class="block cifra-casella text-yellow-400">${eo.troppoPresto ? '—' : soldi(eo.valore)}</span>`
                 + `<span class="block text-[10.5px] font-medium text-white/35 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>`;
         }
 
@@ -9844,7 +9886,7 @@
                 await window.scriviIstantanea(slotIstantanea(quando), datiDaSalvare());
                 try { localStorage.setItem('taxi_ultima_istantanea', String(Date.now())); }
                 catch (err) { /* pazienza */ }
-                showToast('✅ Copia messa da parte nel Cloud.');
+                showToast('Copia messa da parte nel Cloud.');
                 caricaSchedeIstantanee();
             } catch (err) {
                 console.error(err);
@@ -9899,7 +9941,7 @@
                     </p>
                     ${elenco}
                     <button onclick="istantaneaAdesso()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm">
-                        📸 Fai una copia adesso
+                        Fai una copia adesso
                     </button>
                 </div>
             `;
@@ -10792,7 +10834,7 @@
                         ${proposte.map(x => `
                             <div class="bg-white border border-indigo-100 rounded-xl px-3 py-2.5 flex items-center gap-2.5">
                                 <span class="min-w-0 flex-1">
-                                    <span class="block text-sm font-black text-gray-900 truncate">${esc(x.nome)}</span>
+                                    <span class="block nome-voce font-black text-gray-900">${esc(x.nome)}</span>
                                     <span class="block text-[11px] font-bold text-gray-500">${formatCurrency(x.importo)} all'anno · ${formatCurrency(x.importo / 365)} al giorno</span>
                                     <span class="block text-[11px] font-medium text-gray-400">${esc(x.perche)}</span>
                                 </span>

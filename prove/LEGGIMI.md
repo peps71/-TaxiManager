@@ -36,6 +36,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testAssegna.mjs` | riassegnare una spesa a una voce di budget: il nome lo riscrive l'app, importo e data non si toccano |
 | `testScadenzeBudget.mjs` | una voce di budget con la sua scadenza compare fra le scadenze, e si spunta da sola quando paghi |
 | `testConfronto.mjs` | il confronto con l'anno scorso guarda lo stesso tratto, non un anno intero contro dieci mesi |
+| `troncati.mjs` | nessun testo e nessuna cifra tagliata con i puntini, a 320, 390 e 768 px di larghezza |
 | `impronta.mjs` | salva l'HTML esatto delle 14 viste: serve a confrontare prima e dopo un rimaneggiamento |
 | `testScadenze.mjs` | la «prossima» è la più vicina, non la più lontana |
 | `testSpalmate.mjs` | le spese a budget non pesano sul giorno in cui le paghi |
