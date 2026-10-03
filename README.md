@@ -18,6 +18,7 @@ tramite Firebase/Firestore.
 | `icona-sorgente.jpg` | L'immagine da cui nascono tutte le icone |
 | `strumenti/icone.mjs` | Ritaglia `icona-sorgente.jpg` e rigenera le icone |
 | `Gestione_Taxi_2026.txt` | Appunti e conteggi di partenza |
+| `prove/` | Le prove automatiche: `sh prove/tutte.sh` le lancia tutte (vedi `prove/LEGGIMI.md`) |
 | `TaxiManager_2026_iPhone.html` | Prima versione, tenuta come riferimento |
 
 ## Accesso e sicurezza dei dati
@@ -67,6 +68,54 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
+
+## Le prove entrano nel repository, e un giro a cercare contraddizioni
+
+Le prove automatiche stavano in una cartella di lavoro fuori dal repository, e un riavvio della
+macchina le ha cancellate tutte una volta. Adesso stanno in **`prove/`**, con il codice che
+controllano: `sh prove/tutte.sh`. Sono 26 e fanno **120 controlli**.
+
+Portabili: cercano `index.html` partendo da dove stanno, e il motore del browser dove e'
+installato (o dove dice `PLAYWRIGHT=...`).
+
+### Il giro di controllo
+
+Oltre alle identita' dei conti gia' viste nella 121, questa tornata ha aggiunto quattro prove
+nuove, pensate per trovare quello che le identita' non vedono:
+
+- **`testUso.mjs`** — l'app usata **dai suoi pulsanti**: registra un turno dal modulo del
+  calendario, tre corse e una spesa dai moduli veri, poi modifica un importo e cancella una
+  riga, controllando che i totali seguano e che il disco segua. I conti possono tornare tutti e
+  l'app rompersi appena la tocchi.
+- **`testLimiti.mjs`** — nove situazioni scomode (archivio vuoto, un turno senza corse, corse
+  senza turno, tutto a zero, 29 febbraio, capodanno a cavallo, voce di budget a zero, importi
+  enormi, caratteri speciali), passando tutte le schermate e cercando a video `NaN`, `Infinity`,
+  `undefined`: niente.
+- **`coerenza2.mjs`** — 37 identita' nuove: `getReportStats` rifa' da capo l'aggregazione che
+  fa gia' `aggregaCalcola`, due strade per lo stesso numero e **vanno confrontate**. Piu' il
+  report mese per mese che deve ricomporre l'anno, e le vetture (costo/km = perdita/km +
+  spese/km).
+- **`testGiorni.mjs`** — il giro dei giorni su cui poggia tutto il budget. Se saltasse o
+  ripetesse un giorno ai cambi dell'ora legale, i totali dell'anno sarebbero sbagliati e
+  **nessuno se ne accorgerebbe**, perche' le altre prove userebbero tutte lo stesso giro.
+  Provato su cinque anni con fuso `Europe/Rome`: 365 e 366 giorni esatti, tutti diversi, e le
+  due domeniche del cambio ora passano lisce. Una voce da 3.650 € l'anno matura 3.650,00 €
+  tanto nel 2026 quanto nel 2028 bisestile.
+- **`testIntegrita.mjs`** — un backup esportato e reimportato restituisce tutto identico:
+  movimenti, turni, scadenze, vetture, voci di budget, scheda, e i campi di una riga (nota,
+  fattura, metodo, categoria). E le scadenze rispettano la cadenza.
+
+**Esito: nessun difetto nuovo.** Dopo le correzioni della 121 e della 122 l'app regge a tutto.
+
+### E le prestazioni non hanno bisogno di niente
+
+Misurato su 8.640 movimenti e dieci voci di budget: la schermata piu' lenta e' «Spese e tasse»
+con **32 ms**, il conto piu' caro e' `budgetRealeAnno` con **10 ms**, e registrare una corsa
+costa 18 ms. L'indice dei pagamenti della 116 ha fatto il suo lavoro: non c'e' niente da
+ottimizzare.
+
+Struttura: 439 funzioni, **nessuna dichiarata e mai usata**, **nessun blocco di dieci righe
+ripetuto identico**.
 
 ## Il budget e' il pavimento, non il soffitto (versione 122)
 
