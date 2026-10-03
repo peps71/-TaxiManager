@@ -69,6 +69,59 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Quattro cose che mancavano (versione 123)
+
+### Riassegnare una spesa a una voce di budget
+
+Una spesa si aggancia al budget **dal nome**: «Tasse e Contributi - INPS» trova la voce «Tasse e
+Contributi». Quando i due nomi non combaciano — una vecchia riga «Costi fissi - Assicurazione
+infortuni», una categoria scritta a modo suo — la spesa resta fuori, e per sistemarla bisognava
+riscrivere la categoria a mano indovinando la forma giusta.
+
+Adesso, aprendo la riga «fuori budget» del conguaglio, ogni movimento ha un menu **«Assegna a»**:
+scegli la voce e il nome lo riscrive l'app, tenendo il dettaglio. «Costi fissi - Assicurazione
+infortuni» assegnata a «Tasse e Contributi» diventa «Tasse e Contributi - Assicurazione
+infortuni». Se il dettaglio e' gia' il nome della voce non lo si ripete. **Importo, data e metodo
+non si toccano**: cambia solo l'etichetta con cui la spesa si fa trovare.
+
+### La scadenza del budget e' una scadenza vera
+
+Una voce a scadenza con la sua data — l'assicurazione il 10 ottobre, il bollo il 30 aprile — e'
+una scadenza a tutti gli effetti. Scriverla una seconda volta fra le scadenze vorrebbe dire
+tenere due elenchi allineati a mano, e prima o poi uno dei due resta indietro.
+
+Adesso **compare da sola** nel calendario delle scadenze, con il marchio «dal budget», e
+**si spunta da sola**: quando registri il pagamento, l'app lo vede e la da' per fatta (tolleranza
+45 giorni dalla data prevista, perche' una polizza la si paga qualche giorno prima o dopo). Non
+si puo' spostare ne' eliminare da li': si cambia la voce, e c'e' il tasto che ci porta.
+
+Solo le voci **annuali a scadenza**: una rata mensile riempirebbe il calendario di dodici righe
+l'anno, e una voce a consumo non ha una data di scadenza.
+
+### Il confronto con l'anno scorso
+
+In **Andamento**, sotto il grafico del mese e dell'anno: incassato, corse, ore, euro all'ora e
+speso, con la variazione in percentuale e la freccia.
+
+Il confronto guarda lo **stesso tratto**, che e' la sola cosa che lo rende onesto: il 3 ottobre
+non si paragona un anno intero con dieci mesi. Dal 1° gennaio a oggi contro dal 1° gennaio alla
+stessa data dell'anno prima; per un mese in corso, dal primo del mese a oggi contro gli stessi
+giorni. Un anno gia' chiuso si confronta per intero, e l'etichetta dice sempre quale tratto sta
+guardando. Senza dati dell'anno prima il riquadro non compare.
+
+Il 29 febbraio si arretra al 28, che in un anno normale e' l'ultimo giorno di quel febbraio.
+
+### La schermata «Oggi» spezzata
+
+`renderSezioneGiornate` era di **587 righe**: per cambiare la riga di una spesa bisognava
+scorrere il modulo della corsa, i filtri e il registro. Sei pezzi sono usciti come funzioni
+proprie — `schedaGiornata`, `rigaCorsaGiornata`, `rigaSpesaGiornata`, `moduloCorsa`,
+`corsaLampoHTML`, `spesaLampoHTML` — e quello che gli serve arriva come **argomento invece che
+per cattura**, cosi' si legge dalla firma. La funzione scende a **325 righe**.
+
+Verificato come nella 114: l'HTML esatto di tutte e quattordici le viste, prima e dopo, identico
+a meno dei rientri.
+
 ## Le prove entrano nel repository, e un giro a cercare contraddizioni
 
 Le prove automatiche stavano in una cartella di lavoro fuori dal repository, e un riavvio della

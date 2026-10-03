@@ -1104,7 +1104,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 122;
+        const VERSIONE_APP = 123;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -2268,17 +2268,58 @@
             return { teorica, data: o.data || teorica, fatta: !!o.fatta };
         }
 
+        // ============================================================
+        //  LE SCADENZE CHE IL BUDGET CONOSCE GIA'
+        //  Una voce di budget a scadenza con la sua data - l'assicurazione il
+        //  10 ottobre, il bollo il 31 - e' una scadenza a tutti gli effetti.
+        //  Scriverla una seconda volta fra le scadenze vorrebbe dire tenere
+        //  due elenchi allineati a mano, e prima o poi uno dei due resta
+        //  indietro. Qui compare da sola, e si spunta da sola: quando
+        //  registri il pagamento, l'app lo vede e la da' per fatta.
+        //  Non si puo' spostare ne' eliminare da qui: si cambia la voce.
+        // ============================================================
+        const GIORNI_TOLLERANZA_SCADENZA = 45;
+
+        function scadenzeDalBudget() {
+            return elencoVociFisse()
+                .filter(v => tipoVoce(v) === 'scadenza'
+                          && v.unita === 'anno'
+                          && /^\d{4}-\d{2}-\d{2}$/.test(String(v.scadenza || ''))
+                          && (parseFloat(v.importo || 0) || 0) > 0)
+                .map(v => ({
+                    id: 'budget:' + v.slug,
+                    nome: v.nome,
+                    data: v.scadenza,
+                    ancora: v.scadenza,
+                    cadenza: 'anno',
+                    dalBudget: true,
+                    slug: v.slug
+                }));
+        }
+
+        // Una scadenza del budget e' fatta quando c'e' un pagamento vero che
+        // apre il suo periodo intorno a quella data. Non si chiede di spuntarla:
+        // la spunta e' il pagamento.
+        function scadenzaBudgetFatta(sc, quando) {
+            const v = elencoVociFisse().find(x => String(x.slug) === String(sc.slug));
+            if (!v) return false;
+            return annateVoce(v).some(a => Math.abs(giorniFraDate(a.da, quando)) <= GIORNI_TOLLERANZA_SCADENZA);
+        }
+
         // Il calendario dell'anno: una riga per ogni data di ogni scadenza.
         function calendarioScadenze(anno) {
             const oggi = oggiISO();
             const voci = [];
-            (window.scadenze || []).forEach(sc => {
+            (window.scadenze || []).concat(scadenzeDalBudget()).forEach(sc => {
                 occorrenzeAnno(sc, anno).forEach(teorica => {
-                    const info = occorrenzaInfo(sc, teorica);
+                    const info = sc.dalBudget
+                        ? { teorica, data: teorica, fatta: scadenzaBudgetFatta(sc, teorica) }
+                        : occorrenzaInfo(sc, teorica);
                     const giorni = Math.round((new Date(info.data) - new Date(oggi)) / 86400000);
                     voci.push({
                         id: sc.id, nome: sc.nome, cadenza: cadenzaScadenza(sc),
                         teorica, data: info.data, fatta: info.fatta,
+                        dalBudget: !!sc.dalBudget,
                         giorniMancanti: giorni, scaduta: !info.fatta && giorni < 0
                     });
                 });
@@ -4848,6 +4889,127 @@
                 </div>`;
         }
 
+        // ============================================================
+        //  COME VA RISPETTO ALL'ANNO SCORSO
+        //  Il confronto si fa sullo STESSO TRATTO: il 3 ottobre non si
+        //  paragona un anno intero con dieci mesi. Si guarda dal 1 gennaio a
+        //  oggi contro dal 1 gennaio alla stessa data dell'anno prima - e per
+        //  un mese in corso, dal primo del mese a oggi contro gli stessi
+        //  giorni. Un anno gia' chiuso si confronta per intero.
+        // ============================================================
+        function totaliPeriodo(da, a) {
+            let incassi = 0, uscite = 0, nCorse = 0, ore = 0;
+            const giorni = new Set();
+            (window.dailyRecords || []).forEach(r => {
+                const d = String(r.data || '');
+                if (d < da || d > a) return;
+                const imp = parseFloat(r.importo || 0) || 0;
+                if (r.tipo === 'ENTRATA') { incassi += imp; nCorse++; giorni.add(d); }
+                else if (r.tipo === 'USCITA') uscite += imp;
+            });
+            (window.shifts || []).forEach(t => {
+                const d = String(t.data || '');
+                if (d < da || d > a || isRiposo(t)) return;
+                ore += parseFloat(t.ore || 0) || 0;
+            });
+            return { incassi, uscite, nCorse, ore, giorniLavorati: giorni.size };
+        }
+
+        // Lo stesso giorno dell'anno prima. Il 29 febbraio non esiste in un anno
+        // normale: si arretra al 28, che e' l'ultimo giorno di quel febbraio.
+        function stessoGiornoAnnoPrima(iso) {
+            const [y, m, g] = String(iso).split('-').map(Number);
+            const ym = `${y - 1}-${String(m).padStart(2, '0')}`;
+            return `${ym}-${String(Math.min(g, giorniDelMese(ym))).padStart(2, '0')}`;
+        }
+
+        function confrontoAnnoPrima(prefisso) {
+            return memo('confronto:' + prefisso, () => confrontoAnnoPrimaCalcola(prefisso));
+        }
+
+        function confrontoAnnoPrimaCalcola(prefisso) {
+            const pre = String(prefisso || '');
+            const oggi = oggiISO();
+            let da, a, etichetta;
+            if (pre.length === 4) {
+                da = `${pre}-01-01`;
+                const fine = `${pre}-12-31`;
+                a = oggi < fine ? oggi : fine;
+                etichetta = a === fine ? `tutto il ${pre}` : `dal 1° gennaio al ${ggMm(a)}`;
+            } else if (pre.length === 7) {
+                da = `${pre}-01`;
+                const fine = `${pre}-${String(giorniDelMese(pre)).padStart(2, '0')}`;
+                a = oggi < fine ? oggi : fine;
+                etichetta = a === fine ? 'tutto il mese' : `dal 1° al ${ggMm(a)}`;
+            } else return null;
+            if (a < da) return null;
+
+            const daPrima = stessoGiornoAnnoPrima(da);
+            const aPrima = stessoGiornoAnnoPrima(a);
+            const ora = totaliPeriodo(da, a);
+            const prima = totaliPeriodo(daPrima, aPrima);
+            if (!(prima.incassi > 0) && !(prima.nCorse > 0)) return null;   // niente da confrontare
+
+            const var_ = (adesso, before) => (before > 0) ? ((adesso - before) / before) * 100 : null;
+            return {
+                etichetta, da, a, daPrima, aPrima,
+                annoPrima: daPrima.slice(0, 4),
+                ora, prima,
+                incassiPerc: var_(ora.incassi, prima.incassi),
+                uscitePerc: var_(ora.uscite, prima.uscite),
+                corsePerc: var_(ora.nCorse, prima.nCorse),
+                orePerc: var_(ora.ore, prima.ore),
+                perOraOra: ora.ore > 0 ? ora.incassi / ora.ore : 0,
+                perOraPrima: prima.ore > 0 ? prima.incassi / prima.ore : 0
+            };
+        }
+
+        function frecciaVariazione(perc, megioSeSale) {
+            if (perc === null || !Number.isFinite(perc)) return { testo: '—', classe: 'text-gray-400' };
+            const bene = megioSeSale ? perc >= 0 : perc <= 0;
+            const segno = perc > 0 ? '+' : '';
+            return {
+                testo: `${perc > 0 ? '▲' : (perc < 0 ? '▼' : '=')} ${segno}${perc.toFixed(1).replace('.', ',')}%`,
+                classe: Math.abs(perc) < 0.05 ? 'text-gray-500' : (bene ? 'text-green-700' : 'text-red-600')
+            };
+        }
+
+        function bloccoConfrontoAnnoPrima(prefisso) {
+            const c = confrontoAnnoPrima(prefisso);
+            if (!c) return '';
+            const riga = (nome, ora, prima, perc, megioSeSale, formato) => {
+                const f = frecciaVariazione(perc, megioSeSale);
+                return `
+                    <div class="px-3 py-2.5 flex items-center gap-3">
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-xs font-bold text-gray-700">${nome}</span>
+                            <span class="block text-[11px] font-medium text-gray-400">${formato(prima)} nel ${esc(c.annoPrima)}</span>
+                        </span>
+                        <span class="text-sm font-black text-gray-900 whitespace-nowrap">${formato(ora)}</span>
+                        <span class="text-xs font-black whitespace-nowrap w-20 text-right ${f.classe}">${f.testo}</span>
+                    </div>`;
+            };
+            const euro = (x) => formatCurrency(x);
+            const num = (x) => numeroIT(Math.round(x));
+            const ore = (x) => oreScritte(x) + ' h';
+            return `
+                <div>
+                    <div class="mb-2">
+                        <p class="etichetta block">Rispetto all'anno scorso</p>
+                        <p class="text-[11px] font-medium text-gray-400 mt-0.5">
+                            Stesso tratto, per non confrontare mele con pere: ${esc(c.etichetta)}, contro gli stessi giorni del ${esc(c.annoPrima)}.
+                        </p>
+                    </div>
+                    <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                        ${riga('Incassato', c.ora.incassi, c.prima.incassi, c.incassiPerc, true, euro)}
+                        ${riga('Corse', c.ora.nCorse, c.prima.nCorse, c.corsePerc, true, num)}
+                        ${riga('Ore di turno', c.ora.ore, c.prima.ore, c.orePerc, true, ore)}
+                        ${c.perOraPrima > 0 ? riga("All'ora", c.perOraOra, c.perOraPrima, ((c.perOraOra - c.perOraPrima) / c.perOraPrima) * 100, true, euro) : ''}
+                        ${riga('Speso', c.ora.uscite, c.prima.uscite, c.uscitePerc, false, euro)}
+                    </div>
+                </div>`;
+        }
+
         function renderRiepilogoMensile() {
             const ym = meseSelezionato();
             const [anno, mese] = ym.split('-').map(Number);
@@ -4899,6 +5061,8 @@
                                 ${serie.map(x => `<div class="flex-1 text-center text-[9px] font-bold ${x.iso === gSel ? 'text-gray-900' : 'text-gray-300'}">${x.giorno % 5 === 0 || x.iso === gSel ? x.giorno : ''}</div>`).join('')}
                             </div>
                         </div>
+
+                        ${bloccoConfrontoAnnoPrima(ym)}
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                             <div class="space-y-3">
@@ -4992,6 +5156,8 @@
                                 ${serie.map(x => `<div class="flex-1 text-center text-[9px] font-bold ${x.ym === meseSelezionato() ? 'text-gray-900' : 'text-gray-400'}">${nomeMese(x.mese).slice(0, 3)}</div>`).join('')}
                             </div>
                         </div>
+
+                        ${bloccoConfrontoAnnoPrima(String(anno))}
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                             <div class="space-y-3">
@@ -5248,6 +5414,304 @@
                 </div>`;
         }
 
+        // ============================================================
+        //  I PEZZI DELLA SCHERMATA «OGGI»
+        //  Stavano tutti dentro renderSezioneGiornate, cinquecentottantasette
+        //  righe: per cambiare la riga di una spesa bisognava scorrere il
+        //  modulo della corsa, i filtri e il registro. Adesso ognuno ha il suo
+        //  nome e la sua funzione, e quello che gli serve arriva come
+        //  argomento invece che per cattura - cosi' si legge dalla firma.
+        //  Niente e' cambiato a video: l'HTML delle quattordici viste e' stato
+        //  confrontato byte per byte, prima e dopo.
+        // ============================================================
+
+        function moduloCorsa(giorno, metodo) {
+        return `
+            <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-green-500 slide-in">
+                <h3 class="text-lg font-bold mb-4 text-green-800">Registra Nuova Corsa (Incasso)</h3>
+                <form onsubmit="addCorsa(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label for="corsa-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
+                        <input type="date" id="corsa-data" required value="${giorno || window.ultimoDataCorsa || oggiISO()}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400" />
+                    </div>
+                    <div>
+                        <label for="corsa-cat" class="block text-xs font-bold text-gray-700 mb-1">Da dove a dove <span class="text-gray-400 font-normal">se vuoi</span></label>
+                        <input type="text" id="corsa-cat" placeholder="Lascia vuoto per numerarla" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400" />
+                    </div>
+                    <div>
+                        <label for="corsa-metodo" class="block text-xs font-bold text-gray-700 mb-1">Come ha pagato?</label>
+                        <select id="corsa-metodo" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400 font-medium">
+                            ${opzioniMetodo(window.ultimoMetodoCorsa || 'Contanti', 'ENTRATA')}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="corsa-imp" class="block text-xs font-bold text-gray-700 mb-1">Quanto?</label>
+                        <input type="text" inputmode="decimal" id="corsa-imp" required placeholder="0,00" autofocus class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400 font-bold text-gray-900" />
+                    </div>
+                    <div class="lg:col-span-4 flex flex-col sm:flex-row gap-3">
+                        <button type="submit" name="azione" value="nuova" class="flex-1 bg-green-600 hover:bg-green-700 font-bold py-3 rounded-xl transition-colors text-white shadow-md">
+                            Salva e avanti
+                        </button>
+                        <button type="submit" name="azione" value="chiudi" class="sm:px-8 bg-gray-100 hover:bg-gray-200 font-bold py-3 rounded-xl transition-colors text-gray-700">
+                            Salva e basta
+                        </button>
+                    </div>
+                </form>
+            </div>`;
+        }
+
+        function corsaLampoHTML(metodo) {
+        return `
+            <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5">
+                <label for="corsa-lampo" class="etichetta block">Incasso corsa</label>
+                <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-green-600 pb-2.5 transition-colors">
+                    <input type="text" inputmode="decimal" id="corsa-lampo" placeholder="0,00"
+                           onkeydown="if (event.key === 'Enter') { event.preventDefault(); corsaLampo(window.ultimoMetodoCorsa || 'Contanti'); }"
+                           class="flex-1 min-w-0 p-0 bg-transparent border-0 cifra text-[2.35rem] text-right text-gray-900 placeholder:text-gray-300 outline-none" />
+                    <span class="text-xl font-bold text-gray-300" aria-hidden="true">€</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="corsaLampo('Contanti')" class="tasto-metodo bg-green-600 hover:bg-green-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.contanti} Contanti
+                    </button>
+                    <button onclick="corsaLampo('POS')" class="tasto-metodo bg-gray-900 hover:bg-gray-800 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.pos} POS
+                    </button>
+                    <button onclick="corsaLampo('Satispay')" class="tasto-metodo bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.satispay} Satispay
+                    </button>
+                    <button onclick="corsaLampo('App/Nexi')" class="tasto-metodo bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.app} App / Voucher
+                    </button>
+                </div>
+                <button onclick="toggleCorsaForm()" class="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-2 self-start">
+                    ${window.showCorsaForm ? 'Chiudi il modulo completo' : 'Tratta scritta o data diversa'}
+                </button>
+            </div>
+
+            <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                Aggiungi spesa
+            </button>`;
+        }
+
+        function spesaLampoHTML(giorno, metodo) {
+        return `
+            <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <span class="etichetta text-red-600">Stai segnando una spesa</span>
+                    <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || oggiISO())}</span>
+                </div>
+                <div>
+                    <label for="spesa-lampo-cat" class="etichetta block mb-1.5">Che spesa è</label>
+                    <select id="spesa-lampo-cat" class="w-full p-3 border border-gray-200 rounded-xl font-bold text-gray-900 bg-white outline-none focus:border-red-500">
+                        ${opzioniCategoriaSpesa(false)}
+                    </select>
+                </div>
+                <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-red-500 pb-2.5 transition-colors">
+                    <input type="text" inputmode="decimal" id="spesa-lampo" placeholder="0,00"
+                           onkeydown="if (event.key === 'Enter') { event.preventDefault(); spesaLampo(window.ultimoMetodoUscita || 'Contanti'); }"
+                           class="flex-1 min-w-0 p-0 bg-transparent border-0 cifra text-[2.35rem] text-right text-gray-900 placeholder:text-gray-300 outline-none" />
+                    <span class="text-xl font-bold text-gray-300" aria-hidden="true">€</span>
+                </div>
+                <label for="spesa-lampo-fattura" class="flex items-center gap-2.5 cursor-pointer select-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                    <input type="checkbox" id="spesa-lampo-fattura" ${window.ultimaFatturaUscita ? 'checked' : ''} class="w-5 h-5 accent-red-600 shrink-0" />
+                    <span class="min-w-0">
+                        <span class="block text-sm font-bold text-gray-900">Mi fa fattura</span>
+                        <span class="block text-[11px] font-medium text-gray-400 leading-tight">spunta se ti rilascia fattura, non scontrino</span>
+                    </span>
+                </label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="spesaLampo('Contanti')" class="tasto-metodo bg-green-600 hover:bg-green-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.contanti} Contanti
+                    </button>
+                    <button onclick="spesaLampo('POS')" class="tasto-metodo bg-gray-900 hover:bg-gray-800 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.pos} POS / Carta
+                    </button>
+                    <button onclick="spesaLampo('Carta Carburante')" class="tasto-metodo bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.carburante} Carta carburante
+                    </button>
+                    <button onclick="spesaLampo('Bonifico')" class="tasto-metodo bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.bonifico} Bonifico
+                    </button>
+                    <button onclick="spesaLampo('Conto')" class="tasto-metodo col-span-2 bg-sky-600 hover:bg-sky-700 text-white shadow-sm transition-colors" title="Non paghi adesso: te lo segnano sul conto">
+                        ${ICONE_METODO.conto} Conto
+                    </button>
+                </div>
+                <div class="pt-1">
+                    <button onclick="toggleUscitaForm()" class="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-2">
+                        ${window.showUscitaForm ? 'Chiudi il modulo completo' : 'Nota, data diversa o spesa ricorrente'}
+                    </button>
+                </div>
+                <!-- La via d'uscita dal pannello della spesa: era una scritta
+                     sottolineata in fondo, sotto altre due righe di testo, e
+                     non si trovava. Adesso e' un tasto vero, verde come le
+                     corse a cui riporta. -->
+                <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black text-base py-3.5 rounded-[1.25rem] shadow-sm transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    Torna alle corse
+                </button>
+                ${window.showUscitaForm ? moduloUscitaHTML(giorno || oggiISO()) : ''}
+            </div>`;
+        }
+
+        function rigaCorsaGiornata(r, metodo) {
+        return String(window.editRecordId) === String(r.id) ? `
+            <div class="p-3 bg-green-50 space-y-2">
+                <div class="flex flex-wrap gap-2">
+                    <input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="p-2 border rounded-lg text-sm outline-none" />
+                    <input type="text" id="mv-cat-${r.id}" aria-label="Descrizione" value="${esc(r.categoria)}" placeholder="Tratta" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'ENTRATA')}</select>
+                    <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
+                    <div class="flex gap-2 ml-auto">
+                        <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
+                        <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
+                        <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
+                    </div>
+                </div>
+            </div>
+        ` : `
+            <!-- Due righe invece di una: con il tasto per modificare in
+                 fondo, su un telefono stretto la descrizione spariva e la
+                 matita usciva dal bordo. Sopra quello che conta - cosa e
+                 quanto - sotto ora e metodo, in piccolo. -->
+            <div class="px-3 py-2 flex items-center gap-2">
+                <span class="min-w-0 flex-1">
+                    <span class="flex items-baseline gap-2">
+                        <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}</span>
+                        <span class="text-sm font-black text-green-600 whitespace-nowrap shrink-0">${cifraEuro(r.importo)}</span>
+                    </span>
+                    <span class="flex items-center gap-1.5 mt-0.5">
+                        ${r.ora ? `<span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
+                        <span class="${metodoBadgeClass(r.metodo)} shrink min-w-0 truncate px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(r.metodo)}">${esc(metodoBreve(r.metodo))}</span>
+                    </span>
+                </span>
+                <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa corsa" aria-label="Modifica la corsa delle ${esc(r.ora || '')} da ${formatCurrency(r.importo)}"
+                        class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+            </div>`;
+        }
+
+        function rigaSpesaGiornata(r) {
+        return String(window.editRecordId) === String(r.id) ? `
+            <div class="p-3 bg-red-50 space-y-2">
+                <div class="flex flex-wrap gap-2">
+                    <input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="p-2 border rounded-lg text-sm outline-none" />
+                    <input type="text" id="mv-cat-${r.id}" aria-label="Tipo di spesa" value="${esc(r.categoria)}" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
+                </div>
+                <input type="text" id="mv-nota-${r.id}" aria-label="Note" value="${esc(r.nota || '')}" placeholder="Note (non entrano nei conti)" class="w-full p-2 border rounded-lg text-sm outline-none text-gray-600" />
+                <label for="mv-fatt-${r.id}" class="flex items-center gap-2 cursor-pointer select-none text-sm font-bold text-gray-800">
+                    <input type="checkbox" id="mv-fatt-${r.id}" ${r.fattura ? 'checked' : ''} class="w-5 h-5 accent-red-600" />
+                    Mi fa fattura
+                </label>
+                <div class="flex flex-wrap gap-2">
+                    <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select>
+                    <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
+                    <div class="flex gap-2 ml-auto">
+                        <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
+                        <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
+                        <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
+                    </div>
+                </div>
+            </div>
+        ` : `
+            <div class="px-3 py-2 flex items-center gap-2">
+                <span class="min-w-0 flex-1">
+                    <span class="flex items-baseline gap-2">
+                        <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}${r.nota ? ` <span class="font-normal text-gray-400">· ${esc(r.nota)}</span>` : ''}</span>
+                        <span class="text-sm font-black text-red-600 whitespace-nowrap shrink-0">−${cifraEuro(r.importo)}</span>
+                    </span>
+                    <span class="flex items-center gap-1.5 mt-0.5">
+                        ${r.ora ? `<span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
+                        <span class="${metodoBadgeClass(r.metodo)} shrink min-w-0 truncate px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(r.metodo)}">${esc(metodoBreve(r.metodo))}</span>
+                        ${r.fattura ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Con fattura">fatt.</span>' : ''}
+                        ${copertaDalBudget(r) ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Voce a budget: non pesa su questa giornata, e\' spalmata su tutto l\'anno">a budget</span>' : ''}
+                    </span>
+                </span>
+                <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa spesa" aria-label="Modifica la spesa ${esc(r.categoria)} da ${formatCurrency(r.importo)}"
+                        class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+            </div>`;
+        }
+
+        function schedaGiornata(g, giorno, metodo) {
+            const t = g.turno;
+            const aperta = !!giorno || window.giornataAperta === g.iso;
+            const soloUnGiorno = !!giorno;
+            const riposo = isRiposo(t);
+            const lavorati = (g.turni || []).filter(x => !isRiposo(x));
+            const oreGiorno = lavorati.reduce((a, x) => a + (parseFloat(x.ore || 0) || 0), 0);
+            const kmGiorno = lavorati.reduce((a, x) => a + (parseFloat(x.kmTot || 0) || 0), 0);
+            // Quanto di quello che e' uscito in questa data e' una voce a
+            // budget: il totale resta quello vero - questo e' il registro, e
+            // il registro dice quando hai pagato - ma la riga lo dichiara,
+            // cosi' una rata grossa non si legge come una giornata andata male.
+            const speseABudget = totaleImporti((g.spese || []).filter(copertaDalBudget));
+            const sottotitolo = !t ? 'turno non registrato'
+                : lavorati.length > 1
+                    ? `${lavorati.length} turni · ${oreScritte(oreGiorno)} h${kmGiorno ? ' · ' + kmGiorno + ' km' : ''}`
+                    : (riposo
+                        ? esc(t.turno || 'Festivo')
+                        : `${esc(nomeTurno(t))}${orariTurno(t) ? ' · ' + esc(orariTurno(t)) : ''} · ${t.ore} h${t.kmTot ? ' · ' + t.kmTot + ' km' : ''}`);
+            const dettaglio = `
+                <div class="p-3 space-y-3">
+                    ${g.corse.length ? `
+                        <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                            ${g.corse.map(r => rigaCorsaGiornata(r, metodo)).join('')}
+                        </div>
+                    ` : `<p class="text-xs text-gray-400 px-1">Nessuna corsa in questa giornata${metodo !== 'ALL' ? ' con questo metodo' : ''}.</p>`}
+
+                    ${g.spese.length ? `
+                        <div>
+                            <p class="etichetta block px-1 mb-1.5">Spese della giornata</p>
+                            <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                ${g.spese.map(rigaSpesaGiornata).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>`;
+
+            // Con un giorno solo selezionato la testata ripeteva parola per
+            // parola quello che dice gia' la scheda scura in cima: stessa
+            // data, stesso totale, stesse corse. Qui resta solo quello che
+            // in cima non c'e' - il turno con i suoi orari e i suoi km.
+            if (soloUnGiorno) {
+                return `
+                    <div class="bg-white rounded-[1.25rem] shadow-sm border ${riposo ? 'border-indigo-200' : 'border-gray-100'} overflow-hidden">
+                        <div class="px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-100">
+                            <p class="etichetta">${riposo ? 'Giornata non lavorata' : 'Il registro della giornata'}</p>
+                            <span class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-xs font-bold text-gray-500 min-w-0 truncate">${sottotitolo}</span>
+                                ${lavorati.some(kmMancanti) ? '<span class="shrink-0 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[11px] font-black uppercase whitespace-nowrap">senza km</span>' : ''}
+                            </span>
+                        </div>
+                        ${dettaglio}
+                    </div>`;
+            }
+
+            return `
+                <div class="bg-white rounded-[1.25rem] shadow-sm border ${riposo ? 'border-indigo-200' : 'border-gray-100'} overflow-hidden">
+                    <button onclick="alternaGiornata('${g.iso}')" class="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 hover:bg-gray-50 transition-colors">
+                        <div class="min-w-0 flex-1 basis-40">
+                            <p class="font-black text-gray-900 prima-maiuscola leading-tight">${dataEstesa(g.iso)}</p>
+                            <p class="text-xs font-bold text-gray-500">
+                                ${sottotitolo}
+                                ${lavorati.some(kmMancanti) ? '<span class="ml-1 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[11px] font-black uppercase whitespace-nowrap">senza km</span>' : ''}
+                            </p>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <p class="text-lg font-black ${g.tot > 0 ? 'text-green-600' : 'text-gray-300'} leading-tight">${cifraEuro(g.tot)}</p>
+                            <p class="text-[11px] font-bold text-gray-400 leading-tight">
+                                ${g.corse.length} ${g.corse.length === 1 ? 'corsa' : 'corse'}${g.pos > 0 ? ' · POS ' + soldi(g.pos) : ''}
+                            </p>
+                            ${g.speso > 0 ? `<p class="text-[11px] font-bold text-red-500 leading-tight">spese −${soldi(g.speso)}${speseABudget > 0 ? `<span class="font-medium text-gray-400"> · ${soldi(speseABudget)} a budget</span>` : ''}</p>` : ''}
+                        </div>
+                        <span class="text-gray-300 font-black text-lg leading-none">${aperta ? '▾' : '▸'}</span>
+                    </button>
+                    ${aperta ? `<div class="border-t border-gray-100">${dettaglio}</div>` : ''}
+                </div>`;
+        }
+
         function renderSezioneGiornate() {
             const giorno = giornoGiornate();
             const mese = window.filterMeseGiornate;
@@ -5347,38 +5811,6 @@
             // giornata e' sbagliato, non che la corsa va inserita lo stesso.
             const riposoDelGiorno = giornataNonLavorata(giorno);
 
-            const moduloCorsa = () => `
-                <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-green-500 slide-in">
-                    <h3 class="text-lg font-bold mb-4 text-green-800">Registra Nuova Corsa (Incasso)</h3>
-                    <form onsubmit="addCorsa(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                            <label for="corsa-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
-                            <input type="date" id="corsa-data" required value="${giorno || window.ultimoDataCorsa || oggiISO()}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400" />
-                        </div>
-                        <div>
-                            <label for="corsa-cat" class="block text-xs font-bold text-gray-700 mb-1">Da dove a dove <span class="text-gray-400 font-normal">se vuoi</span></label>
-                            <input type="text" id="corsa-cat" placeholder="Lascia vuoto per numerarla" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400" />
-                        </div>
-                        <div>
-                            <label for="corsa-metodo" class="block text-xs font-bold text-gray-700 mb-1">Come ha pagato?</label>
-                            <select id="corsa-metodo" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400 font-medium">
-                                ${opzioniMetodo(window.ultimoMetodoCorsa || 'Contanti', 'ENTRATA')}
-                            </select>
-                        </div>
-                        <div>
-                            <label for="corsa-imp" class="block text-xs font-bold text-gray-700 mb-1">Quanto?</label>
-                            <input type="text" inputmode="decimal" id="corsa-imp" required placeholder="0,00" autofocus class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-green-400 font-bold text-gray-900" />
-                        </div>
-                        <div class="lg:col-span-4 flex flex-col sm:flex-row gap-3">
-                            <button type="submit" name="azione" value="nuova" class="flex-1 bg-green-600 hover:bg-green-700 font-bold py-3 rounded-xl transition-colors text-white shadow-md">
-                                Salva e avanti
-                            </button>
-                            <button type="submit" name="azione" value="chiudi" class="sm:px-8 bg-gray-100 hover:bg-gray-200 font-bold py-3 rounded-xl transition-colors text-gray-700">
-                                Salva e basta
-                            </button>
-                        </div>
-                    </form>
-                </div>`;
 
             // ============================================================
             //  LA CORSA IN DUE TOCCHI
@@ -5391,38 +5823,6 @@
             //  Il modulo completo non sparisce: sta sotto, per la convenzione,
             //  la tratta scritta, la data di ieri.
             // ============================================================
-            const corsaLampoHTML = () => `
-                <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5">
-                    <label for="corsa-lampo" class="etichetta block">Incasso corsa</label>
-                    <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-green-600 pb-2.5 transition-colors">
-                        <input type="text" inputmode="decimal" id="corsa-lampo" placeholder="0,00"
-                               onkeydown="if (event.key === 'Enter') { event.preventDefault(); corsaLampo(window.ultimoMetodoCorsa || 'Contanti'); }"
-                               class="flex-1 min-w-0 p-0 bg-transparent border-0 cifra text-[2.35rem] text-right text-gray-900 placeholder:text-gray-300 outline-none" />
-                        <span class="text-xl font-bold text-gray-300" aria-hidden="true">€</span>
-                    </div>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="corsaLampo('Contanti')" class="tasto-metodo bg-green-600 hover:bg-green-700 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.contanti} Contanti
-                        </button>
-                        <button onclick="corsaLampo('POS')" class="tasto-metodo bg-gray-900 hover:bg-gray-800 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.pos} POS
-                        </button>
-                        <button onclick="corsaLampo('Satispay')" class="tasto-metodo bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.satispay} Satispay
-                        </button>
-                        <button onclick="corsaLampo('App/Nexi')" class="tasto-metodo bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.app} App / Voucher
-                        </button>
-                    </div>
-                    <button onclick="toggleCorsaForm()" class="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-2 self-start">
-                        ${window.showCorsaForm ? 'Chiudi il modulo completo' : 'Tratta scritta o data diversa'}
-                    </button>
-                </div>
-
-                <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                    Aggiungi spesa
-                </button>`;
 
             // ============================================================
             //  LA SPESA, QUI DENTRO
@@ -5433,221 +5833,14 @@
             //  Il registro completo di tutte le spese resta in «Altro»: quello
             //  si guarda a mese, non in mezzo al traffico.
             // ============================================================
-            const spesaLampoHTML = () => `
-                <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <span class="etichetta text-red-600">Stai segnando una spesa</span>
-                        <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || oggiISO())}</span>
-                    </div>
-                    <div>
-                        <label for="spesa-lampo-cat" class="etichetta block mb-1.5">Che spesa è</label>
-                        <select id="spesa-lampo-cat" class="w-full p-3 border border-gray-200 rounded-xl font-bold text-gray-900 bg-white outline-none focus:border-red-500">
-                            ${opzioniCategoriaSpesa(false)}
-                        </select>
-                    </div>
-                    <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-red-500 pb-2.5 transition-colors">
-                        <input type="text" inputmode="decimal" id="spesa-lampo" placeholder="0,00"
-                               onkeydown="if (event.key === 'Enter') { event.preventDefault(); spesaLampo(window.ultimoMetodoUscita || 'Contanti'); }"
-                               class="flex-1 min-w-0 p-0 bg-transparent border-0 cifra text-[2.35rem] text-right text-gray-900 placeholder:text-gray-300 outline-none" />
-                        <span class="text-xl font-bold text-gray-300" aria-hidden="true">€</span>
-                    </div>
-                    <label for="spesa-lampo-fattura" class="flex items-center gap-2.5 cursor-pointer select-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
-                        <input type="checkbox" id="spesa-lampo-fattura" ${window.ultimaFatturaUscita ? 'checked' : ''} class="w-5 h-5 accent-red-600 shrink-0" />
-                        <span class="min-w-0">
-                            <span class="block text-sm font-bold text-gray-900">Mi fa fattura</span>
-                            <span class="block text-[11px] font-medium text-gray-400 leading-tight">spunta se ti rilascia fattura, non scontrino</span>
-                        </span>
-                    </label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="spesaLampo('Contanti')" class="tasto-metodo bg-green-600 hover:bg-green-700 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.contanti} Contanti
-                        </button>
-                        <button onclick="spesaLampo('POS')" class="tasto-metodo bg-gray-900 hover:bg-gray-800 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.pos} POS / Carta
-                        </button>
-                        <button onclick="spesaLampo('Carta Carburante')" class="tasto-metodo bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.carburante} Carta carburante
-                        </button>
-                        <button onclick="spesaLampo('Bonifico')" class="tasto-metodo bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors">
-                            ${ICONE_METODO.bonifico} Bonifico
-                        </button>
-                        <button onclick="spesaLampo('Conto')" class="tasto-metodo col-span-2 bg-sky-600 hover:bg-sky-700 text-white shadow-sm transition-colors" title="Non paghi adesso: te lo segnano sul conto">
-                            ${ICONE_METODO.conto} Conto
-                        </button>
-                    </div>
-                    <div class="pt-1">
-                        <button onclick="toggleUscitaForm()" class="text-xs font-bold text-gray-500 hover:text-gray-900 underline underline-offset-2">
-                            ${window.showUscitaForm ? 'Chiudi il modulo completo' : 'Nota, data diversa o spesa ricorrente'}
-                        </button>
-                    </div>
-                    <!-- La via d'uscita dal pannello della spesa: era una scritta
-                         sottolineata in fondo, sotto altre due righe di testo, e
-                         non si trovava. Adesso e' un tasto vero, verde come le
-                         corse a cui riporta. -->
-                    <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-black text-base py-3.5 rounded-[1.25rem] shadow-sm transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                        Torna alle corse
-                    </button>
-                    ${window.showUscitaForm ? moduloUscitaHTML(giorno || oggiISO()) : ''}
-                </div>`;
 
             // --- una corsa dentro la giornata ---
-            const rigaCorsa = (r) => String(window.editRecordId) === String(r.id) ? `
-                <div class="p-3 bg-green-50 space-y-2">
-                    <div class="flex flex-wrap gap-2">
-                        <input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="p-2 border rounded-lg text-sm outline-none" />
-                        <input type="text" id="mv-cat-${r.id}" aria-label="Descrizione" value="${esc(r.categoria)}" placeholder="Tratta" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'ENTRATA')}</select>
-                        <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
-                        <div class="flex gap-2 ml-auto">
-                            <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
-                            <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
-                            <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
-                        </div>
-                    </div>
-                </div>
-            ` : `
-                <!-- Due righe invece di una: con il tasto per modificare in
-                     fondo, su un telefono stretto la descrizione spariva e la
-                     matita usciva dal bordo. Sopra quello che conta - cosa e
-                     quanto - sotto ora e metodo, in piccolo. -->
-                <div class="px-3 py-2 flex items-center gap-2">
-                    <span class="min-w-0 flex-1">
-                        <span class="flex items-baseline gap-2">
-                            <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}</span>
-                            <span class="text-sm font-black text-green-600 whitespace-nowrap shrink-0">${cifraEuro(r.importo)}</span>
-                        </span>
-                        <span class="flex items-center gap-1.5 mt-0.5">
-                            ${r.ora ? `<span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
-                            <span class="${metodoBadgeClass(r.metodo)} shrink min-w-0 truncate px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(r.metodo)}">${esc(metodoBreve(r.metodo))}</span>
-                        </span>
-                    </span>
-                    <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa corsa" aria-label="Modifica la corsa delle ${esc(r.ora || '')} da ${formatCurrency(r.importo)}"
-                            class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
-                </div>`;
 
-            const rigaSpesa = (r) => String(window.editRecordId) === String(r.id) ? `
-                <div class="p-3 bg-red-50 space-y-2">
-                    <div class="flex flex-wrap gap-2">
-                        <input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="p-2 border rounded-lg text-sm outline-none" />
-                        <input type="text" id="mv-cat-${r.id}" aria-label="Tipo di spesa" value="${esc(r.categoria)}" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
-                    </div>
-                    <input type="text" id="mv-nota-${r.id}" aria-label="Note" value="${esc(r.nota || '')}" placeholder="Note (non entrano nei conti)" class="w-full p-2 border rounded-lg text-sm outline-none text-gray-600" />
-                    <label for="mv-fatt-${r.id}" class="flex items-center gap-2 cursor-pointer select-none text-sm font-bold text-gray-800">
-                        <input type="checkbox" id="mv-fatt-${r.id}" ${r.fattura ? 'checked' : ''} class="w-5 h-5 accent-red-600" />
-                        Mi fa fattura
-                    </label>
-                    <div class="flex flex-wrap gap-2">
-                        <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select>
-                        <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
-                        <div class="flex gap-2 ml-auto">
-                            <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
-                            <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
-                            <button onclick="deleteRecord('${escJs(r.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Elimina</button>
-                        </div>
-                    </div>
-                </div>
-            ` : `
-                <div class="px-3 py-2 flex items-center gap-2">
-                    <span class="min-w-0 flex-1">
-                        <span class="flex items-baseline gap-2">
-                            <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}${r.nota ? ` <span class="font-normal text-gray-400">· ${esc(r.nota)}</span>` : ''}</span>
-                            <span class="text-sm font-black text-red-600 whitespace-nowrap shrink-0">−${cifraEuro(r.importo)}</span>
-                        </span>
-                        <span class="flex items-center gap-1.5 mt-0.5">
-                            ${r.ora ? `<span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap" title="Ora in cui l'hai registrata">${esc(r.ora)}</span>` : ''}
-                            <span class="${metodoBadgeClass(r.metodo)} shrink min-w-0 truncate px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(r.metodo)}">${esc(metodoBreve(r.metodo))}</span>
-                            ${r.fattura ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Con fattura">fatt.</span>' : ''}
-                            ${copertaDalBudget(r) ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Voce a budget: non pesa su questa giornata, e\' spalmata su tutto l\'anno">a budget</span>' : ''}
-                        </span>
-                    </span>
-                    <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa spesa" aria-label="Modifica la spesa ${esc(r.categoria)} da ${formatCurrency(r.importo)}"
-                            class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
-                </div>`;
 
             // --- il turno della giornata, con i comandi ---
             // conPulsante: nel registro la giornata senza turno offre il pulsante per
             // registrarlo; in cima no, perche' il pulsante e' gia' li' sopra.
             // --- la giornata: testata sempre visibile, dettaglio a richiesta ---
-            const scheda = (g) => {
-                const t = g.turno;
-                const aperta = !!giorno || window.giornataAperta === g.iso;
-                const soloUnGiorno = !!giorno;
-                const riposo = isRiposo(t);
-                const lavorati = (g.turni || []).filter(x => !isRiposo(x));
-                const oreGiorno = lavorati.reduce((a, x) => a + (parseFloat(x.ore || 0) || 0), 0);
-                const kmGiorno = lavorati.reduce((a, x) => a + (parseFloat(x.kmTot || 0) || 0), 0);
-                // Quanto di quello che e' uscito in questa data e' una voce a
-                // budget: il totale resta quello vero - questo e' il registro, e
-                // il registro dice quando hai pagato - ma la riga lo dichiara,
-                // cosi' una rata grossa non si legge come una giornata andata male.
-                const speseABudget = totaleImporti((g.spese || []).filter(copertaDalBudget));
-                const sottotitolo = !t ? 'turno non registrato'
-                    : lavorati.length > 1
-                        ? `${lavorati.length} turni · ${oreScritte(oreGiorno)} h${kmGiorno ? ' · ' + kmGiorno + ' km' : ''}`
-                        : (riposo
-                            ? esc(t.turno || 'Festivo')
-                            : `${esc(nomeTurno(t))}${orariTurno(t) ? ' · ' + esc(orariTurno(t)) : ''} · ${t.ore} h${t.kmTot ? ' · ' + t.kmTot + ' km' : ''}`);
-                const dettaglio = `
-                    <div class="p-3 space-y-3">
-                        ${g.corse.length ? `
-                            <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                                ${g.corse.map(rigaCorsa).join('')}
-                            </div>
-                        ` : `<p class="text-xs text-gray-400 px-1">Nessuna corsa in questa giornata${metodo !== 'ALL' ? ' con questo metodo' : ''}.</p>`}
-
-                        ${g.spese.length ? `
-                            <div>
-                                <p class="etichetta block px-1 mb-1.5">Spese della giornata</p>
-                                <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                                    ${g.spese.map(rigaSpesa).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-                    </div>`;
-
-                // Con un giorno solo selezionato la testata ripeteva parola per
-                // parola quello che dice gia' la scheda scura in cima: stessa
-                // data, stesso totale, stesse corse. Qui resta solo quello che
-                // in cima non c'e' - il turno con i suoi orari e i suoi km.
-                if (soloUnGiorno) {
-                    return `
-                        <div class="bg-white rounded-[1.25rem] shadow-sm border ${riposo ? 'border-indigo-200' : 'border-gray-100'} overflow-hidden">
-                            <div class="px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-gray-100">
-                                <p class="etichetta">${riposo ? 'Giornata non lavorata' : 'Il registro della giornata'}</p>
-                                <span class="flex items-center gap-1.5 min-w-0">
-                                    <span class="text-xs font-bold text-gray-500 min-w-0 truncate">${sottotitolo}</span>
-                                    ${lavorati.some(kmMancanti) ? '<span class="shrink-0 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[11px] font-black uppercase whitespace-nowrap">senza km</span>' : ''}
-                                </span>
-                            </div>
-                            ${dettaglio}
-                        </div>`;
-                }
-
-                return `
-                    <div class="bg-white rounded-[1.25rem] shadow-sm border ${riposo ? 'border-indigo-200' : 'border-gray-100'} overflow-hidden">
-                        <button onclick="alternaGiornata('${g.iso}')" class="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 hover:bg-gray-50 transition-colors">
-                            <div class="min-w-0 flex-1 basis-40">
-                                <p class="font-black text-gray-900 prima-maiuscola leading-tight">${dataEstesa(g.iso)}</p>
-                                <p class="text-xs font-bold text-gray-500">
-                                    ${sottotitolo}
-                                    ${lavorati.some(kmMancanti) ? '<span class="ml-1 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[11px] font-black uppercase whitespace-nowrap">senza km</span>' : ''}
-                                </p>
-                            </div>
-                            <div class="text-right shrink-0">
-                                <p class="text-lg font-black ${g.tot > 0 ? 'text-green-600' : 'text-gray-300'} leading-tight">${cifraEuro(g.tot)}</p>
-                                <p class="text-[11px] font-bold text-gray-400 leading-tight">
-                                    ${g.corse.length} ${g.corse.length === 1 ? 'corsa' : 'corse'}${g.pos > 0 ? ' · POS ' + soldi(g.pos) : ''}
-                                </p>
-                                ${g.speso > 0 ? `<p class="text-[11px] font-bold text-red-500 leading-tight">spese −${soldi(g.speso)}${speseABudget > 0 ? `<span class="font-medium text-gray-400"> · ${soldi(speseABudget)} a budget</span>` : ''}</p>` : ''}
-                            </div>
-                            <span class="text-gray-300 font-black text-lg leading-none">${aperta ? '▾' : '▸'}</span>
-                        </button>
-                        ${aperta ? `<div class="border-t border-gray-100">${dettaglio}</div>` : ''}
-                    </div>`;
-            };
 
             // I filtri stanno in fondo, chiusi. Chi apre questa schermata vuole
             // vedere le corse, non filtrarle: prima erano aperti e spingevano il
@@ -5808,11 +6001,11 @@
                             Aggiungi spesa
                         </button>
                         <p class="text-xs text-gray-400">Le corse no, ma le spese sì: in un giorno di riposo l'auto costa come sempre.</p>`}
-                    ` : (window.mostraSpesaLampo ? '' : corsaLampoHTML())}
+                    ` : (window.mostraSpesaLampo ? '' : corsaLampoHTML(metodo))}
 
-                    ${window.showCorsaForm && !riposoDelGiorno ? moduloCorsa() : ''}
+                    ${window.showCorsaForm && !riposoDelGiorno ? moduloCorsa(giorno, metodo) : ''}
 
-                    ${window.mostraSpesaLampo ? spesaLampoHTML() : ''}
+                    ${window.mostraSpesaLampo ? spesaLampoHTML(giorno, metodo) : ''}
 
                     ${pannelloFiltri()}
 
@@ -5825,7 +6018,7 @@
                         </p>` : ''}
 
                     <div class="space-y-2">
-                        ${lista.slice(0, LIMITE_RIGHE).map(scheda).join('') || `
+                        ${lista.slice(0, LIMITE_RIGHE).map(g => schedaGiornata(g, giorno, metodo)).join('') || `
                             <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center text-gray-400">
                                 ${filtriAttivi
                                     ? 'Niente in questa selezione. Usa le frecce qui sopra per cambiare giorno, oppure × per togliere il filtro e vedere tutto l\'anno.'
@@ -7337,20 +7530,33 @@
                                 <div class="divide-y divide-gray-100">
                                     ${(mostraFatteScadenze() ? voci : voci.filter(v => !v.fatta)).map(v => `
                                         <div class="px-4 py-2.5 flex flex-wrap items-center gap-2 ${v.fatta ? 'bg-gray-50' : ''}">
-                                            <button onclick="spuntaOccorrenza('${escJs(v.id)}', '${v.teorica}')" title="${v.fatta ? 'Segna come da fare' : 'Segna come fatta'}"
-                                                class="w-6 h-6 rounded-md border-2 flex-shrink-0 text-xs font-black flex items-center justify-center ${v.fatta ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 bg-white hover:border-green-400'}">${v.fatta ? '✓' : ''}</button>
+                                            ${v.dalBudget ? `
+                                                <span title="Si spunta da sola quando registri il pagamento"
+                                                      class="w-6 h-6 rounded-md border-2 flex-shrink-0 text-xs font-black flex items-center justify-center ${v.fatta ? 'bg-green-500 border-green-500 text-white' : 'border-gray-200 bg-gray-50 text-gray-300'}">${v.fatta ? '✓' : ''}</span>`
+                                              : `
+                                                <button onclick="spuntaOccorrenza('${escJs(v.id)}', '${v.teorica}')" title="${v.fatta ? 'Segna come da fare' : 'Segna come fatta'}"
+                                                    class="w-6 h-6 rounded-md border-2 flex-shrink-0 text-xs font-black flex items-center justify-center ${v.fatta ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 bg-white hover:border-green-400'}">${v.fatta ? '✓' : ''}</button>`}
                                             <div class="min-w-0 flex-1 basis-32">
                                                 <p class="font-bold text-sm truncate ${v.fatta ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(v.nome)}</p>
-                                                ${v.cadenza ? `<p class="text-xs font-black uppercase tracking-wider text-purple-500">${esc(v.cadenza.etichetta)}</p>` : ''}
+                                                <p class="text-xs font-black uppercase tracking-wider ${v.dalBudget ? 'text-indigo-500' : 'text-purple-500'}">
+                                                    ${v.dalBudget ? 'dal budget' : (v.cadenza ? esc(v.cadenza.etichetta) : '')}
+                                                </p>
                                             </div>
-                                            <input type="date" value="${v.data}" onchange="spostaOccorrenza('${escJs(v.id)}', '${v.teorica}', this.value)" aria-label="Quando l'hai fatta"
-                                                title="Quest'anno cade in un altro giorno? Cambia solo questa data."
-                                                class="p-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-yellow-400" />
+                                            ${v.dalBudget ? `
+                                                <span class="p-1.5 text-xs font-bold text-gray-500 whitespace-nowrap">${ggMmAaaa(v.data)}</span>`
+                                              : `
+                                                <input type="date" value="${v.data}" onchange="spostaOccorrenza('${escJs(v.id)}', '${v.teorica}', this.value)" aria-label="Quando l'hai fatta"
+                                                    title="Quest'anno cade in un altro giorno? Cambia solo questa data."
+                                                    class="p-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-yellow-400" />`}
                                             ${v.fatta ? '' : `
                                                 <span class="text-xs font-black px-2 py-1 rounded-full ${v.scaduta ? 'bg-red-100 text-red-800' : (v.giorniMancanti <= 30 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-500')}">
                                                     ${v.scaduta ? 'scaduta' : (v.giorniMancanti === 0 ? 'oggi' : `tra ${v.giorniMancanti} gg`)}
                                                 </span>`}
-                                            <button onclick="deleteScadenza('${escJs(v.id)}')" title="Elimina la scadenza${v.cadenza ? ' e tutte le sue date' : ''}" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>
+                                            ${v.dalBudget ? `
+                                                <button onclick="switchTab('categorie')" title="La scadenza si cambia sulla voce di budget"
+                                                        class="text-indigo-600 hover:text-indigo-800 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded whitespace-nowrap">Vai al budget</button>`
+                                              : `
+                                                <button onclick="deleteScadenza('${escJs(v.id)}')" title="Elimina la scadenza${v.cadenza ? ' e tutte le sue date' : ''}" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded">Elimina</button>`}
                                         </div>
                                     `).join('')}
                                 </div>
@@ -10883,6 +11089,41 @@
             };
         }
 
+        // ============================================================
+        //  RIASSEGNARE UNA SPESA A UNA VOCE DI BUDGET
+        //  Una spesa si aggancia al budget dal nome: "Tasse e Contributi -
+        //  INPS" trova la voce "Tasse e Contributi". Quando i due nomi non
+        //  combaciano - una vecchia riga "Costi fissi - Assicurazione
+        //  infortuni", una categoria scritta a modo suo - la spesa resta
+        //  fuori, e per sistemarla bisognava riscrivere la categoria a mano
+        //  indovinando la forma giusta.
+        //  Qui si sceglie la voce da un menu e il nome lo riscrive l'app,
+        //  tenendo il dettaglio: "Costi fissi - Assicurazione infortuni"
+        //  assegnata a "Tasse e Contributi" diventa "Tasse e Contributi -
+        //  Assicurazione infortuni". L'importo, la data e il metodo non si
+        //  toccano: cambia solo l'etichetta con cui la spesa si fa trovare.
+        // ============================================================
+        async function assegnaSpesaAVoce(idMovimento, slugVoce) {
+            if (!slugVoce) return;
+            const r = (window.dailyRecords || []).find(x => String(x.id) === String(idMovimento));
+            const v = elencoVociFisse().find(x => String(x.slug) === String(slugVoce));
+            if (!r || !v) return;
+            const nomeVoce = String(v.nome || '').trim();
+            if (!nomeVoce) return;
+            const dettaglio = dettaglioSpesaDiRecord(r) || nomeSpesaDiRecord(r);
+            // Se il dettaglio e' gia' il nome della voce non si ripete due volte.
+            const nuova = (dettaglio && chiaveNome(dettaglio) !== chiaveNome(nomeVoce))
+                ? `${nomeVoce} - ${dettaglio}`
+                : nomeVoce;
+            if (nuova === r.categoria) { showToast('Era già assegnata a questa voce.'); return; }
+            // La stessa strada che usa la modifica di una riga: cosi' il
+            // salvataggio sul Cloud e su disco e' quello collaudato.
+            persistiRecord(Object.assign({}, r, { categoria: nuova })).then(() => {
+                showToast(`Assegnata a «${nomeVoce}».`);
+                renderContent();
+            });
+        }
+
         // Aprire una riga del conguaglio: quali movimenti ci stanno dentro.
         // Una riga che dice «2 movimenti» senza farteli vedere e' una domanda
         // lasciata a meta', e per le spese fuori budget e' proprio quella la
@@ -11043,6 +11284,16 @@
                                                                 : '<span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">registrata da te</span>') : ''}
                                                             <span class="ml-auto text-xs font-black text-red-600 whitespace-nowrap">−${formatCurrency(m.importo)}</span>
                                                         </p>
+                                                        ${r.extra && elencoVociFisse().length ? `
+                                                            <p class="flex flex-wrap items-center gap-2 mt-1.5">
+                                                                <label class="text-[11px] font-bold text-gray-500" for="ass-${escJs(m.id)}">Assegna a</label>
+                                                                <select id="ass-${escJs(m.id)}" onchange="assegnaSpesaAVoce('${escJs(m.id)}', this.value)"
+                                                                        class="text-[11px] font-bold p-1.5 border border-gray-200 rounded-lg bg-white outline-none">
+                                                                    <option value="">una voce del budget…</option>
+                                                                    ${elencoVociFisse().filter(v => String(v.nome || '').trim())
+                                                                        .map(v => `<option value="${esc(v.slug)}">${esc(v.nome)}</option>`).join('')}
+                                                                </select>
+                                                            </p>` : ''}
                                                     </div>`).join('')}
                                             </div>
                                             </div>

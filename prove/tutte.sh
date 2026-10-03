@@ -23,6 +23,9 @@ titolo "previsione e realta'";    giro testPrevisioneRealta.mjs
 titolo "indice dei pagamenti";    giro testIndiceVivo.mjs
 titolo "budget e proposte";       giro testBudget118.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs
+titolo "riassegna a una voce";    giro testAssegna.mjs
+titolo "scadenze dal budget";     giro testScadenzeBudget.mjs
+titolo "confronto anno su anno";  giro testConfronto.mjs
 titolo "scadenze";                giro testScadenze.mjs
 titolo "spese spalmate";          giro testSpalmate.mjs
 titolo "incasso coperto";         giro testCoperto.mjs
