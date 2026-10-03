@@ -33,6 +33,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testIndiceVivo.mjs` | l'indice dei pagamenti si rifà quando registri o cancelli **dai tasti veri** |
 | `testBudget118.mjs` | una spesa «Famiglia - Dettaglio» si aggancia alla voce giusta; le proposte dal registro |
 | `testConguaglio.mjs` | le righe si aprono e dicono quali movimenti contengono, con la provenienza |
+| `testPareggio.mjs` | il costo fisso al giorno comprende la quota IRPEF, e l'etichetta del pareggio segue il segno: «Sopra» col più in verde, «Sotto» col meno in rosso |
 | `testAssegna.mjs` | riassegnare una spesa a una voce di budget: il nome lo riscrive l'app, importo e data non si toccano |
 | `testScadenzeBudget.mjs` | una voce di budget con la sua scadenza compare fra le scadenze, e si spunta da sola quando paghi |
 | `testConfronto.mjs` | il confronto con l'anno scorso guarda lo stesso tratto, non un anno intero contro dieci mesi |

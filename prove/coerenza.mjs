@@ -118,7 +118,8 @@ const dati = await p.evaluate((anno) => {
       const sp = speseGiornataSpalmate(g, uscite);
       const q = quotaDelGiorno(g);
       return { vere:sp.vere, fuoriBudget:sp.fuoriBudget, quotaBudget:sp.quotaBudget, totale:sp.totale,
-               pagateABudget:sp.pagateOggiABudget, qBudget:q.budget, qAltre:q.altre, qQuota:q.quota }; })()
+               pagateABudget:sp.pagateOggiABudget, qBudget:q.budget, qAltre:q.altre, qIrpef:q.irpef,
+               qSpese:q.spese, qQuota:q.quota, qIrpefAnno:q.irpefAnno, qGiorniAnno:giorniDellAnno(anno) }; })()
   };
 }, ANNO);
 
@@ -186,7 +187,9 @@ c('budget del conguaglio = budget della scheda', d.conguaglio.budget, d.budget.p
 console.log('  --- la giornata ---');
 c('spese vere = fuori budget + pagate a budget', d.giornata.vere, d.giornata.fuoriBudget + d.giornata.pagateABudget);
 c('spese spalmate = fuori budget + quota', d.giornata.totale, d.giornata.fuoriBudget + d.giornata.quotaBudget);
-c('quota del giorno = budget + altre spese', d.giornata.qQuota, d.giornata.qBudget + d.giornata.qAltre);
+c('costo del giorno = budget + altre spese + IRPEF', d.giornata.qQuota, d.giornata.qBudget + d.giornata.qAltre + d.giornata.qIrpef);
+c('la parte di sole spese esclude l\'IRPEF', d.giornata.qSpese, d.giornata.qBudget + d.giornata.qAltre);
+c('la quota IRPEF e\' l\'IRPEF dell\'anno divisa per i giorni', d.giornata.qIrpef * d.giornata.qGiorniAnno, d.giornata.qIrpefAnno);
 c('il budget della quota = quello delle spese spalmate', d.giornata.qBudget, d.giornata.quotaBudget);
 
 console.log(`\n  ${ko.length ? ko.length + ' INCOERENZE' : 'nessuna incoerenza'} · ${ok} controlli passati`);

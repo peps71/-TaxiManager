@@ -69,6 +69,82 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'IRPEF entra nel costo della giornata (versione 125)
+
+### «Sopra il pareggio: −32,00» non voleva dire niente
+
+L'etichetta era fissa. Quando il numero era negativo — la giornata non aveva
+coperto i suoi costi — la scheda diceva comunque «SOPRA il pareggio» e sotto
+mostrava un numero rosso col meno. Due cose che si contraddicono.
+
+Adesso l'etichetta segue il segno: **«Sopra il pareggio»** con il più, in
+verde, quando la giornata ha reso più di quello che costava; **«Sotto il
+pareggio»** con il meno, in rosso, quando è rimasta indietro. Il segno è
+scritto per esteso: un «+12,40» verde e un «−32,00» rosso si leggono senza
+doverci pensare.
+
+### Il costo del giorno adesso comprende l'IRPEF
+
+Finora il costo di una giornata era: la quota giornaliera delle voci a budget
+più la media delle spese fuori budget. L'IRPEF non c'era, per una ragione
+corretta in teoria — non è un costo fisso, è una percentuale sull'utile, e a
+utile zero non se ne paga — ma inutile per chi lavora: a giugno la cartella
+arriva lo stesso, e va messa via un po' per volta.
+
+Adesso c'è una terza voce:
+
+    a budget 83,90 € + spese fuori budget 0,00 € + IRPEF stimata 21,52 €
+
+È l'IRPEF a scaglioni **più le addizionali regionali e comunali** che ci si
+aspetta sull'utile che l'anno promette al ritmo tenuto finora — la stessa
+proiezione che l'app già usava per scegliere la percentuale di accantonamento —
+divisa per i giorni dell'anno. Si sposta man mano che l'anno va, perché si
+muove l'utile su cui è calcolata.
+
+**I contributi INPS restano fuori**: quelli sono una voce del budget, e
+contarli qui vorrebbe dire contarli due volte.
+
+### L'avviso sul doppio conteggio
+
+Lo stesso rischio vale per l'IRPEF: se nel budget c'è già una voce che la
+comprende, la stessa tassa finirebbe nel conto due volte. L'app controlla i
+nomi delle voci di budget e, se ne trova una che parla di IRPEF, lo dice in
+chiaro nella scheda invece di lasciare un numero gonfio senza spiegazione.
+
+### Il pareggio e il «ti resta» non sono più la stessa cifra
+
+Erano uguali, e adesso non lo sono più: la scheda scura in cima dice quanto ti
+è rimasto in mano dopo le spese, il pareggio dice quanto serve perché la
+giornata paghi anche la sua parte di tasse. La scheda lo spiega, sotto «Come è
+fatto questo conto».
+
+Anche il pieghevole sull'accantonamento è stato riscritto: diceva «le tasse non
+spostano il pareggio», che adesso non è più vero. Quello che si mette da parte
+è la tassa su quello che fai **in più** del ritmo dell'anno, perché il ritmo
+dell'anno è già dentro il costo del giorno.
+
+### Il titolo
+
+«Quanto costa questa giornata» è diventato **«Costo fisso al giorno»**.
+
+Nuova prova, `prove/testPareggio.mjs`: dodici controlli sulla composizione del
+costo, sulle due etichette con il loro segno e il loro colore, e sull'avviso
+del doppio conteggio.
+
+### Un difetto che si vedeva solo mentre lavoravi
+
+Cercando una regressione che non c'era, la prova dei testi tagliati ha trovato
+una cosa vera: nella schermata «Giornate», **mentre sei in turno**, la
+pastiglia «in turno» compare accanto alla data e a 320 px le toglieva settanta
+pixel. Si leggeva «sabato 3» e «ottobre 2026» tagliati a metà.
+
+Non era una novità di questa versione: c'era anche prima, e le prove non lo
+vedevano perché seminavano turni dalle 8 alle 20 — il difetto compariva solo se
+la prova girava dentro quella fascia. Adesso la prova fa cominciare il turno di
+oggi un'ora fa e finire fra un'ora, qualunque sia l'ora in cui gira: il caso
+stretto si prova sempre. La riga va a capo e la pastiglia scende sotto invece
+di stringere la data.
+
 ## Meno decorazione, piu' chiarezza (versione 124)
 
 Niente di nuovo in questa versione: e' un giro di pulizia su quello che si vede

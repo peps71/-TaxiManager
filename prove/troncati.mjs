@@ -27,12 +27,24 @@ for (const larghezza of [320, 390, 768]) {
     localStorage.setItem('taxi_voci_fisse_avviato','si');
     localStorage.setItem('taxi_budget_proposte_no', JSON.stringify(['carburante']));
     const rec = [], tur = [], met = ['Contanti','POS','Satispay','App/Nexi','Conto'];
+    // Il turno di oggi si fa cominciare un'ora fa e finire fra un'ora, qualunque
+    // sia l'ora in cui gira la prova. Cosi' la pastiglia «in turno» c'e' sempre:
+    // e' il caso stretto - e' lei che toglie spazio alla data - e con l'orario
+    // fisso delle otto si vedeva solo se la prova girava di giorno.
+    const adesso = new Date();
+    const oraPiu = (h) => { const d = new Date(adesso.getTime() + h * 3600000);
+      return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+    const inTurnoOra = { inizio: oraPiu(-1), fine: oraPiu(1) };
     // cifre grandi come quelle di un anno vero: e' li' che il testo si tronca
     for (const a of [2025, 2026]) for (let m=1;m<=12;m++) for (let g=1;g<=28;g++) {
       if (g%7===0) continue;
       const d = `${a}-${String(m).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
       if (d > oggiISO()) continue;
-      tur.push({ id:`t${a}${m}${g}`, data:d, turno:'Le otto', inizio:'08:00', fine:'20:00', ore:12, lavorato:true, kmTot:175 });
+      const oggi = d === oggiISO();
+      tur.push({ id:`t${a}${m}${g}`, data:d, turno:'Le otto',
+                 inizio: oggi ? inTurnoOra.inizio : '08:00',
+                 fine: oggi ? inTurnoOra.fine : '20:00',
+                 ore:12, lavorato:true, kmTot:175 });
       for (let c=0;c<6;c++) rec.push({ id:`e${a}${m}${g}${c}`, data:d, tipo:'ENTRATA', categoria:'Corsa', metodo:met[(g+c)%5], importo:13+((g*3+c*5)%42), ora:'10:00' });
       if (g%3===0) rec.push({ id:`u${a}${m}${g}`, data:d, tipo:'USCITA', categoria:'Carburante', metodo:'Bonifico', importo:62 });
     }
