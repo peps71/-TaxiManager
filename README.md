@@ -69,6 +69,49 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La stima delle tasse va dal commercialista (versione 137)
+
+Stava in fondo a «Spese e tasse», sotto il carburante e la manutenzione. Ma è
+roba da scrivania — INPS, IRPEF, addizionali, la soglia del forfettario — e si
+guarda quando si fanno i conti con chi li firma, non mentre si segna un pieno.
+
+È passata in **Commercialista**, sotto il prospetto da stampare. Con lei si è
+spostato anche il blocco **Approfondimenti fiscali** (il confronto fra le due
+basi di calcolo e la soglia del regime forfettario): diceva di sé «numeri da
+guardare una volta l'anno con il commercialista», quindi lasciarlo indietro
+avrebbe diviso in due lo stesso discorso.
+
+Il markup è quello di prima, intero: cambia solo la schermata che lo ospita. È
+stato estratto in una funzione sua, `sezioneStimaTasse()`, invece di essere
+trascinato da una schermata all'altra — l'unica variabile che prendeva da fuori,
+la soglia del forfettario, adesso se la calcola da sé.
+
+Sta **fuori dal foglio da stampare**: il prospetto è fatto di numeri del
+registro, la stima è un calcolo dell'app, e mescolarli in un documento che va al
+commercialista sarebbe stato scorretto.
+
+### Il totale delle uscite è tornato
+
+Finché la stima stava lì, il totale delle spese dell'anno si leggeva dentro quel
+blocco. Spostandolo, una schermata che parla di spese restava senza il totale
+delle spese. Adesso c'è, sopra le tre schede per categoria: **uscite dell'anno,
+e di cui tracciate**.
+
+### I rimandi
+
+Tre testi puntavano a una sezione che non è più lì. Il budget diceva «INPS e
+IRPEF lasciali fuori: sono già stimate più sotto» → adesso dice «in
+Commercialista». E i due sottotitoli, nella schermata e nell'indice di Gestione,
+dicono cosa c'è davvero in ciascuna.
+
+### La prova
+
+`coerenzaVideo` controllava che sei numeri fiscali comparissero in «Spese e
+tasse»: adesso li cerca in «Commercialista». E c'è un controllo nuovo che
+pretende il contrario — che in «Spese e tasse» quei numeri **non** ci siano
+più. Una sezione spostata che resta anche dove stava è un doppione, ed è
+esattamente l'errore che un cambio così può lasciarsi dietro.
+
 ## Righe sempre uguali, e un separatore (versione 136)
 
 Le tre cifre stavano in un blocco unico che andava a capo da sé. Con un budget

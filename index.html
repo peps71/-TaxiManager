@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 136;
+        const VERSIONE_APP = 137;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3382,11 +3382,11 @@
         ];
 
         const SCHEDE_SECONDARIE = [
-            { id: 'categorie',  label: 'Spese e tasse',         desc: 'Ripartizione delle uscite e quota fiscale' , icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
+            { id: 'categorie',  label: 'Spese e tasse',         desc: 'Costo giornaliero, budget e uscite'       , icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
             { id: 'scadenze',   label: 'Scadenze',              desc: 'Bollo, revisione, INPS: cosa scade e quando',   icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14v3"/><circle cx="12" cy="19.5" r="0.5" fill="currentColor"/></svg>' },
             { id: 'auto',       label: 'Parco auto',               desc: 'Vetture, chilometri e valore residuo'     ,      icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
             { id: 'rendimento', label: 'Rendimento',            desc: 'Euro all\'ora, al chilometro, per corsa',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>' },
-            { id: 'report',     label: 'Commercialista',        desc: 'Riepilogo da stampare o da esportare'    ,       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
+            { id: 'report',     label: 'Commercialista',        desc: 'Riepilogo da stampare e stima delle tasse',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
             { id: 'cloud',      label: 'Backup e impostazioni', desc: 'Copie automatiche, accesso, aliquote fiscali',  icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 3 16.3"/><path d="M16 16l2 2 4-4"/><path d="M20 16.5A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 3 14.5"/></svg>' }
         ];
 
@@ -7356,7 +7356,7 @@
                     <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
                         <div>
                         <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Spese e tasse</h2>
-                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Costo di una giornata, ripartizione delle uscite e quota già destinata al fisco.</p>
+                        <p class="text-gray-500 text-[13px] font-medium mt-0.5">Costo di una giornata, budget dei costi fissi e ripartizione delle uscite.</p>
                         </div>
                         ${pillolaAnno('spese')}
                     </header>
@@ -7379,6 +7379,21 @@
 
                     ${sezioneBudgetFissi()}
 
+                    <!-- Il totale dell'anno: finche' la stima delle tasse stava
+                         qui, questo numero si leggeva li' dentro. Spostata quella,
+                         una schermata che parla di spese restava senza il totale
+                         delle spese. -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-baseline justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="etichetta block">Uscite del ${esc(annoAttivo())}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">Tutto quello che è uscito, deducibile o no.</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-black text-red-600">${formatCurrency(spese.uscite)}</p>
+                            <p class="text-xs font-bold text-gray-400">di cui tracciate ${formatCurrency(spese.usciteDed)}</p>
+                        </div>
+                    </div>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         ${schedaSpesa('Carburante', carbo, spese.carburanteDed)}
                         ${schedaSpesa('Manutenzione &amp; cura', man, spese.manutenzioneDed)}
@@ -7389,263 +7404,6 @@
                         regola che hai stabilito. Quanto poi sia deducibile ogni singola voce — e in che
                         percentuale — lo dice il commercialista: questa è la somma, non la dichiarazione.
                     </p>
-
-                    <!-- Stima tasse Regime Ordinario -->
-                    ${(() => {
-                        const st = getStats();
-                        const fs = window.fiscalSettings || { inpsPerc: 24, addizionaliPerc: 2 };
-                        // Le tasse si contano sull'utile fiscale (incassi meno le sole
-                        // spese deducibili); quello che ti resta in tasca si conta
-                        // sull'utile di cassa, dove le spese in contanti pesano eccome.
-                        const utile = st.utileFiscale;
-                        const f = st.fiscale;
-                        const pct = (v) => utile > 0 ? Math.max(0, (v / utile) * 100) : 0;
-                        const nettoStimato = st.utileCassa - st.tasse;
-                        const alMese = st.tasse > 0 ? st.tasse / 12 : 0;
-                        // Quanto pesa il fisco su cento euro. Numeratore e
-                        // denominatore devono parlare della stessa cosa: le tasse
-                        // si contano sui soli incassi tracciati, quindi anche il
-                        // rapporto sta su quelli. Dividendo per tutti gli incassi
-                        // veniva un numero piu' basso della meta' del vero.
-                        const su100 = st.entrateTracciate > 0 ? (st.tasse / st.entrateTracciate) * 100 : 0;
-                        const a2 = aliquotaSecondoScaglione(annoAttivo()) * 100;
-
-                        // Proiezione a fine anno: ha senso solo sull'anno in corso
-                        const oggiD = new Date();
-                        const annoInCorso = String(oggiD.getFullYear()) === String(annoAttivo());
-                        let proiezione = null;
-                        if (annoInCorso && utile > 0) {
-                            const giorniPassati = Math.max(1, Math.round((oggiD - new Date(oggiD.getFullYear(), 0, 1)) / 86400000) + 1);
-                            const fattore = 365 / giorniPassati;
-                            const utileFineAnno = utile * fattore;
-                            proiezione = {
-                                giorniPassati,
-                                incassi: st.entrate * fattore,
-                                utile: utileFineAnno,
-                                tasse: calcolaTasseOrdinario(utileFineAnno, annoAttivo()).tasseTot
-                            };
-                        }
-
-                        return `
-                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                                    <div>
-                                        <h3 class="text-lg font-black text-gray-900">Stima tasse ${annoAttivo()} · Regime Ordinario</h3>
-                                        <p class="text-xs text-gray-500">Sui soli movimenti tracciati, da una parte e dall\'altra: incassi con POS, app o bonifico meno le spese pagate allo stesso modo.</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="etichetta block">Da accantonare</p>
-                                        <p class="text-3xl font-black ${st.tasse > 0 ? 'text-red-600' : 'text-gray-300'} leading-tight">${formatCurrency(st.tasse)}</p>
-                                    </div>
-                                </div>
-
-                                <div class="p-5 space-y-5">
-                                    ${utile > 0 ? `
-                                        <div>
-                                            <div class="flex h-3 rounded-full overflow-hidden bg-gray-100">
-                                                <div class="bg-purple-500" style="width:${pct(f.contributiInps)}%"></div>
-                                                <div class="bg-red-500" style="width:${pct(f.irpef)}%"></div>
-                                                <div class="bg-orange-400" style="width:${pct(f.addizionali)}%"></div>
-                                                <div class="bg-green-500" style="width:${pct(nettoStimato)}%"></div>
-                                            </div>
-                                            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-bold text-gray-500">
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-purple-500 align-middle"></span> INPS</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> IRPEF</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-orange-400 align-middle"></span> Addizionali</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Netto</span>
-                                            </div>
-                                        </div>
-                                    ` : ''}
-
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
-                                        <div>
-                                            ${rigaFiscale('Incassi tracciati ' + annoAttivo() + ' <span class="font-normal text-gray-400">POS, app, bonifico</span>', formatCurrency(st.entrateTracciate), { classe: 'text-green-600' })}
-                                            ${rigaFiscale('Spese deducibili <span class="font-normal text-gray-400">tracciate</span>', '-' + formatCurrency(st.deducibili), { classe: 'text-red-600' })}
-                                            ${rigaFiscale('Utile fiscale', formatCurrency(utile), { forte: true })}
-                                            ${st.entrateContanti > 0 || st.nonDeducibili > 0 ? `
-                                                <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-3 pt-2 border-t border-gray-100">Fuori da questo conto</p>
-                                            ` : ''}
-                                            ${st.entrateContanti > 0 ? rigaFiscale(
-                                                'Incassi in contanti', formatCurrency(st.entrateContanti), { classe: 'text-gray-500' }) : ''}
-                                            ${st.nonDeducibili > 0 ? rigaFiscale(
-                                                'Spese non deducibili <span class="font-normal text-gray-400">contanti o senza metodo</span>',
-                                                '-' + formatCurrency(st.nonDeducibili), { classe: 'text-gray-500' }) : ''}
-                                            ${st.entrateContanti > 0 || st.nonDeducibili > 0 ? `
-                                                <p class="text-[11px] text-gray-400 leading-relaxed pb-2">
-                                                    Entrano e escono dalla cassa davvero — il «ti resta» qui sotto ne tiene conto —
-                                                    ma restano fuori dal conto delle tasse.
-                                                </p>
-                                            ` : ''}
-                                            ${f.inps && f.inps.fissa > 0 ? `
-                                                ${rigaFiscale(
-                                                    'INPS \u00b7 rate fisse <span class="font-normal text-gray-400">' + f.inps.rate + ' \u00d7 ' + formatCurrency(f.inps.rata) + '</span>',
-                                                    '-' + formatCurrency(f.inps.fissa), { classe: 'text-purple-600' })}
-                                                ${rigaFiscale(
-                                                    'INPS \u00b7 ' + fs.inpsPerc + '% oltre ' + formatCurrency(fs.inpsMinimale ?? 18415),
-                                                    f.inps.eccedenza > 0 ? '-' + formatCurrency(f.inps.eccedenza) : formatCurrency(0),
-                                                    { classe: f.inps.eccedenza > 0 ? 'text-purple-600' : 'text-gray-400' })}
-                                            ` : rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
-                                            ${rigaFiscale('Imponibile IRPEF', formatCurrency(f.imponibileIrpef), { forte: true })}
-                                        </div>
-                                        <div>
-                                            ${rigaFiscale('IRPEF a scaglioni', '-' + formatCurrency(f.irpef), { classe: 'text-red-600' })}
-                                            ${rigaFiscale('Addizionali (' + fs.addizionaliPerc + '%)', '-' + formatCurrency(f.addizionali), { classe: 'text-orange-600' })}
-                                            ${rigaFiscale('Totale tasse e contributi', formatCurrency(st.tasse), { forte: true, classe: 'text-red-600' })}
-                                            ${rigaFiscale('Netto stimato', formatCurrency(nettoStimato), { forte: true, classe: 'text-green-700', bordo: true })}
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                        ${boxDato('Da mettere via ogni mese', formatCurrency(alMese))}
-                                        ${boxDato('Su ogni 100 € tracciati', formatCurrency(su100))}
-                                        ${boxDato('Scaglioni ' + annoAttivo(), `23% · ${a2}% · 43%`)}
-                                    </div>
-
-                                    ${proiezione ? `
-                                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                                            <p class="text-xs font-black uppercase tracking-wider text-yellow-800 mb-1">Proiezione a fine anno</p>
-                                            <p class="text-sm font-bold text-gray-700">
-                                                Con questo ritmo (${proiezione.giorniPassati} giorni di ${annoAttivo()} registrati) chiuderesti a
-                                                <span class="font-black text-gray-900">${formatCurrency(proiezione.incassi)}</span> di incassi,
-                                                <span class="font-black text-gray-900">${formatCurrency(proiezione.utile)}</span> di utile fiscale e circa
-                                                <span class="font-black text-red-600">${formatCurrency(proiezione.tasse)}</span> tra tasse e contributi.
-                                            </p>
-                                        </div>
-                                    ` : ''}
-
-                                    <p class="text-xs text-gray-600 leading-relaxed bg-yellow-50 border border-yellow-200 rounded-xl p-3">
-                                        <strong>La stima considera solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
-                                        Per il fisco, in regime ordinario, concorrono al reddito <em>tutti</em> i corrispettivi, contanti compresi,
-                                        quindi il conto vero e' piu' alto. Quanto piu' alto lo vedi qui sotto, negli approfondimenti, nel confronto
-                                        fra le due basi di calcolo.
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        Stima indicativa, non una dichiarazione. Non tiene conto di detrazioni e deduzioni personali, dei minimali INPS artigiani,
-                                        di acconti gia' versati o di redditi diversi da questa attivita'. Le percentuali INPS e addizionali si cambiano in
-                                        "Cloud & Sync" → Impostazioni Fiscali. Verifica sempre con il commercialista.
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                    })()}
-
-                    <!-- Approfondimenti fiscali: si aprono quando servono -->
-                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                        <div class="max-w-xl">
-                            <h3 class="font-bold text-gray-900">Approfondimenti fiscali</h3>
-                            <p class="text-xs text-gray-500 leading-relaxed">
-                                Il confronto fra le due basi di calcolo e la soglia del regime forfettario: numeri da
-                                guardare una volta l'anno con il commercialista, non tutti i giorni.
-                            </p>
-                        </div>
-                        <button onclick="alternaDettagliFiscali()" class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
-                            ${window.dettagliFiscali ? 'Nascondi' : 'Mostra'}
-                        </button>
-                    </div>
-
-                    <div class="space-y-6 ${window.dettagliFiscali ? '' : 'hidden'}">
-
-                    <!-- Confronto fra due basi di calcolo -->
-                    ${(() => {
-                        // Gli stessi totali del riepilogo annuale, senza rifare i conti.
-                        // Bonifici e voucher finiscono entrambi in "app", quindi il totale
-                        // degli incassi tracciati non cambia.
-                        const inc = aggrega(annoAttivo());
-                        inc.totale = inc.incassi;
-                        // Tracciato vuol dire tracciato: Satispay lo e' quanto il POS.
-                        // Prima restava fuori da questo confronto, e la colonna B
-                        // risultava piu' bassa del vero.
-                        inc.elettronici = inc.pos + inc.app + inc.conto + inc.satispay;
-                        const st2 = getStats();
-                        // Anche qui si toglie solo quello che il fisco lascia togliere.
-                        const uscite = st2.deducibili;
-                        const anno = annoAttivo();
-                        const A = scenarioTasse(inc.totale, uscite, anno);
-                        const B = scenarioTasse(inc.elettronici, uscite, anno);
-
-                        // Proiezione a fine anno, solo se l'anno e' quello in corso
-                        const oggiD2 = new Date();
-                        const inCorso = String(oggiD2.getFullYear()) === String(anno);
-                        const gg = Math.max(1, Math.round((oggiD2 - new Date(oggiD2.getFullYear(), 0, 1)) / 86400000) + 1);
-                        const k = 365 / gg;
-                        const Ap = inCorso ? scenarioTasse(inc.totale * k, uscite * k, anno) : null;
-                        const Bp = inCorso ? scenarioTasse(inc.elettronici * k, uscite * k, anno) : null;
-
-                        const colonna = (titolo, sottotitolo, sc, proj, accento) => `
-                            <div class="border ${accento} rounded-xl overflow-hidden">
-                                <div class="px-4 py-3 border-b border-gray-100 bg-gray-50/70">
-                                    <p class="font-black text-gray-900 text-sm">${titolo}</p>
-                                    <p class="text-xs text-gray-500">${sottotitolo}</p>
-                                </div>
-                                <div class="p-4">
-                                    ${rigaFiscale('Incassi considerati', formatCurrency(sc.incassi), { classe: 'text-green-600' })}
-                                    ${rigaFiscale('Spese dedotte', '-' + formatCurrency(sc.uscite), { classe: 'text-red-600' })}
-                                    ${rigaFiscale('Utile lordo', formatCurrency(sc.utile), { forte: true })}
-                                    ${rigaFiscale('Contributi INPS', '-' + formatCurrency(sc.contributiInps), { classe: 'text-purple-600' })}
-                                    ${rigaFiscale('IRPEF', '-' + formatCurrency(sc.irpef), { classe: 'text-red-600' })}
-                                    ${rigaFiscale('Addizionali', '-' + formatCurrency(sc.addizionali), { classe: 'text-orange-600' })}
-                                    ${rigaFiscale('Tasse e contributi', formatCurrency(sc.tasse), { forte: true, classe: 'text-red-600', bordo: true })}
-                                    ${rigaFiscale('Netto stimato', formatCurrency(sc.netto), { forte: true, classe: 'text-green-700' })}
-                                    <div class="mt-3 grid grid-cols-2 gap-2 text-center">
-                                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Al mese</p>
-                                            <p class="text-sm font-black text-gray-900">${formatCurrency(sc.tasse / 12)}</p>
-                                        </div>
-                                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Su 100 € incassati</p>
-                                            <p class="text-sm font-black text-gray-900">${sc.incassi > 0 ? formatCurrency((sc.tasse / sc.incassi) * 100) : '—'}</p>
-                                        </div>
-                                    </div>
-                                    ${proj ? `
-                                        <p class="text-xs text-gray-500 mt-3">
-                                            Proiezione a fine ${anno}: <span class="font-black text-gray-700">${formatCurrency(proj.tasse)}</span>
-                                            su ${formatCurrency(proj.incassi)} di incassi.
-                                        </p>
-                                    ` : ''}
-                                </div>
-                            </div>`;
-
-                        return `
-                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                <div class="px-5 py-4 border-b border-gray-100">
-                                    <h3 class="text-lg font-black text-gray-900">Confronto fra due basi di calcolo</h3>
-                                    <p class="text-xs text-gray-500">Stesse spese in entrambi i casi, cambia solo la parte di incassi considerata.</p>
-                                </div>
-                                <div class="p-5 space-y-4">
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        ${colonna('A · Tutti gli incassi', 'Contanti compresi: e\' la base che conta per il fisco in regime ordinario.', A, Ap, 'border-gray-200')}
-                                        ${colonna('B · Solo POS, app e fatture', 'Esclude contanti (' + formatCurrency(inc.contanti) + ') e Satispay (' + formatCurrency(inc.satispay) + ').', B, Bp, 'border-gray-200')}
-                                    </div>
-
-                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        ${boxDato('Incassi esclusi in B', formatCurrency(inc.totale - inc.elettronici))}
-                                        ${boxDato('Differenza di tasse', formatCurrency(A.tasse - B.tasse), 'text-red-600')}
-                                        ${boxDato('Quota elettronica sul totale', (inc.totale > 0 ? ((inc.elettronici / inc.totale) * 100).toFixed(0) : 0) + '%')}
-                                    </div>
-
-                                    <p class="text-xs text-gray-500">
-                                        La colonna A e' quella che conta per il fisco: in regime ordinario concorrono al reddito tutti i corrispettivi,
-                                        compresi quelli in contanti. La colonna B serve solo come confronto, per vedere quanto pesa la parte tracciata
-                                        del lavoro. Come sempre, stima indicativa: la dichiarazione la fa il commercialista.
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                    })()}
-
-                    <!-- Soglia Regime Forfettario -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
-                        <div class="flex flex-wrap items-baseline justify-between gap-2">
-                            <h3 class="font-bold text-gray-800 text-lg">Soglia Regime Forfettario ${annoAttivo()}</h3>
-                            <p class="text-sm font-black ${sf.vicino ? 'text-red-600' : 'text-gray-900'}">${formatCurrency(sf.entrate)} <span class="text-gray-400 font-bold">/ ${formatCurrency(sf.soglia)}</span></p>
-                        </div>
-                        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
-                            <div class="h-full ${sf.vicino ? 'bg-red-500' : 'bg-yellow-400'} rounded-full transition-all" style="width:${sf.pct}%"></div>
-                        </div>
-                        <p class="text-xs text-gray-500">Se superi la soglia nell'anno, dall'anno successivo esci dal regime forfettario. Soglia modificabile in "Cloud & Sync" → Impostazioni Fiscali. Stima indicativa: verifica sempre con il commercialista.</p>
-                    </div>
-
-                    </div><!-- fine approfondimenti fiscali -->
 
                 </div>
             `;
@@ -7914,6 +7672,279 @@
             `;
         }
 
+
+        // ============================================================
+        //  LA STIMA DELLE TASSE STA CON IL COMMERCIALISTA
+        //  Stava in «Spese e tasse», in fondo a una pagina che parla di
+        //  carburante e manutenzione. Ma e' roba da scrivania: INPS, IRPEF,
+        //  addizionali, la soglia del forfettario. Si guarda quando si fanno
+        //  i conti con chi li firma, non mentre si segna un pieno.
+        //  Il markup e' quello di prima, intero: cambia solo la schermata che
+        //  lo ospita, e l'unica variabile che prendeva da fuori - la soglia
+        //  del forfettario - adesso se la calcola da se'.
+        // ============================================================
+        function sezioneStimaTasse() {
+            const sf = statsForfettario();
+            return `
+                    <!-- Stima tasse Regime Ordinario -->
+                    ${(() => {
+                        const st = getStats();
+                        const fs = window.fiscalSettings || { inpsPerc: 24, addizionaliPerc: 2 };
+                        // Le tasse si contano sull'utile fiscale (incassi meno le sole
+                        // spese deducibili); quello che ti resta in tasca si conta
+                        // sull'utile di cassa, dove le spese in contanti pesano eccome.
+                        const utile = st.utileFiscale;
+                        const f = st.fiscale;
+                        const pct = (v) => utile > 0 ? Math.max(0, (v / utile) * 100) : 0;
+                        const nettoStimato = st.utileCassa - st.tasse;
+                        const alMese = st.tasse > 0 ? st.tasse / 12 : 0;
+                        // Quanto pesa il fisco su cento euro. Numeratore e
+                        // denominatore devono parlare della stessa cosa: le tasse
+                        // si contano sui soli incassi tracciati, quindi anche il
+                        // rapporto sta su quelli. Dividendo per tutti gli incassi
+                        // veniva un numero piu' basso della meta' del vero.
+                        const su100 = st.entrateTracciate > 0 ? (st.tasse / st.entrateTracciate) * 100 : 0;
+                        const a2 = aliquotaSecondoScaglione(annoAttivo()) * 100;
+
+                        // Proiezione a fine anno: ha senso solo sull'anno in corso
+                        const oggiD = new Date();
+                        const annoInCorso = String(oggiD.getFullYear()) === String(annoAttivo());
+                        let proiezione = null;
+                        if (annoInCorso && utile > 0) {
+                            const giorniPassati = Math.max(1, Math.round((oggiD - new Date(oggiD.getFullYear(), 0, 1)) / 86400000) + 1);
+                            const fattore = 365 / giorniPassati;
+                            const utileFineAnno = utile * fattore;
+                            proiezione = {
+                                giorniPassati,
+                                incassi: st.entrate * fattore,
+                                utile: utileFineAnno,
+                                tasse: calcolaTasseOrdinario(utileFineAnno, annoAttivo()).tasseTot
+                            };
+                        }
+
+                        return `
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <h3 class="text-lg font-black text-gray-900">Stima tasse ${annoAttivo()} · Regime Ordinario</h3>
+                                        <p class="text-xs text-gray-500">Sui soli movimenti tracciati, da una parte e dall\'altra: incassi con POS, app o bonifico meno le spese pagate allo stesso modo.</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="etichetta block">Da accantonare</p>
+                                        <p class="text-3xl font-black ${st.tasse > 0 ? 'text-red-600' : 'text-gray-300'} leading-tight">${formatCurrency(st.tasse)}</p>
+                                    </div>
+                                </div>
+
+                                <div class="p-5 space-y-5">
+                                    ${utile > 0 ? `
+                                        <div>
+                                            <div class="flex h-3 rounded-full overflow-hidden bg-gray-100">
+                                                <div class="bg-purple-500" style="width:${pct(f.contributiInps)}%"></div>
+                                                <div class="bg-red-500" style="width:${pct(f.irpef)}%"></div>
+                                                <div class="bg-orange-400" style="width:${pct(f.addizionali)}%"></div>
+                                                <div class="bg-green-500" style="width:${pct(nettoStimato)}%"></div>
+                                            </div>
+                                            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-bold text-gray-500">
+                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-purple-500 align-middle"></span> INPS</span>
+                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> IRPEF</span>
+                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-orange-400 align-middle"></span> Addizionali</span>
+                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Netto</span>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
+                                        <div>
+                                            ${rigaFiscale('Incassi tracciati ' + annoAttivo() + ' <span class="font-normal text-gray-400">POS, app, bonifico</span>', formatCurrency(st.entrateTracciate), { classe: 'text-green-600' })}
+                                            ${rigaFiscale('Spese deducibili <span class="font-normal text-gray-400">tracciate</span>', '-' + formatCurrency(st.deducibili), { classe: 'text-red-600' })}
+                                            ${rigaFiscale('Utile fiscale', formatCurrency(utile), { forte: true })}
+                                            ${st.entrateContanti > 0 || st.nonDeducibili > 0 ? `
+                                                <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-3 pt-2 border-t border-gray-100">Fuori da questo conto</p>
+                                            ` : ''}
+                                            ${st.entrateContanti > 0 ? rigaFiscale(
+                                                'Incassi in contanti', formatCurrency(st.entrateContanti), { classe: 'text-gray-500' }) : ''}
+                                            ${st.nonDeducibili > 0 ? rigaFiscale(
+                                                'Spese non deducibili <span class="font-normal text-gray-400">contanti o senza metodo</span>',
+                                                '-' + formatCurrency(st.nonDeducibili), { classe: 'text-gray-500' }) : ''}
+                                            ${st.entrateContanti > 0 || st.nonDeducibili > 0 ? `
+                                                <p class="text-[11px] text-gray-400 leading-relaxed pb-2">
+                                                    Entrano e escono dalla cassa davvero — il «ti resta» qui sotto ne tiene conto —
+                                                    ma restano fuori dal conto delle tasse.
+                                                </p>
+                                            ` : ''}
+                                            ${f.inps && f.inps.fissa > 0 ? `
+                                                ${rigaFiscale(
+                                                    'INPS \u00b7 rate fisse <span class="font-normal text-gray-400">' + f.inps.rate + ' \u00d7 ' + formatCurrency(f.inps.rata) + '</span>',
+                                                    '-' + formatCurrency(f.inps.fissa), { classe: 'text-purple-600' })}
+                                                ${rigaFiscale(
+                                                    'INPS \u00b7 ' + fs.inpsPerc + '% oltre ' + formatCurrency(fs.inpsMinimale ?? 18415),
+                                                    f.inps.eccedenza > 0 ? '-' + formatCurrency(f.inps.eccedenza) : formatCurrency(0),
+                                                    { classe: f.inps.eccedenza > 0 ? 'text-purple-600' : 'text-gray-400' })}
+                                            ` : rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
+                                            ${rigaFiscale('Imponibile IRPEF', formatCurrency(f.imponibileIrpef), { forte: true })}
+                                        </div>
+                                        <div>
+                                            ${rigaFiscale('IRPEF a scaglioni', '-' + formatCurrency(f.irpef), { classe: 'text-red-600' })}
+                                            ${rigaFiscale('Addizionali (' + fs.addizionaliPerc + '%)', '-' + formatCurrency(f.addizionali), { classe: 'text-orange-600' })}
+                                            ${rigaFiscale('Totale tasse e contributi', formatCurrency(st.tasse), { forte: true, classe: 'text-red-600' })}
+                                            ${rigaFiscale('Netto stimato', formatCurrency(nettoStimato), { forte: true, classe: 'text-green-700', bordo: true })}
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                                        ${boxDato('Da mettere via ogni mese', formatCurrency(alMese))}
+                                        ${boxDato('Su ogni 100 € tracciati', formatCurrency(su100))}
+                                        ${boxDato('Scaglioni ' + annoAttivo(), `23% · ${a2}% · 43%`)}
+                                    </div>
+
+                                    ${proiezione ? `
+                                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                            <p class="text-xs font-black uppercase tracking-wider text-yellow-800 mb-1">Proiezione a fine anno</p>
+                                            <p class="text-sm font-bold text-gray-700">
+                                                Con questo ritmo (${proiezione.giorniPassati} giorni di ${annoAttivo()} registrati) chiuderesti a
+                                                <span class="font-black text-gray-900">${formatCurrency(proiezione.incassi)}</span> di incassi,
+                                                <span class="font-black text-gray-900">${formatCurrency(proiezione.utile)}</span> di utile fiscale e circa
+                                                <span class="font-black text-red-600">${formatCurrency(proiezione.tasse)}</span> tra tasse e contributi.
+                                            </p>
+                                        </div>
+                                    ` : ''}
+
+                                    <p class="text-xs text-gray-600 leading-relaxed bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                                        <strong>La stima considera solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
+                                        Per il fisco, in regime ordinario, concorrono al reddito <em>tutti</em> i corrispettivi, contanti compresi,
+                                        quindi il conto vero e' piu' alto. Quanto piu' alto lo vedi qui sotto, negli approfondimenti, nel confronto
+                                        fra le due basi di calcolo.
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Stima indicativa, non una dichiarazione. Non tiene conto di detrazioni e deduzioni personali, dei minimali INPS artigiani,
+                                        di acconti gia' versati o di redditi diversi da questa attivita'. Le percentuali INPS e addizionali si cambiano in
+                                        "Cloud & Sync" → Impostazioni Fiscali. Verifica sempre con il commercialista.
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                    })()}
+
+                    <!-- Approfondimenti fiscali: si aprono quando servono -->
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                        <div class="max-w-xl">
+                            <h3 class="font-bold text-gray-900">Approfondimenti fiscali</h3>
+                            <p class="text-xs text-gray-500 leading-relaxed">
+                                Il confronto fra le due basi di calcolo e la soglia del regime forfettario: numeri da
+                                guardare una volta l'anno con il commercialista, non tutti i giorni.
+                            </p>
+                        </div>
+                        <button onclick="alternaDettagliFiscali()" class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
+                            ${window.dettagliFiscali ? 'Nascondi' : 'Mostra'}
+                        </button>
+                    </div>
+
+                    <div class="space-y-6 ${window.dettagliFiscali ? '' : 'hidden'}">
+
+                    <!-- Confronto fra due basi di calcolo -->
+                    ${(() => {
+                        // Gli stessi totali del riepilogo annuale, senza rifare i conti.
+                        // Bonifici e voucher finiscono entrambi in "app", quindi il totale
+                        // degli incassi tracciati non cambia.
+                        const inc = aggrega(annoAttivo());
+                        inc.totale = inc.incassi;
+                        // Tracciato vuol dire tracciato: Satispay lo e' quanto il POS.
+                        // Prima restava fuori da questo confronto, e la colonna B
+                        // risultava piu' bassa del vero.
+                        inc.elettronici = inc.pos + inc.app + inc.conto + inc.satispay;
+                        const st2 = getStats();
+                        // Anche qui si toglie solo quello che il fisco lascia togliere.
+                        const uscite = st2.deducibili;
+                        const anno = annoAttivo();
+                        const A = scenarioTasse(inc.totale, uscite, anno);
+                        const B = scenarioTasse(inc.elettronici, uscite, anno);
+
+                        // Proiezione a fine anno, solo se l'anno e' quello in corso
+                        const oggiD2 = new Date();
+                        const inCorso = String(oggiD2.getFullYear()) === String(anno);
+                        const gg = Math.max(1, Math.round((oggiD2 - new Date(oggiD2.getFullYear(), 0, 1)) / 86400000) + 1);
+                        const k = 365 / gg;
+                        const Ap = inCorso ? scenarioTasse(inc.totale * k, uscite * k, anno) : null;
+                        const Bp = inCorso ? scenarioTasse(inc.elettronici * k, uscite * k, anno) : null;
+
+                        const colonna = (titolo, sottotitolo, sc, proj, accento) => `
+                            <div class="border ${accento} rounded-xl overflow-hidden">
+                                <div class="px-4 py-3 border-b border-gray-100 bg-gray-50/70">
+                                    <p class="font-black text-gray-900 text-sm">${titolo}</p>
+                                    <p class="text-xs text-gray-500">${sottotitolo}</p>
+                                </div>
+                                <div class="p-4">
+                                    ${rigaFiscale('Incassi considerati', formatCurrency(sc.incassi), { classe: 'text-green-600' })}
+                                    ${rigaFiscale('Spese dedotte', '-' + formatCurrency(sc.uscite), { classe: 'text-red-600' })}
+                                    ${rigaFiscale('Utile lordo', formatCurrency(sc.utile), { forte: true })}
+                                    ${rigaFiscale('Contributi INPS', '-' + formatCurrency(sc.contributiInps), { classe: 'text-purple-600' })}
+                                    ${rigaFiscale('IRPEF', '-' + formatCurrency(sc.irpef), { classe: 'text-red-600' })}
+                                    ${rigaFiscale('Addizionali', '-' + formatCurrency(sc.addizionali), { classe: 'text-orange-600' })}
+                                    ${rigaFiscale('Tasse e contributi', formatCurrency(sc.tasse), { forte: true, classe: 'text-red-600', bordo: true })}
+                                    ${rigaFiscale('Netto stimato', formatCurrency(sc.netto), { forte: true, classe: 'text-green-700' })}
+                                    <div class="mt-3 grid grid-cols-2 gap-2 text-center">
+                                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
+                                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Al mese</p>
+                                            <p class="text-sm font-black text-gray-900">${formatCurrency(sc.tasse / 12)}</p>
+                                        </div>
+                                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
+                                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Su 100 € incassati</p>
+                                            <p class="text-sm font-black text-gray-900">${sc.incassi > 0 ? formatCurrency((sc.tasse / sc.incassi) * 100) : '—'}</p>
+                                        </div>
+                                    </div>
+                                    ${proj ? `
+                                        <p class="text-xs text-gray-500 mt-3">
+                                            Proiezione a fine ${anno}: <span class="font-black text-gray-700">${formatCurrency(proj.tasse)}</span>
+                                            su ${formatCurrency(proj.incassi)} di incassi.
+                                        </p>
+                                    ` : ''}
+                                </div>
+                            </div>`;
+
+                        return `
+                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div class="px-5 py-4 border-b border-gray-100">
+                                    <h3 class="text-lg font-black text-gray-900">Confronto fra due basi di calcolo</h3>
+                                    <p class="text-xs text-gray-500">Stesse spese in entrambi i casi, cambia solo la parte di incassi considerata.</p>
+                                </div>
+                                <div class="p-5 space-y-4">
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                        ${colonna('A · Tutti gli incassi', 'Contanti compresi: e\' la base che conta per il fisco in regime ordinario.', A, Ap, 'border-gray-200')}
+                                        ${colonna('B · Solo POS, app e fatture', 'Esclude contanti (' + formatCurrency(inc.contanti) + ') e Satispay (' + formatCurrency(inc.satispay) + ').', B, Bp, 'border-gray-200')}
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        ${boxDato('Incassi esclusi in B', formatCurrency(inc.totale - inc.elettronici))}
+                                        ${boxDato('Differenza di tasse', formatCurrency(A.tasse - B.tasse), 'text-red-600')}
+                                        ${boxDato('Quota elettronica sul totale', (inc.totale > 0 ? ((inc.elettronici / inc.totale) * 100).toFixed(0) : 0) + '%')}
+                                    </div>
+
+                                    <p class="text-xs text-gray-500">
+                                        La colonna A e' quella che conta per il fisco: in regime ordinario concorrono al reddito tutti i corrispettivi,
+                                        compresi quelli in contanti. La colonna B serve solo come confronto, per vedere quanto pesa la parte tracciata
+                                        del lavoro. Come sempre, stima indicativa: la dichiarazione la fa il commercialista.
+                                    </p>
+                                </div>
+                            </div>
+                        `;
+                    })()}
+
+                    <!-- Soglia Regime Forfettario -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+                        <div class="flex flex-wrap items-baseline justify-between gap-2">
+                            <h3 class="font-bold text-gray-800 text-lg">Soglia Regime Forfettario ${annoAttivo()}</h3>
+                            <p class="text-sm font-black ${sf.vicino ? 'text-red-600' : 'text-gray-900'}">${formatCurrency(sf.entrate)} <span class="text-gray-400 font-bold">/ ${formatCurrency(sf.soglia)}</span></p>
+                        </div>
+                        <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full ${sf.vicino ? 'bg-red-500' : 'bg-yellow-400'} rounded-full transition-all" style="width:${sf.pct}%"></div>
+                        </div>
+                        <p class="text-xs text-gray-500">Se superi la soglia nell'anno, dall'anno successivo esci dal regime forfettario. Soglia modificabile in "Cloud & Sync" → Impostazioni Fiscali. Stima indicativa: verifica sempre con il commercialista.</p>
+                    </div>
+
+                    </div><!-- fine approfondimenti fiscali -->
+            `;
+        }
+
         function renderSchedaCommercialista() {
             const rep = getReportStats(window.filterMonthReport);
             const todayStr = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -7927,7 +7958,7 @@
                         <div class="flex items-center justify-between gap-x-3">
                             <div class="min-w-0 flex-1">
                                 <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Commercialista</h2>
-                                <p class="text-gray-500 text-[13px] font-medium mt-0.5">Riepilogo mensile o annuale, da stampare o esportare.</p>
+                                <p class="text-gray-500 text-[13px] font-medium mt-0.5">Riepilogo mensile o annuale da stampare, e la stima delle tasse.</p>
                             </div>
                             ${pillolaAnno('rep')}
                         </div>
@@ -8117,6 +8148,11 @@
                             <p>Documento per uso interno / contabile.</p>
                         </div>
                     </div>
+
+                    <!-- La stima delle tasse, sotto il prospetto: fa parte dello
+                         stesso discorso, ma e' una stima dell'app e non un dato
+                         del registro, quindi sta fuori dal foglio da stampare. -->
+                    ${sezioneStimaTasse()}
                 </div>
             `;
         }
@@ -11356,7 +11392,7 @@
                             </p>
                             <p>
                                 Quello che <strong>non</strong> metti a budget l'app lo spalma da sola, sulla media del
-                                mese. INPS e IRPEF lasciali fuori: sono già stimate più sotto.
+                                mese. INPS e IRPEF lasciali fuori: sono già stimate in «Commercialista».
                             </p>
                         </div>
                     </details>

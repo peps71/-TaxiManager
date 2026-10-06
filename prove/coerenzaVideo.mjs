@@ -96,13 +96,20 @@ c(`le uscite dell'anno in «Andamento / anno»`, ci('Andamento / anno', attesi.u
 // perche' sono le due cose che contano per il fisco. Si controlla la divisione.
 c(`gli incassi tracciati + contanti fanno il totale`, Math.abs(attesi.entrateTracciate + (attesi.incassi - attesi.entrateTracciate) - attesi.incassi) < 0.02);
 c(`le uscite dell'anno in «Spese e tasse»`, ci('Spese e tasse', attesi.uscite));
+// Dalla v137 la stima delle tasse sta in «Commercialista»: e' roba da
+// scrivania, non da mentre si segna un pieno. I numeri sono gli stessi, cambia
+// la schermata che li ospita - ed e' esattamente quello che qui si controlla.
 // anche l'utile di cassa non e' stampato: si mostra il netto, che e' utile - tasse
-c(`il netto stimato in «Spese e tasse»`, ci('Spese e tasse', attesi.netto));
+c(`il netto stimato in «Commercialista»`, ci('Commercialista', attesi.netto));
 c(`e il netto vale utile di cassa - tasse`, Math.abs(attesi.netto - (attesi.utileCassa - attesi.tasse)) < 0.02);
-c(`l'utile fiscale in «Spese e tasse»`, ci('Spese e tasse', attesi.utileFiscale));
-c(`le tasse stimate in «Spese e tasse»`, ci('Spese e tasse', attesi.tasse));
-c(`gli incassi tracciati in «Spese e tasse»`, ci('Spese e tasse', attesi.entrateTracciate));
-c(`le spese deducibili in «Spese e tasse»`, ci('Spese e tasse', attesi.deducibili));
+c(`l'utile fiscale in «Commercialista»`, ci('Commercialista', attesi.utileFiscale));
+c(`le tasse stimate in «Commercialista»`, ci('Commercialista', attesi.tasse));
+c(`gli incassi tracciati in «Commercialista»`, ci('Commercialista', attesi.entrateTracciate));
+c(`le spese deducibili in «Commercialista»`, ci('Commercialista', attesi.deducibili));
+// e non devono essere rimasti dov'erano: se ricompaiono in «Spese e tasse»
+// vuol dire che sono finiti in due posti invece di uno.
+c(`la stima non e' rimasta anche in «Spese e tasse»`,
+  !ci('Spese e tasse', attesi.tasse) && !ci('Spese e tasse', attesi.netto));
 c(`gli incassi dell'anno in «Commercialista»`, ci('Commercialista', attesi.incassi));
 c(`le uscite dell'anno in «Commercialista»`, ci('Commercialista', attesi.uscite));
 c(`le uscite dell'anno in «Uscite»`, ci('Uscite', attesi.uscite));
