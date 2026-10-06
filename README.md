@@ -69,6 +69,53 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Budget e conguaglio, una sezione sola (versione 134)
+
+Erano due schede separate che parlavano delle **stesse voci**: sopra l'elenco
+modificabile («Assicurazione auto · 3,80 €/g»), mezzo schermo più giù una
+tabella con gli stessi nomi e i numeri veri («Assicurazione auto · 1.387,00 € ·
+speso 0,00»). Per sapere se l'assicurazione stava dentro il budget bisognava
+cercarla due volte.
+
+Adesso la voce è **una riga sola**:
+
+    Assicurazione auto                       3,80 €/g   [modifica] [elimina]
+    budget 1.387,00 € · speso 0,00 € · +1.387,00 €
+
+Toccandola si aprono i movimenti che l'hanno fatta, come faceva la tabella del
+conguaglio. Modifica ed eliminazione sono sulla stessa riga.
+
+### Cosa resta, e dove
+
+Tutto quello che c'era nel conguaglio è rimasto, dentro la stessa scheda: la
+**barra dello stato di avanzamento** (a che punto è l'anno, quanto ne hai
+speso), la **differenza complessiva** accanto alla previsione giornaliera in
+testata, l'avviso sui **movimenti con data futura**, quello su un anno **senza
+nessuna spesa registrata**, e la riga gialla delle **spese fuori budget** in
+fondo all'elenco, con l'assegnazione a una voce.
+
+La colonnina «a oggi» di ogni riga non c'è più come testo: su un telefono
+allungava la riga di un terzo. Il segnale che serviva c'è ancora, ed è più
+diretto: **«speso» diventa rosso** quando quella voce corre più in fretta
+dell'anno. Il valore esatto resta nel suggerimento al tocco prolungato.
+
+Via anche l'importo per periodo sulle voci annuali («1.387,00 €/anno» diceva la
+stessa cosa di «budget 1.387,00 €»); resta sulle mensili, dove 797 €/mese e
+9.564 € l'anno sono due informazioni diverse.
+
+### Quanto si è accorciato
+
+Con dieci voci e le loro spese, misurato a 390 px:
+
+| | Prima | Dopo |
+| --- | --- | --- |
+| Le sezioni del budget | 978 + 1666 = **2644 px** | **1626 px** |
+| La pagina intera | 5146 px | **4104 px** |
+
+Tre controlli nuovi nella prova (tredici in tutto): la sezione deve portare i
+numeri del conguaglio, e dev'essercene **una sola** — così se un domani qualcuno
+rimette la seconda scheda, la prova se ne accorge.
+
 ## Il budget compattato (versione 133)
 
 Con dieci voci, la sezione del budget era alta **2181 px** su un telefono: si

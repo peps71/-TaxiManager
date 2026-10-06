@@ -18,8 +18,11 @@ const { chromium } = await import(DOVE_PW);
 
 // Tetti larghi: servono a cogliere «la sezione e' esplosa di nuovo», non a
 // inchiodare il disegno al pixel.
-const TETTO_SEZIONE = 1400;
-const TETTO_RIGA = 90;
+// Dalla v134 la sezione porta anche i conti del conguaglio, quindi la riga e'
+// piu' alta di quando mostrava solo la previsione: il tetto segue. Il confronto
+// che conta e' con le DUE sezioni di prima, che insieme facevano 2644px.
+const TETTO_SEZIONE = 2000;
+const TETTO_RIGA = 110;
 
 let ok = 0; const ko = [];
 const c = (nome, vero) => { if (vero) ok++; else ko.push(nome); };
@@ -56,7 +59,12 @@ const m = await p.evaluate(() => {
     nRighe: righe.length,
     rigaMax: righe.length ? Math.max(...righe.map(r => Math.round(r.getBoundingClientRect().height))) : null,
     tastoInserisci: /Inserisci una voce di budget/i.test(det.innerText),
-    titoloElenco: /Budget del \d{4}/i.test(det.innerText),
+    titoloElenco: /Le voci del \d{4}/i.test(det.innerText),
+    // La fusione: i numeri del conguaglio devono stare in questa sezione...
+    portaIConti: /budget\s/i.test(det.innerText) && /speso\s/i.test(det.innerText),
+    // ...e non deve esistere piu' una seconda sezione che dice le stesse cose.
+    sezioniBudget: [...document.querySelectorAll('details')]
+        .filter(d => /Budget dei costi fissi|Conguaglio \d{4}/.test(d.innerText)).length,
     // Le spiegazioni lunghe non devono stare aperte: solo dentro il pieghevole.
     spiegaChiusa: ![...det.querySelectorAll('details')].some(d => d.open && /base minima del calcolo/i.test(d.innerText)),
     // innerText non legge dentro un <details> chiuso: per sapere che il testo
@@ -71,7 +79,9 @@ c(`dieci voci stanno in meno di ${TETTO_SEZIONE}px (viste ${m && m.sezione}px)`,
 c('tutte e dieci le voci sono in elenco', !!m && m.nRighe === 10);
 c(`una riga sta sotto i ${TETTO_RIGA}px (vista ${m && m.rigaMax}px)`, !!m && m.rigaMax < TETTO_RIGA);
 c('c\'è il tasto per inserire una voce', !!m && m.tastoInserisci);
-c('l\'elenco si chiama «Budget del <anno>»', !!m && m.titoloElenco);
+c('l\'elenco si chiama «Le voci del <anno>»', !!m && m.titoloElenco);
+c('la sezione porta i conti del conguaglio', !!m && m.portaIConti);
+c('e la sezione del budget e\' una sola', !!m && m.sezioniBudget === 1);
 c('le spiegazioni lunghe esistono ancora', !!m && m.spiegaPresente);
 c('ma stanno nel pieghevole, chiuso', !!m && m.spiegaChiusa && m.spiegaNonVisibile);
 

@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 133;
+        const VERSIONE_APP = 134;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -7378,7 +7378,6 @@
                     </button>
 
                     ${sezioneBudgetFissi()}
-                    ${sezioneConguaglio()}
 
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         ${schedaSpesa('Carburante', carbo, spese.carburanteDed)}
@@ -10808,7 +10807,7 @@
         // e la quota giornaliera sopra, il resto in piccolo sotto. Prima ogni
         // voce era una scheda col suo bordo, il suo fondo e due pulsanti
         // scritti a parole: con dieci voci la pagina non finiva piu'.
-        function rigaVoceFissaChiusa(v, anno) {
+        function rigaVoceFissaChiusa(v, anno, cong, inCorso) {
             const imp = parseFloat(v.importo || 0);
             const unita = v.unita === 'anno' ? 'anno' : (v.unita === 'mese' ? 'mese' : 'giorno');
             const alGiorno = pesoGiornalieroVoce(v, anno);
@@ -10817,29 +10816,46 @@
             const scadeTesto = !scadenza ? '' : (scadenza.giorni < 0
                 ? `scaduta il ${ggMmAaaa(scadenza.data)}`
                 : scadenza.giorni === 0 ? 'scade oggi' : `scade fra ${scadenza.giorni} gg`);
-            return `
-                <div class="px-3 py-2 flex items-center gap-2">
-                    <span class="min-w-0 flex-1">
+            const periodo = periodoVoce(v);
+            const conMovimenti = !!(cong && cong.movimenti);
+            const aperta = conMovimenti && window.conguaglioAperto === cong.chiave;
+            // Tutto quello che si legge sta dentro il tasto che apre i
+            // movimenti, quando ce ne sono: su un telefono un bersaglio grande
+            // si centra, una freccetta da dodici pixel no.
+            const dentro = `
                         <span class="flex items-baseline gap-2">
                             <span class="nome-voce font-bold text-gray-900 min-w-0 flex-1">${esc(v.nome || 'Voce senza nome')}</span>
                             ${alGiorno > 0 ? `<span class="text-[11px] font-black text-indigo-900 whitespace-nowrap shrink-0" title="Quanto pesa al giorno">${formatCurrency(alGiorno)}/g</span>` : ''}
                         </span>
-                        <span class="flex flex-wrap items-center gap-1.5 mt-0.5">
-                            <span class="text-[11px] font-bold text-gray-400 whitespace-nowrap">${formatCurrency(imp)} ogni ${unita} · ${esc(periodoVoce(v))}</span>
-                            ${scadeTesto ? `<span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${scadenza.giorni < 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-100 text-yellow-800'}">${scadeTesto}</span>` : ''}
-                            ${oggi && !oggi.daPrevisione ? `<span class="shrink-0 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(oggi.testo)}">oggi ${formatCurrency(oggi.quota)}</span>` : ''}
-                        </span>
-                    </span>
+                        <span class="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] font-bold">
+                            ${unita !== 'anno' ? `<span class="text-gray-400 whitespace-nowrap">${formatCurrency(imp)}/${unita}</span>` : ''}
+                            ${cong ? rigaContiVoce(cong, inCorso) : ''}
+                            ${periodo !== 'sempre' ? `<span class="text-gray-400 whitespace-nowrap">${esc(periodo)}</span>` : ''}
+                            ${scadeTesto ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap ${scadenza.giorni < 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-100 text-yellow-800'}">${scadeTesto}</span>` : ''}
+                            ${oggi && !oggi.daPrevisione ? `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap" title="${esc(oggi.testo)}">oggi ${formatCurrency(oggi.quota)}</span>` : ''}
+                            ${conMovimenti
+                                ? `<span class="text-gray-500 whitespace-nowrap">${aperta ? '▾' : '▸'} ${cong.movimenti} ${cong.movimenti === 1 ? 'movimento' : 'movimenti'}</span>`
+                                : ''}
+                        </span>`;
+            return `
+                <div>
+                <div class="px-3 py-2 flex items-center gap-2">
+                    ${conMovimenti
+                        ? `<button type="button" onclick="alternaDettaglioConguaglio('${escJs(cong.chiave)}')" aria-expanded="${aperta}"
+                                   class="min-w-0 flex-1 text-left">${dentro}</button>`
+                        : `<span class="min-w-0 flex-1">${dentro}</span>`}
                     <button type="button" onclick="apriVoceFissa('${escJs(v.slug)}')" title="Modifica questa voce" aria-label="Modifica ${esc(v.nome || 'questa voce')}"
                             class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
                     <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" title="Elimina questa voce" aria-label="Elimina ${esc(v.nome || 'questa voce')}"
                             class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-700 hover:bg-red-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
+                </div>
+                ${aperta ? dettaglioMovimentiVoce(cong) : ''}
                 </div>`;
         }
 
-        function rigaVoceFissa(v) {
+        function rigaVoceFissa(v, cong, inCorso) {
             const anno = annoAttivo();
-            if (window.voceFissaInModifica !== v.slug) return rigaVoceFissaChiusa(v, anno);
+            if (window.voceFissaInModifica !== v.slug) return rigaVoceFissaChiusa(v, anno, cong, inCorso);
 
             const val = (x) => x === null || x === undefined ? '' : esc(x);
             const etichetta = (t) => `<span class="block text-xs font-black uppercase tracking-wider text-gray-400 mb-1">${t}</span>`;
@@ -11086,29 +11102,130 @@
         }
 
         // Il riquadro del budget: l'elenco delle voci e quanto pesano in tutto
+        // ============================================================
+        //  BUDGET E CONGUAGLIO, UNA SEZIONE SOLA
+        //  Erano due schede separate che parlavano delle stesse voci: sopra
+        //  l'elenco modificabile, mezzo schermo piu' giu' una tabella con gli
+        //  stessi nomi e i numeri veri. Per sapere se l'assicurazione stava
+        //  dentro il budget bisognava cercarla due volte.
+        //  Adesso la voce e' una sola riga: quanto hai previsto, quanto hai
+        //  speso, la differenza, e aprendola i movimenti che l'hanno fatta.
+        //  La matita e il cestino sono sulla stessa riga.
+        // ============================================================
+
+        // I movimenti che compongono una riga, con la spiegazione per quelli
+        // che non corrispondono a nessuna voce del budget.
+        function dettaglioMovimentiVoce(r) {
+            return `
+                <div class="px-3 pb-3">
+                    ${r.extra ? `
+                        <p class="text-xs text-gray-600 leading-relaxed mb-2">
+                            Queste spese sono scritte come costi fissi ma <strong>non corrispondono a nessuna voce
+                            del tuo budget</strong>. Contano nelle spese dell'anno e nelle tasse, ma non hanno un
+                            budget con cui confrontarsi. <strong>Prima di cancellarle controlla il marchio:</strong>
+                            <span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">generata dall'app</span>
+                            non è un pagamento — l'hanno scritta le versioni vecchie, e se la stessa spesa è registrata
+                            anche a mano questa la conta due volte: si tolgono in blocco da «Backup e impostazioni →
+                            Costi fissi scritti come movimenti».
+                            <span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">registrata da te</span>
+                            è un pagamento vero: <strong>non cancellarla</strong>. Se è già coperta da una voce del
+                            budget, assegnagliela qui sotto.
+                        </p>` : ''}
+                    <div class="divide-y divide-gray-100 border border-gray-200 rounded-xl overflow-hidden bg-white">
+                        ${r.voci.map(m => `
+                            <div class="px-3 py-2">
+                                <p class="text-xs font-bold text-gray-800 leading-relaxed">
+                                    ${esc(m.categoria)}${m.nota ? ` <span class="font-normal text-gray-400">· ${esc(m.nota)}</span>` : ''}
+                                </p>
+                                <p class="flex flex-wrap items-center gap-2 mt-0.5">
+                                    <span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(m.data)}</span>
+                                    <span class="${metodoBadgeClass(m.metodo)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(metodoBreve(m.metodo))}</span>
+                                    ${r.extra ? (generataDallApp(m)
+                                        ? '<span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">generata dall\'app</span>'
+                                        : '<span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">registrata da te</span>') : ''}
+                                    <span class="ml-auto text-xs font-black text-red-600 whitespace-nowrap">−${formatCurrency(m.importo)}</span>
+                                </p>
+                                ${r.extra && elencoVociFisse().length ? `
+                                    <p class="flex flex-wrap items-center gap-2 mt-1.5">
+                                        <label class="text-[11px] font-bold text-gray-500" for="ass-${escJs(m.id)}">Assegna a</label>
+                                        <select id="ass-${escJs(m.id)}" onchange="assegnaSpesaAVoce('${escJs(m.id)}', this.value)"
+                                                class="text-[11px] font-bold p-1.5 border border-gray-200 rounded-lg bg-white outline-none">
+                                            <option value="">una voce del budget…</option>
+                                            ${elencoVociFisse().filter(v => String(v.nome || '').trim())
+                                                .map(v => `<option value="${esc(v.slug)}">${esc(v.nome)}</option>`).join('')}
+                                        </select>
+                                    </p>` : ''}
+                            </div>`).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // La riga del conguaglio: budget previsto, speso davvero, differenza.
+        // Compare sotto il nome, in una riga sola di testo piccolo: con dieci
+        // voci una tabella a quattro colonne non ci sta su un telefono.
+        function rigaContiVoce(r, inCorso) {
+            if (!r) return '';
+            const d = r.budget - r.speso;
+            const mat = r.maturato || 0;
+            // Speso in rosso quando corre piu' dell'anno: e' il segnale che
+            // serve, e vale piu' della colonnina «a oggi» che stava nella
+            // tabella di prima e che su un telefono allungava la riga.
+            const oltrePasso = inCorso && r.speso > mat + 0.005;
+            return `
+                <span class="text-gray-400 whitespace-nowrap">budget ${formatCurrency(r.budget)}</span>
+                <span class="${oltrePasso ? 'text-red-600' : 'text-gray-500'} whitespace-nowrap" ${inCorso && r.budget > 0 ? `title="A oggi ne è maturato ${formatCurrency(mat)}"` : ''}>speso ${formatCurrency(r.speso)}</span>
+                <span class="${Math.abs(d) < 0.005 ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')} whitespace-nowrap">${d > 0 ? '+' : ''}${formatCurrency(d)}</span>`;
+        }
+
+        // La riga delle spese che non corrispondono a nessuna voce: non si
+        // modifica e non si elimina, si apre per vedere di cosa si tratta.
+        function rigaFuoriBudget(r, inCorso) {
+            const aperta = window.conguaglioAperto === r.chiave;
+            return `
+                <div class="bg-yellow-50">
+                    <button onclick="alternaDettaglioConguaglio('${escJs(r.chiave)}')" aria-expanded="${aperta}"
+                            class="w-full text-left px-3 py-2 flex items-center gap-2 hover:bg-yellow-50 transition-colors">
+                        <span class="min-w-0 flex-1">
+                            <span class="block nome-voce font-bold text-yellow-900">${esc(r.nome)}</span>
+                            <span class="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] font-bold">
+                                <span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">fuori budget</span>
+                                <span class="text-red-600 whitespace-nowrap">speso ${formatCurrency(r.speso)}</span>
+                                <span class="text-gray-500 whitespace-nowrap">${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}</span>
+                            </span>
+                        </span>
+                        <span class="shrink-0 text-gray-400 font-black">${aperta ? '▾' : '▸'}</span>
+                    </button>
+                    ${aperta ? dettaglioMovimentiVoce(r) : ''}
+                </div>`;
+        }
+
         function sezioneBudgetFissi() {
             const anno = annoAttivo();
             const voci = elencoVociFisse();
+            const c = conguaglioAnno(anno);
+            const perChiave = new Map((c.righe || []).map(r => [r.chiave, r]));
+            const fuori = (c.righe || []).find(r => r.extra);
             const nellAnno = budgetAnno(anno);
             // Media sull'anno: i mesi non hanno tutti lo stesso numero di giorni,
             // quindi una rata mensile pesa un filo di piu' a febbraio.
             const giorniAnno = new Date(parseInt(anno, 10), 1, 29).getDate() === 29 ? 366 : 365;
             const alGiorno = nellAnno / giorniAnno;
-            // E quanto sta pesando davvero, se i conti veri gia' arrivati dicono
-            // un'altra cosa: e' la domanda che viene subito dopo aver letto la
-            // previsione, e lasciarla senza risposta faceva sembrare un errore
-            // la differenza con la scheda di «Oggi».
             const realeNellAnno = budgetRealeAnno(anno);
             const realeAlGiorno = realeNellAnno / giorniAnno;
             const scostaDallaPrevisione = Math.abs(realeNellAnno - nellAnno) >= 1;
+            const avanzo = c.differenza;
+            const etichettaAvanzo = avanzo < 0
+                ? 'speso più del budget'
+                : (c.inCorso ? 'ancora da spendere' : 'speso meno del budget');
+            const nessunaSpesa = c.speso === 0 && c.budget > 0;
 
             return `
                 <details class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || proposteBudget().length ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
                     <summary class="flex flex-wrap items-start justify-between gap-3 cursor-pointer select-none">
                         <div class="min-w-0">
-                            <h3 class="text-lg font-black text-gray-900">Budget dei costi fissi</h3>
+                            <h3 class="text-lg font-black text-gray-900">Budget dei costi fissi ${esc(anno)}</h3>
                             <p class="text-xs text-gray-500 leading-relaxed mt-1 max-w-2xl">
-                                ${voci.length ? `${voci.length} ${voci.length === 1 ? 'voce' : 'voci'} · ` : ''}quello che ti costa lavorare, prima di uscire di casa.
+                                ${voci.length ? `${voci.length} ${voci.length === 1 ? 'voce' : 'voci'} · ` : ''}quello che ti costa lavorare, prima di uscire di casa, e a che punto sei.
                             </p>
                         </div>
                         <div class="text-right">
@@ -11118,8 +11235,11 @@
                             ${scostaDallaPrevisione ? `
                                 <p class="text-xs font-bold text-indigo-700 mt-1.5">
                                     coi conti veri ${formatCurrency(realeAlGiorno)} al giorno
-                                </p>
-                                <p class="text-[11px] font-medium text-gray-400">${formatCurrency(realeNellAnno)} nel ${esc(anno)}</p>` : ''}
+                                </p>` : ''}
+                            ${c.righe.length ? `
+                                <p class="text-xs font-bold ${avanzo >= 0 ? 'text-green-700' : 'text-red-600'} mt-1.5">
+                                    ${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)} <span class="font-medium text-gray-400">${etichettaAvanzo}</span>
+                                </p>` : ''}
                         </div>
                     </summary>
 
@@ -11127,17 +11247,55 @@
 
                     <button onclick="aggiungiVoceFissa()" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-4 rounded-xl text-sm">+ Inserisci una voce di budget</button>
 
-                    ${voci.length ? `
+                    ${c.inCorso && c.budget > 0 ? `
+                        <div class="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                                <p class="etichetta block">Stato di avanzamento</p>
+                                <p class="text-xs font-bold text-gray-500">
+                                    l'anno è al <strong class="text-gray-800">${c.pctAnno.toFixed(0)}%</strong> ·
+                                    del budget ne hai speso il <strong class="${c.pctSpeso > c.pctAnno + 5 ? 'text-red-600' : 'text-gray-800'}">${c.pctSpeso.toFixed(0)}%</strong>
+                                </p>
+                            </div>
+                            <div class="relative h-3 bg-gray-200 rounded-full overflow-hidden">
+                                <div class="absolute inset-y-0 left-0 ${c.pctSpeso > c.pctAnno + 5 ? 'bg-red-500' : 'bg-green-600'} rounded-full" style="width:${Math.min(100, c.pctSpeso)}%"></div>
+                                <div class="absolute inset-y-0 w-0.5 bg-gray-900" style="left:${Math.min(100, c.pctAnno)}%" title="a che punto è l'anno"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
+                                La barra è quello che hai speso, la riga nera è a che punto è l'anno. Barra più corta
+                                della riga: sei sotto le previsioni. Più lunga: stai spendendo più in fretta di quanto
+                                avevi messo a budget.
+                            </p>
+                        </div>` : ''}
+
+                    ${nessunaSpesa ? `
+                        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                            <p class="font-black text-yellow-900 text-sm">Nel ${esc(anno)} non hai ancora registrato nessuna spesa a budget</p>
+                            <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
+                                Nel registro non c'è niente che corrisponda alle voci del budget: finché non registri
+                                le spese vere questi soldi non entrano nei totali dell'anno né nella stima delle tasse.
+                                Registrale come una spesa qualsiasi, il giorno in cui le paghi.
+                            </p>
+                        </div>` : ''}
+
+                    ${voci.length || fuori ? `
                         <div>
-                            <p class="etichetta block mb-1.5">Budget del ${esc(anno)}</p>
+                            <p class="etichetta block mb-1.5">Le voci del ${esc(anno)}</p>
                             <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                                ${voci.map(rigaVoceFissa).join('')}
+                                ${voci.map(v => rigaVoceFissa(v, perChiave.get(chiaveNome(v.nome)), c.inCorso)).join('')}
+                                ${fuori ? rigaFuoriBudget(fuori, c.inCorso) : ''}
                             </div>
                         </div>`
                       : '<p class="text-sm text-gray-400">Nessuna voce: inseriscine una con il tasto qui sopra.</p>'}
 
                     ${window.voceFissaInModifica ? `
                         <button onclick="salvaModificheVociFisse()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">Salva il budget</button>` : ''}
+
+                    ${c.futuri ? `
+                        <p class="text-xs text-gray-500 leading-relaxed bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                            Nel ${esc(anno)} ci sono anche <strong>${c.futuri} ${c.futuri === 1 ? 'movimento registrato in una data futura' : 'movimenti registrati in date future'}</strong>
+                            per ${formatCurrency(c.importoFuturi)} — tipicamente una serie ricorrente creata in anticipo.
+                            Qui non sono contati: entrano man mano che arriva la loro data. Nei totali dell'anno e nella stima delle tasse invece ci sono già.
+                        </p>` : ''}
 
                     <details class="text-xs text-gray-500">
                         <summary class="cursor-pointer font-bold text-gray-600 hover:text-gray-900">Come funziona, e come si compila</summary>
@@ -11156,9 +11314,16 @@
                             <p>
                                 <strong>Quando il conto vero supera la previsione, comanda lui.</strong> L'assicurazione
                                 rinnovata a 1.500 invece dei 1.387 previsti: da quel giorno la giornata pesa 1.500, per
-                                tutto il periodo che copre. Non devi correggere niente a mano. E se a fine anno il budget
-                                risulta più alto del dovuto, a dirtelo c'è il <strong>conguaglio</strong>, qui sotto: è il
-                                suo mestiere.
+                                tutto il periodo che copre. Non devi correggere niente a mano.
+                            </p>
+                            <p>
+                                <strong>Budget, speso e differenza</strong> stanno sotto ogni voce. Una differenza non è
+                                per forza un errore: a metà anno è normale aver speso meno del budget di tutto l'anno, e
+                                una polizza pagata in un colpo solo a gennaio risulta in anticipo. Quello che conta è il
+                                confronto con «a oggi»: se una voce ha speso più di quanto sia maturato, il numero
+                                diventa rosso. Se invece resta a zero mese dopo mese, quella spesa non è mai stata
+                                registrata. Il conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e
+                                nella stima delle tasse conta solo lo <strong>speso davvero</strong>.
                             </p>
                             <p>
                                 L'importo si scrive con la virgola o con il punto, e ha la sua unità: <strong>mese</strong>
@@ -11166,12 +11331,6 @@
                                 cifra che ti aspetti in dodici mesi (6.500 € di carburante), <strong>giorno</strong> per un
                                 costo già ridotto a giornata. <strong>Dal</strong> e <strong>Al</strong> dicono da quando a
                                 quando vale: una polizza che parte il 15 marzo non pesa a gennaio.
-                            </p>
-                            <p>
-                                Ci sta anche una spesa che cambia ogni mese, come il carburante: metti quello che prevedi
-                                in un anno e il conguaglio ti dirà quanto ci hai preso. I pieni continui a registrarli
-                                nella categoria di sempre — restano nel costo al chilometro delle vetture — e il conguaglio
-                                li riconosce lo stesso, dal nome.
                             </p>
                             <p>
                                 Quello che <strong>non</strong> metti a budget l'app lo spalma da sola, sulla media del
@@ -11453,199 +11612,6 @@
             renderContent();
         }
 
-        function sezioneConguaglio() {
-            const c = conguaglioAnno(annoAttivo());
-            if (!c.righe.length) return '';
-            const nessunaSpesa = c.speso === 0 && c.budget > 0;
-            const avanzo = c.differenza;
-            // A meta' anno "speso meno del budget" suonerebbe come un risparmio:
-            // finche' l'anno non e' finito la differenza e' solo quello che deve
-            // ancora uscire.
-            const etichetta = avanzo < 0
-                ? 'speso più del budget'
-                : (c.inCorso ? 'ancora da spendere' : 'speso meno del budget');
-
-            return `
-                <details class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('conguaglio', false) ? 'open' : ''} ontoggle="ricordaPieghevole('conguaglio', this.open)">
-                    <summary class="flex flex-wrap items-start justify-between gap-3 cursor-pointer select-none">
-                        <div class="max-w-2xl">
-                            <h3 class="text-lg font-black text-gray-900">Conguaglio ${esc(c.anno)}</h3>
-                            <p class="text-xs text-gray-500 leading-relaxed mt-1">
-                                Il budget che hai ipotizzato per il ${esc(c.anno)} è di <strong>${formatCurrency(c.budget)}</strong>;
-                                finora ne hai speso <strong>${formatCurrency(c.speso)}</strong>.
-                                ${c.inCorso
-                                    ? `Le spese sono quelle registrate fino al ${ggMm(c.a)}.`
-                                    : 'Anno chiuso: il conto è definitivo.'}
-                            </p>
-                        </div>
-                        <div class="text-right">
-                            <p class="etichetta block">Differenza</p>
-                            <p class="text-2xl font-black ${avanzo >= 0 ? 'text-green-700' : 'text-red-600'}">${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)}</p>
-                            <p class="text-xs font-bold text-gray-400">${etichetta}</p>
-                        </div>
-                    </summary>
-
-                    ${c.inCorso && c.budget > 0 ? `
-                        <div class="bg-gray-50 border border-gray-100 rounded-xl p-4">
-                            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
-                                <p class="etichetta block">Stato di avanzamento</p>
-                                <p class="text-xs font-bold text-gray-500">
-                                    l'anno è al <strong class="text-gray-800">${c.pctAnno.toFixed(0)}%</strong> ·
-                                    del budget ne hai speso il <strong class="${c.pctSpeso > c.pctAnno + 5 ? 'text-red-600' : 'text-gray-800'}">${c.pctSpeso.toFixed(0)}%</strong>
-                                </p>
-                            </div>
-                            <div class="relative h-3 bg-gray-200 rounded-full overflow-hidden">
-                                <div class="absolute inset-y-0 left-0 ${c.pctSpeso > c.pctAnno + 5 ? 'bg-red-500' : 'bg-green-600'} rounded-full" style="width:${Math.min(100, c.pctSpeso)}%"></div>
-                                <div class="absolute inset-y-0 w-0.5 bg-gray-900" style="left:${Math.min(100, c.pctAnno)}%" title="a che punto è l'anno"></div>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
-                                La barra è quello che hai speso, la riga nera è a che punto è l'anno. Barra più corta
-                                della riga: sei sotto le previsioni. Più lunga: stai spendendo più in fretta di quanto
-                                avevi messo a budget. A oggi ne è maturato ${formatCurrency(c.maturato)}.
-                            </p>
-                        </div>` : ''}
-
-                    ${c.futuri ? `
-                        <p class="text-xs text-gray-500 leading-relaxed bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
-                            Nel ${esc(c.anno)} ci sono anche <strong>${c.futuri} ${c.futuri === 1 ? 'movimento registrato in una data futura' : 'movimenti registrati in date future'}</strong>
-                            per ${formatCurrency(c.importoFuturi)} — tipicamente una serie ricorrente creata in anticipo.
-                            Qui non sono contati: entrano man mano che arriva la loro data. Nei totali dell'anno e nella stima delle tasse invece ci sono già.
-                        </p>` : ''}
-
-                    ${nessunaSpesa ? `
-                        <div class="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
-                            <p class="font-black text-yellow-900 text-sm">Nel ${esc(c.anno)} non hai ancora registrato nessuna spesa a budget</p>
-                            <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
-                                Nel registro non c'è niente che corrisponda alle voci del budget: finché non registri
-                                le spese vere questi soldi non entrano nei totali dell'anno né nella stima delle tasse.
-                                Registrale come una spesa qualsiasi, il giorno in cui le paghi.
-                            </p>
-                        </div>` : ''}
-
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-gray-100 text-gray-600 text-xs uppercase tracking-wider">
-                                <tr>
-                                    <th class="p-3 font-bold">Voce</th>
-                                    <th class="p-3 font-bold text-right">Budget ${esc(c.anno)}</th>
-                                    <th class="p-3 font-bold text-right">Speso davvero</th>
-                                    <th class="p-3 font-bold text-right">Differenza</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                                ${c.righe.map(r => {
-                                    const d = r.budget - r.speso;
-                                    const mat = r.maturato || 0;
-                                    const aperta = window.conguaglioAperto === r.chiave;
-                                    return `
-                                    <tr class="${r.extra ? 'bg-yellow-50' : ''}">
-                                        <td class="p-3 font-bold text-gray-800">
-                                            ${r.movimenti ? `
-                                                <button onclick="alternaDettaglioConguaglio('${escJs(r.chiave)}')"
-                                                        aria-expanded="${aperta ? 'true' : 'false'}"
-                                                        class="text-left w-full group">
-                                                    <span class="font-bold text-gray-800 group-hover:text-gray-900">${esc(r.nome)}</span>
-                                                    ${r.extra ? '<span class="ml-2 bg-yellow-200 text-yellow-900 px-2 py-0.5 rounded text-xs font-black uppercase whitespace-nowrap">fuori budget</span>' : ''}
-                                                    <span class="block text-xs font-medium text-gray-400">
-                                                        <span class="text-gray-400">${aperta ? '\u25be' : '\u25b8'}</span>
-                                                        ${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}, l'ultimo il ${ggMm(r.ultima)}
-                                                    </span>
-                                                </button>`
-                                              : `${esc(r.nome)}
-                                                 <span class="block text-xs font-medium text-gray-400">nessun movimento registrato</span>`}
-                                        </td>
-                                        <td class="p-3 text-right font-bold text-gray-700 whitespace-nowrap">
-                                            ${formatCurrency(r.budget)}
-                                            ${c.inCorso && r.budget > 0 ? `<span class="block text-xs font-medium text-gray-400">a oggi ${formatCurrency(mat)}</span>` : ''}
-                                        </td>
-                                        <td class="p-3 text-right font-bold whitespace-nowrap ${(c.inCorso && r.speso > mat + 0.005) ? 'text-red-600' : 'text-gray-700'}">${formatCurrency(r.speso)}</td>
-                                        <td class="p-3 text-right font-black whitespace-nowrap ${Math.abs(d) < 0.005 ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')}">${d > 0 ? '+' : ''}${formatCurrency(d)}</td>
-                                    </tr>
-                                    ${aperta ? `
-                                    <tr class="${r.extra ? 'bg-yellow-50' : 'bg-gray-50'}">
-                                        <td colspan="4" class="px-3 pb-3 pt-0">
-                                            <!-- La tabella e' piu' larga dello schermo e scorre in orizzontale.
-                                                 Il dettaglio no: resta agganciato al bordo sinistro e largo quanto
-                                                 lo schermo, se no per leggerlo bisognerebbe trascinare la tabella. -->
-                                            <div style="position:sticky;left:0;max-width:calc(100vw - 5rem)">
-                                            ${r.extra ? `
-                                                <p class="text-xs text-gray-600 leading-relaxed mb-2">
-                                                    Queste spese sono scritte come costi fissi ma <strong>non corrispondono a nessuna voce
-                                                    del tuo budget</strong>. Contano nelle spese dell'anno e nelle tasse, ma non hanno un
-                                                    budget con cui confrontarsi. <strong>Prima di cancellarle controlla il marchio:</strong>
-                                                </p>
-                                                <p class="text-xs text-gray-600 leading-relaxed mb-2">
-                                                    <span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">generata dall'app</span>
-                                                    non è un pagamento: l'hanno scritta le versioni vecchie, che mettevano i costi fissi
-                                                    nel registro un mese alla volta. Se la stessa spesa l'hai registrata anche a mano,
-                                                    questa la conta due volte e <strong>va tolta</strong>: si fa da
-                                                    «Backup e impostazioni → Costi fissi scritti come movimenti», che le elimina in blocco.
-                                                </p>
-                                                <p class="text-xs text-gray-600 leading-relaxed mb-2">
-                                                    <span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase">registrata da te</span>
-                                                    è un pagamento vero: <strong>non cancellarla</strong>, sparirebbe dalle spese dell'anno
-                                                    e dalla stima delle tasse. Se è già coperta da una voce del budget con un altro nome,
-                                                    correggi la categoria della spesa perché combaci con quella voce.
-                                                </p>` : ''}
-                                            <div class="divide-y divide-gray-200 border border-gray-200 rounded-xl overflow-hidden bg-white">
-                                                <!-- Due righe e non una: su un telefono, con data, metodo e importo
-                                                     sulla stessa riga, la descrizione si riduceva a «Cost...» - ed e'
-                                                     proprio la descrizione la cosa che si sta cercando. -->
-                                                ${r.voci.map(m => `
-                                                    <div class="px-3 py-2">
-                                                        <p class="text-xs font-bold text-gray-800 leading-relaxed">
-                                                            ${esc(m.categoria)}${m.nota ? ` <span class="font-normal text-gray-400">· ${esc(m.nota)}</span>` : ''}
-                                                        </p>
-                                                        <p class="flex flex-wrap items-center gap-2 mt-0.5">
-                                                            <span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(m.data)}</span>
-                                                            <span class="${metodoBadgeClass(m.metodo)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(metodoBreve(m.metodo))}</span>
-                                                            ${r.extra ? (generataDallApp(m)
-                                                                ? '<span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">generata dall\'app</span>'
-                                                                : '<span class="bg-green-100 text-green-800 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">registrata da te</span>') : ''}
-                                                            <span class="ml-auto text-xs font-black text-red-600 whitespace-nowrap">−${formatCurrency(m.importo)}</span>
-                                                        </p>
-                                                        ${r.extra && elencoVociFisse().length ? `
-                                                            <p class="flex flex-wrap items-center gap-2 mt-1.5">
-                                                                <label class="text-[11px] font-bold text-gray-500" for="ass-${escJs(m.id)}">Assegna a</label>
-                                                                <select id="ass-${escJs(m.id)}" onchange="assegnaSpesaAVoce('${escJs(m.id)}', this.value)"
-                                                                        class="text-[11px] font-bold p-1.5 border border-gray-200 rounded-lg bg-white outline-none">
-                                                                    <option value="">una voce del budget…</option>
-                                                                    ${elencoVociFisse().filter(v => String(v.nome || '').trim())
-                                                                        .map(v => `<option value="${esc(v.slug)}">${esc(v.nome)}</option>`).join('')}
-                                                                </select>
-                                                            </p>` : ''}
-                                                    </div>`).join('')}
-                                            </div>
-                                            </div>
-                                        </td>
-                                    </tr>` : ''}`;
-                                }).join('')}
-                            </tbody>
-                            <tfoot>
-                                <tr class="bg-gray-900 text-white">
-                                    <td class="p-3 font-black">Totale</td>
-                                    <td class="p-3 text-right font-black">
-                                        ${formatCurrency(c.budget)}
-                                        ${c.inCorso ? `<span class="block text-xs font-medium text-gray-400">a oggi ${formatCurrency(c.maturato)}</span>` : ''}
-                                    </td>
-                                    <td class="p-3 text-right font-black">${formatCurrency(c.speso)}</td>
-                                    <td class="p-3 text-right font-black ${avanzo >= 0 ? 'text-green-400' : 'text-red-400'}">${avanzo >= 0 ? '+' : ''}${formatCurrency(avanzo)}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-
-                    <p class="text-xs text-gray-500 leading-relaxed">
-                        Una differenza non è per forza un errore: a metà anno è normale aver speso meno del budget di
-                        tutto l'anno, e una polizza pagata in un colpo solo a gennaio risulta in anticipo. Quello che
-                        conta è il confronto con la colonnina «a oggi»: se una voce ha speso più di quanto sia maturato
-                        il numero diventa rosso. Se invece resta a zero mese dopo mese, quella spesa non è mai stata
-                        registrata.<br>
-                        Il conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e nella stima delle
-                        tasse conta solo il <strong>speso davvero</strong>.
-                    </p>
-                </details>`;
-        }
 
         function sezioneCostiFissiInArchivio() {
             const anni = anniCostiFissi();
