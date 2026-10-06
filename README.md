@@ -69,6 +69,51 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Controllo di coerenza, e la voce rinominata che si perdeva la storia (versione 139)
+
+Un giro completo sul motore costruito dopo la versione 121: il costo della
+giornata con dentro l'IRPEF, il budget fuso col conguaglio, i corrispettivi, il
+segno «da verificare». Stesso metodo di allora: identità che devono valere
+sempre, e se due strade portano allo stesso numero devono portarci davvero.
+
+**Ottantuno identità, nessuna incoerenza.** Fra queste: il costo del giorno è
+budget + spese del giorno + IRPEF da tutte e due le strade che lo calcolano; la
+quota IRPEF moltiplicata per i giorni dell'anno fa l'IRPEF dell'anno, ed è
+identica in ogni giorno dello stesso anno; i contributi INPS restano fuori da
+quella quota; ogni spesa coperta dal budget finisce in una riga del conguaglio,
+una volta sola; i dodici mesi dei corrispettivi fanno gli incassi dell'anno e
+non perdono nemmeno una corsa; i segni «da verificare» contati per giorno fanno
+quelli contati per metodo.
+
+Più dieci situazioni scomode sul motore nuovo — anno senza incassi, voce a zero,
+voce senza nome, bisestile, utile da scaglione alto, solo contanti, spesa con
+data futura, voce che vale un giorno solo, importi negativi per sbaglio: nessuna
+eccezione, nessun NaN, nessuna schermata sporca. E nessuna funzione morta su 471.
+
+### Ma un difetto vero c'era, ed era silenzioso
+
+**Rinominare una voce di budget le faceva perdere tutte le spese già
+registrate.** Una spesa si aggancia al budget dal nome: rinominando «Radio taxi»
+in «Radio», le rate già pagate smettevano di agganciarsi. Il danno era doppio:
+
+- la voce mostrava **speso 0,00 €**, come se non l'avessi mai pagata;
+- quegli stessi soldi ricominciavano a pesare sulla giornata come **spese fuori
+  budget**, mentre la quota del budget pesava lo stesso.
+
+Misurato: la giornata passava da **8,63 € a 18,01 €**, con la stessa spesa
+contata due volte. Senza un avviso, senza un numero rosso: solo un costo
+giornaliero diventato il doppio.
+
+Adesso l'app se ne accorge. Al salvataggio, se il nome è cambiato, cerca le
+spese che erano agganciate a quello vecchio e chiede se riagganciarle. Si
+riscrive solo l'etichetta — importi, date e metodi non si toccano — e il
+dettaglio dopo il trattino si conserva: «Radio taxi - rata marzo» diventa
+«Radio - rata marzo». Rispondendo di no non cambia niente.
+
+Prova nuova, `prove/testRinomina.mjs`, dieci controlli. Verificata nell'unico
+modo che conta: **contro il codice della 138 fallisce**, e fallisce proprio sul
+controllo che la giornata non raddoppi.
+
 ## La scheda si chiama «Spese» (versione 138)
 
 Con la stima delle tasse passata in «Commercialista», il nome «Spese e tasse»

@@ -17,6 +17,7 @@ titolo "uso vero dell'app";       giro testUso.mjs
 titolo "casi limite";             giro testLimiti.mjs
 titolo "coerenza dei conti";      giro coerenza.mjs
 titolo "coerenza del report";     giro coerenza2.mjs
+titolo "coerenza del motore";     giro coerenza3.mjs
 titolo "coerenza a video";        giro coerenzaVideo.mjs
 titolo "integrita' dei dati";     giro testIntegrita.mjs
 titolo "il giro dei giorni";      giro testGiorni.mjs
@@ -24,6 +25,7 @@ titolo "previsione e realta'";    giro testPrevisioneRealta.mjs
 titolo "indice dei pagamenti";    giro testIndiceVivo.mjs
 titolo "budget e proposte";       giro testBudget118.mjs
 titolo "budget compatto";         giro testBudgetCompatto.mjs
+titolo "rinominare una voce";     giro testRinomina.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs
 titolo "costo e pareggio";        giro testPareggio.mjs
 titolo "corse da verificare";     giro testVerifica.mjs

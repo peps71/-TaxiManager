@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 138;
+        const VERSIONE_APP = 139;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -10767,18 +10767,76 @@
             return v.dataInizio ? `dal ${ggMm(v.dataInizio)}` : `fino al ${ggMm(v.dataFine)}`;
         }
 
+        // ============================================================
+        //  RINOMINARE UNA VOCE NON DEVE PERDERE LA SUA STORIA
+        //  Una spesa si aggancia al budget dal NOME. Rinominando una voce -
+        //  «Radio taxi» diventa «Radio» - tutte le spese gia' registrate
+        //  smettono di agganciarsi, in silenzio. E il danno e' doppio:
+        //  la voce mostra «speso 0,00», come se non l'avessi mai pagata, e
+        //  quegli stessi soldi ricominciano a pesare sulla giornata come
+        //  spese fuori budget - mentre la quota del budget pesa lo stesso.
+        //  Misurato: 8,63 € al giorno diventavano 18,01 €, con la stessa
+        //  spesa contata due volte.
+        //  Qui il nome di prima si tiene da parte quando si apre la voce, e
+        //  al salvataggio, se e' cambiato, si chiede se riagganciare le
+        //  spese. Si riscrive solo l'etichetta: importi, date e metodi non
+        //  si toccano.
+        // ============================================================
+
+        // Le spese che si agganciavano a un certo nome di voce. Si guarda come
+        // guarda il budget: prima il nome scritto nel movimento, poi il
+        // dettaglio dopo il trattino.
+        function speseAgganciateANome(nome) {
+            const k = chiaveNome(nome);
+            if (!k) return [];
+            return (window.dailyRecords || []).filter(r => {
+                if (!r || r.tipo !== 'USCITA') return false;
+                if (chiaveNome(nomeSpesaDiRecord(r)) === k) return true;
+                const det = dettaglioSpesaDiRecord(r);
+                return !!det && chiaveNome(det) === k;
+            });
+        }
+
+        async function riagganciaSpeseRinominate(nomePrima, nomeDopo) {
+            if (!nomePrima || !nomeDopo || chiaveNome(nomePrima) === chiaveNome(nomeDopo)) return;
+            const spese = speseAgganciateANome(nomePrima);
+            if (!spese.length) return;
+            const quante = `${spese.length} ${spese.length === 1 ? 'spesa registrata' : 'spese registrate'}`;
+            if (!confirm(`Hai rinominato «${nomePrima}» in «${nomeDopo}».\n\n${quante} ${spese.length === 1 ? 'era agganciata' : 'erano agganciate'} al nome vecchio. Se non ${spese.length === 1 ? 'la riaggancio' : 'le riaggancio'}, la voce risulterà non pagata e quei soldi peseranno due volte sulla giornata.\n\nRiaggancio al nome nuovo? Importi, date e metodi non si toccano: cambia solo l'etichetta.`)) return;
+            const aggiornati = spese.map(r => {
+                const det = dettaglioSpesaDiRecord(r);
+                const nuova = (det && chiaveNome(det) !== chiaveNome(nomeDopo))
+                    ? `${nomeDopo} - ${det}`
+                    : nomeDopo;
+                return Object.assign({}, r, { categoria: nuova });
+            });
+            for (const r of aggiornati) await persistiRecord(r);
+            showToast(`${aggiornati.length} ${aggiornati.length === 1 ? 'spesa riagganciata' : 'spese riagganciate'} a «${nomeDopo}».`);
+            renderContent();
+        }
+
         // Apre una voce lasciando intatto quello che si stava scrivendo in un'altra
         function apriVoceFissa(slug) {
             leggiVociFisse();
             salvaVociFisse();
+            const v = elencoVociFisse().find(x => String(x.slug) === String(slug));
+            // Il nome di adesso, per accorgersi se al salvataggio e' cambiato.
+            window.nomeVocePrima = v ? String(v.nome || '').trim() : '';
             window.voceFissaInModifica = slug;
             renderContent();
         }
 
         function chiudiVoceFissa() {
+            const slug = window.voceFissaInModifica;
+            const prima = window.nomeVocePrima;
             if (salvaModificheVociFisse({ silenzioso: true })) {
+                const v = elencoVociFisse().find(x => String(x.slug) === String(slug));
+                const dopo = v ? String(v.nome || '').trim() : '';
                 window.voceFissaInModifica = null;
+                window.nomeVocePrima = null;
                 renderContent();
+                // Dopo il disegno: la domanda arriva su una schermata gia' a posto.
+                if (prima && dopo) riagganciaSpeseRinominate(prima, dopo);
             }
         }
 
