@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 134;
+        const VERSIONE_APP = 135;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -11167,14 +11167,21 @@
             if (!r) return '';
             const d = r.budget - r.speso;
             const mat = r.maturato || 0;
-            // Speso in rosso quando corre piu' dell'anno: e' il segnale che
-            // serve, e vale piu' della colonnina «a oggi» che stava nella
-            // tabella di prima e che su un telefono allungava la riga.
-            const oltrePasso = inCorso && r.speso > mat + 0.005;
+            // TRE CIFRE, TRE COLORI, SEMPRE GLI STESSI
+            //   budget    blu, e' la previsione;
+            //   speso     rosso se qualcosa e' uscito, grigio se non ancora;
+            //   differenza verde se avanza, rosso se sfora, grigio se e' pari.
+            // Stesso peso per tutte e tre: si leggono come una riga sola, non
+            // come tre informazioni di importanza diversa.
+            // Quanto ne sia maturato a oggi - il confronto che dice se quella
+            // voce sta correndo piu' dell'anno - resta nel suggerimento, e la
+            // barra dello stato di avanzamento lo dice per tutto il budget.
+            const speso = r.speso > 0.005;
+            const pari = Math.abs(d) < 0.005;
             return `
-                <span class="text-gray-400 whitespace-nowrap">budget ${formatCurrency(r.budget)}</span>
-                <span class="${oltrePasso ? 'text-red-600' : 'text-gray-500'} whitespace-nowrap" ${inCorso && r.budget > 0 ? `title="A oggi ne è maturato ${formatCurrency(mat)}"` : ''}>speso ${formatCurrency(r.speso)}</span>
-                <span class="${Math.abs(d) < 0.005 ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')} whitespace-nowrap">${d > 0 ? '+' : ''}${formatCurrency(d)}</span>`;
+                <span class="text-indigo-700 font-black whitespace-nowrap">budget ${formatCurrency(r.budget)}</span>
+                <span class="${speso ? 'text-red-600' : 'text-gray-400'} font-black whitespace-nowrap" ${inCorso && r.budget > 0 ? `title="A oggi ne è maturato ${formatCurrency(mat)}"` : ''}>speso ${formatCurrency(r.speso)}</span>
+                <span class="${pari ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')} font-black whitespace-nowrap">${d > 0 ? '+' : ''}${formatCurrency(d)}</span>`;
         }
 
         // La riga delle spese che non corrispondono a nessuna voce: non si
@@ -11189,7 +11196,7 @@
                             <span class="block nome-voce font-bold text-yellow-900">${esc(r.nome)}</span>
                             <span class="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] font-bold">
                                 <span class="bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded text-[10px] font-black uppercase whitespace-nowrap">fuori budget</span>
-                                <span class="text-red-600 whitespace-nowrap">speso ${formatCurrency(r.speso)}</span>
+                                <span class="${r.speso > 0.005 ? 'text-red-600' : 'text-gray-400'} font-black whitespace-nowrap">speso ${formatCurrency(r.speso)}</span>
                                 <span class="text-gray-500 whitespace-nowrap">${r.movimenti} ${r.movimenti === 1 ? 'movimento' : 'movimenti'}</span>
                             </span>
                         </span>

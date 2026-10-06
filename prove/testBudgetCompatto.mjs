@@ -112,6 +112,60 @@ await p.waitForTimeout(400);
 const dopoDel = await p.evaluate(() => (window.vociFisse || []).map(v => v.nome));
 c('l\'eliminazione la toglie', !dopoDel.includes('Lavaggio') && dopoDel.length === 10);
 
+// --- i tre colori delle cifre, sempre gli stessi ---
+// budget blu, speso rosso se qualcosa e' uscito e grigio se no, differenza
+// verde se avanza e rossa se sfora. Si guarda il colore calcolato, non la
+// classe scritta nel markup: e' quello che l'occhio vede davvero.
+const BLU = 'rgb(67, 56, 202)', ROSSO = 'rgb(220, 38, 38)', VERDE = 'rgb(21, 128, 61)';
+await p.evaluate((anno) => {
+  window.vociFisse = [
+    { slug: 'a', nome: 'Mai pagata',   importo: 1200, unita: 'anno', tipo: 'scadenza', scadenza: '', dataInizio: '', dataFine: '' },
+    { slug: 'b', nome: 'Sotto budget', importo: 1000, unita: 'anno', tipo: 'scadenza', scadenza: '', dataInizio: '', dataFine: '' },
+    { slug: 'c', nome: 'Sforata',      importo:  500, unita: 'anno', tipo: 'scadenza', scadenza: '', dataInizio: '', dataFine: '' }
+  ];
+  window.dailyRecords = [
+    { id: 's2', data: `${anno}-02-11`, tipo: 'USCITA', categoria: 'Sotto budget', metodo: 'Bonifico', importo: 200 },
+    { id: 's3', data: `${anno}-02-12`, tipo: 'USCITA', categoria: 'Sforata',      metodo: 'Bonifico', importo: 508 }
+  ];
+  window.versioneDati = (window.versioneDati || 0) + 1;
+  renderContent();
+}, ANNO);
+await p.waitForTimeout(500);
+
+const col = await p.evaluate(() => {
+  const det = [...document.querySelectorAll('details')].find(d => /Budget dei costi fissi/.test(d.innerText));
+  return [...det.querySelectorAll('.divide-y > div')].map(r => {
+    const cifre = [...r.querySelectorAll('span')]
+      .filter(x => x.children.length === 0 && /^(budget |speso |[+\u2212-]?\d)/.test(x.textContent.trim()));
+    const dato = (pre) => {
+      const e = cifre.find(x => x.textContent.trim().startsWith(pre));
+      return e ? { colore: getComputedStyle(e).color, peso: getComputedStyle(e).fontWeight } : null;
+    };
+    const diff = cifre[cifre.length - 1];
+    return {
+      voce: r.innerText.split('\n')[0],
+      budget: dato('budget'),
+      speso: dato('speso'),
+      differenza: diff ? { testo: diff.textContent.trim(), colore: getComputedStyle(diff).color, peso: getComputedStyle(diff).fontWeight } : null
+    };
+  });
+});
+const voce = (n) => col.find(x => x.voce.startsWith(n));
+const grassetto = (x) => !!x && Number(x.peso) >= 700;
+
+c('il budget e\' blu su tutte le voci', col.length === 3 && col.every(x => x.budget && x.budget.colore === BLU));
+c('e in grassetto', col.every(x => grassetto(x.budget)));
+c('speso resta grigio se non e\' uscito niente',
+  !!voce('Mai pagata') && voce('Mai pagata').speso.colore !== ROSSO);
+c('speso diventa rosso appena qualcosa esce',
+  !!voce('Sotto budget') && voce('Sotto budget').speso.colore === ROSSO);
+c('e in grassetto', col.every(x => grassetto(x.speso)));
+c('la differenza e\' verde quando avanza',
+  !!voce('Sotto budget') && voce('Sotto budget').differenza.colore === VERDE);
+c('ed e\' rossa quando sfora',
+  !!voce('Sforata') && voce('Sforata').differenza.colore === ROSSO);
+c('anche la differenza e\' in grassetto', col.every(x => grassetto(x.differenza)));
+
 await b.close();
 console.log(`  ${ok} controlli passati`);
 ko.forEach(x => console.log(`  *** ${x}`));

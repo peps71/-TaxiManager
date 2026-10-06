@@ -69,6 +69,38 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Tre cifre, tre colori, sempre gli stessi (versione 135)
+
+Le tre cifre sotto ogni voce del budget erano colorate con criteri diversi: il
+budget grigio, lo speso grigio o rosso a seconda di quanto fosse maturato
+dell'anno, la differenza grigia, verde o rossa. Tre regole da ricordare per
+leggere una riga sola.
+
+Adesso la regola è una:
+
+| Cifra | Colore |
+| --- | --- |
+| **budget** | blu — è la previsione |
+| **speso** | **rosso** se qualcosa è uscito, **grigio** se non ancora |
+| **differenza** | **verde** se avanza, **rossa** se sfora, grigia se è pari |
+
+Tutte e tre con lo stesso peso, così si leggono come una riga sola e non come
+tre informazioni di importanza diversa. La stessa regola vale sulla riga delle
+spese fuori budget.
+
+### Cosa si è perso, e dov'è finito
+
+Prima lo «speso» diventava rosso quando quella voce correva più in fretta
+dell'anno — un'informazione utile, ma che richiedeva di sapere la regola.
+Adesso il rosso dice solo «qui è uscito del denaro». Il confronto col passo
+dell'anno non è sparito: sta nel suggerimento al tocco prolungato sullo speso
+(«A oggi ne è maturato 1.060,20 €») e, per tutto il budget insieme, nella barra
+dello stato di avanzamento sopra l'elenco.
+
+Otto controlli nuovi (ventuno in tutto) su quattro voci costruite apposta — mai
+pagata, sotto budget, sforata, pari — e non sulle classi scritte nel codice ma
+sul **colore calcolato dal browser**, che è quello che l'occhio vede davvero.
+
 ## Budget e conguaglio, una sezione sola (versione 134)
 
 Erano due schede separate che parlavano delle **stesse voci**: sopra l'elenco
