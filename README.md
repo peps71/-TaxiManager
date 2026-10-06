@@ -69,6 +69,31 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La riga da controllare si vede (versione 131)
+
+La cella colorata da sola non bastava: la tabella dei corrispettivi scorre di
+lato, e se la colonna di quel metodo è fuori schermo non si vede più niente.
+
+Adesso la riga si evidenzia su tre livelli, dal generale al particolare:
+
+- **tutta la riga** prende un fondo giallo chiaro;
+- **la colonna del giorno** — quella che resta ferma mentre la tabella scorre,
+  quindi l'unica che si vede sempre — prende una tinta più carica e una barra
+  arancione sul bordo sinistro;
+- **la cella del metodo** tiene la tinta più decisa e la bandierina.
+
+Così la riga dice **quale giorno** guardare e, dentro la riga, la cella dice
+**quale cifra** controllare.
+
+I colori sono scritti a mano invece che con le classi di Tailwind, perché
+devono scavalcare il fondo fisso della colonna ferma: senza, quella resterebbe
+bianca in mezzo a una riga gialla.
+
+Sei controlli nuovi nella prova (ventisei in tutto), e non sul markup ma sul
+**colore calcolato**: la riga segnata deve staccarsi da quelle normali, la
+colonna ferma dev'essere colorata e portare la barra, e le righe senza segno
+devono restare bianche.
+
 ## Il segno va sulla colonna del metodo (versione 130)
 
 Nella 129 i corrispettivi portavano il promemoria in due posti: un riquadro

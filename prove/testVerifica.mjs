@@ -102,13 +102,36 @@ const corrisp = await p.evaluate(() => {
       }
     });
   });
-  return { intestazioni, celleSegnate, testoSezione: document.getElementById('main-container').innerText };
+  // Il colore vero, come lo vede l'occhio: la riga segnata deve staccarsi
+  // da quelle normali, e la colonna del giorno - che resta ferma mentre la
+  // tabella scorre di lato - deve portare la barra.
+  const righe = [...tabella.querySelectorAll('tbody tr')].map(tr => ({
+    classe: tr.className || '',
+    giorno: tr.children[0].innerText.trim().split('\n')[0],
+    fondoGiorno: getComputedStyle(tr.children[0]).backgroundColor,
+    barra: getComputedStyle(tr.children[0]).boxShadow,
+    fondiCelle: [...tr.children].slice(1).map(td => getComputedStyle(td).backgroundColor)
+  }));
+  return { intestazioni, celleSegnate, righe, testoSezione: document.getElementById('main-container').innerText };
 });
 c('la tabella dei corrispettivi c\'e\'', !!corrisp);
 c('una sola cella porta il segno', corrisp.celleSegnate.length === 1);
 c('ed e\' quella del metodo giusto', corrisp.celleSegnate[0] && /POS/i.test(corrisp.celleSegnate[0].colonna));
 c('ed e\' quella del giorno giusto', corrisp.celleSegnate[0] && corrisp.celleSegnate[0].giorno.startsWith('10/'));
 c('niente riquadro in cima ai corrispettivi', !/cors[ae] da verificare in marzo/i.test(corrisp.testoSezione));
+
+// --- la riga intera si vede, non solo la cella ---
+const segnata = corrisp.righe.find(r => r.giorno.startsWith('10/'));
+const normale = corrisp.righe.find(r => !r.giorno.startsWith('10/'));
+const colorata = (x) => !!x && x !== 'rgba(0, 0, 0, 0)' && x !== 'transparent' && x !== 'rgb(255, 255, 255)';
+c('la riga segnata porta la sua classe', !!segnata && /riga-verifica/.test(segnata.classe));
+c('la colonna del giorno e\' colorata anche se e\' ferma', !!segnata && colorata(segnata.fondoGiorno));
+c('e porta la barra sul bordo sinistro', !!segnata && /inset/.test(segnata.barra));
+c('tutte le celle della riga sono colorate', !!segnata && segnata.fondiCelle.every(colorata));
+c('la cella del metodo e\' piu\' decisa delle altre',
+  !!segnata && new Set(segnata.fondiCelle).size > 1);
+c('le righe senza segno restano bianche',
+  !!normale && !/riga-verifica/.test(normale.classe) && !normale.fondiCelle.some(colorata));
 
 // --- il prospetto in CSV porta la colonna solo quando serve ---
 const csv = await p.evaluate((anno) => {

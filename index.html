@@ -153,6 +153,23 @@
         .col-ferma-grigia { background-color: #f3f4f6; }
         .col-ferma-scura  { background-color: #111827; }
 
+        /* LA RIGA DEI CORRISPETTIVI CHE ASPETTA UN CONTROLLO
+           Colorare la sola cella del metodo non bastava: la tabella scorre di
+           lato, e se quella colonna e' fuori schermo non si vede piu' niente.
+           Qui si colora tutta la riga, con una barra sul bordo sinistro che
+           sta nella colonna del giorno - cioe' quella che resta ferma mentre
+           si scorre, quindi si vede sempre. Dentro la riga, la cella del
+           metodo tiene una tinta piu' decisa: la riga dice QUALE giorno
+           guardare, la cella dice QUALE cifra controllare.
+           I colori non passano da Tailwind perche' devono scavalcare il fondo
+           fisso della colonna ferma, che altrimenti resta bianco. */
+        .riga-verifica > td { background-color: #fef3c7; }
+        .riga-verifica .col-ferma-chiara {
+            background-color: #fde68a;
+            box-shadow: inset 4px 0 0 #d97706;
+        }
+        .riga-verifica .cella-verifica { background-color: #fcd34d; }
+
         /* ============================================================
            LA LINGUA VISIVA (v89 - direzione «Rifinitura»)
            Prima di questa versione l'app aveva 287 elementi scritti con il
@@ -1156,7 +1173,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 130;
+        const VERSIONE_APP = 131;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4813,14 +4830,14 @@
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                                 ${c.righe.filter(r => scelto === 'ALL' || r[scelto] > 0).map(r => `
-                                    <tr>
+                                    <tr class="${r.daVerificare ? 'riga-verifica' : ''}"${r.daVerificare ? ` title="${r.daVerificare} cors${r.daVerificare === 1 ? 'a' : 'e'} da verificare in questa giornata"` : ''}>
                                         <td class="px-3 py-2 whitespace-nowrap col-ferma col-ferma-chiara">
                                             <button onclick="setDashGiorno('${r.iso}')" class="font-black text-gray-900 hover:text-yellow-600 tasto-minuto">
                                                 ${String(r.giorno).padStart(2, '0')}/${String(mese).padStart(2, '0')}
                                             </button>
                                             <span class="block text-xs font-bold text-gray-400">${giornoBreve(r.iso)} · ${r.n} cors${r.n === 1 ? 'a' : 'e'}</span>
                                         </td>
-                                        ${colonne.map(k => `<td class="px-3 py-2 text-right font-bold ${r.verifica[k] ? 'bg-yellow-50 text-yellow-900' : (r[k] > 0 ? 'text-gray-900' : 'text-gray-300')} whitespace-nowrap" ${r.verifica[k] ? `title="${r.verifica[k]} cors${r.verifica[k] === 1 ? 'a' : 'e'} da verificare in ${METODI_BREVI[k]} — tocca il giorno per aprirla"` : ''}>${r.verifica[k] ? `<span class="inline-flex items-center gap-1 text-yellow-600 align-middle mr-1">${iconaVerifica(true)}${r.verifica[k] > 1 ? `<span class="text-[10px] font-black">${r.verifica[k]}</span>` : ''}</span>` : ''}${formatCurrency(r[k])}</td>`).join('')}
+                                        ${colonne.map(k => `<td class="px-3 py-2 text-right font-bold ${r.verifica[k] ? 'cella-verifica text-yellow-900' : (r[k] > 0 ? 'text-gray-900' : 'text-gray-300')} whitespace-nowrap" ${r.verifica[k] ? `title="${r.verifica[k]} cors${r.verifica[k] === 1 ? 'a' : 'e'} da verificare in ${METODI_BREVI[k]} — tocca il giorno per aprirla"` : ''}>${r.verifica[k] ? `<span class="inline-flex items-center gap-1 text-yellow-600 align-middle mr-1">${iconaVerifica(true)}${r.verifica[k] > 1 ? `<span class="text-[10px] font-black">${r.verifica[k]}</span>` : ''}</span>` : ''}${formatCurrency(r[k])}</td>`).join('')}
                                         ${colonne.length > 1 ? `<td class="px-3 py-2 text-right font-black text-green-700 whitespace-nowrap">${formatCurrency(r.tot)}</td>` : ''}
                                     </tr>
                                 `).join('')}
