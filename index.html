@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 137;
+        const VERSIONE_APP = 138;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3382,7 +3382,7 @@
         ];
 
         const SCHEDE_SECONDARIE = [
-            { id: 'categorie',  label: 'Spese e tasse',         desc: 'Costo giornaliero, budget e uscite'       , icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
+            { id: 'categorie',  label: 'Spese',                desc: 'Costo giornaliero, budget e uscite'       , icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' },
             { id: 'scadenze',   label: 'Scadenze',              desc: 'Bollo, revisione, INPS: cosa scade e quando',   icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M12 14v3"/><circle cx="12" cy="19.5" r="0.5" fill="currentColor"/></svg>' },
             { id: 'auto',       label: 'Parco auto',               desc: 'Vetture, chilometri e valore residuo'     ,      icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
             { id: 'rendimento', label: 'Rendimento',            desc: 'Euro all\'ora, al chilometro, per corsa',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>' },
@@ -4733,7 +4733,7 @@
                                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                                     <p class="text-xs font-black uppercase tracking-wider text-indigo-700">Di questo margine</p>
                                     <p class="text-xs font-bold text-indigo-400">
-                                        accantonamento ${(acc.perc * 100).toFixed(0)}%${acc.auto ? ' · calcolato sulla stima di Spese &amp; Fisco' : ' · impostato da te'}
+                                        accantonamento ${(acc.perc * 100).toFixed(0)}%${acc.auto ? ' · calcolato sulla stima in Commercialista' : ' · impostato da te'}
                                     </p>
                                 </div>
                                 <div class="grid grid-cols-2 gap-3 mt-1">
@@ -6770,7 +6770,7 @@
         // ============================================================
 
         // Il registro spese non e' una voce dell'indice (v80): si apre da
-        // «Spese e tasse», quindi il suo «indietro» torna li'.
+        // «Spese», quindi il suo «indietro» torna li'.
         const GENITORE_SEZIONE = { uscite: 'categorie' };
 
         function intestazioneGestione(idAttivo) {
@@ -6843,7 +6843,7 @@
         // ============================================================
         //  I CONTI PESANTI SI FANNO UNA VOLTA PER DISEGNO
         //  Misurato su tre anni di lavoro (9.697 movimenti): disegnare
-        //  «Spese e tasse» chiamava elencoVociFisse() 732 volte e
+        //  «Spese» chiamava elencoVociFisse() 732 volte e
         //  calcolaTasseOrdinario() 7. Non era codice sbagliato - erano gli
         //  stessi conti chiesti da punti diversi della stessa schermata.
         //  Qui si tengono da parte per la durata di un disegno e basta: la
@@ -7087,7 +7087,7 @@
                                 ${formatCurrency(cg.fuoriBudget)} di spese di giornata${cg.irpef > 0 ? ` e ${formatCurrency(cg.irpef)} di IRPEF stimata` : ''}.
                                 Il budget non è fatto di movimenti — pesa ogni giorno anche quando non paghi niente —
                                 quindi in questo elenco non lo trovi. Il conto giornata per giornata è nella Dashboard,
-                                il confronto con quello che hai speso davvero in Spese &amp; Fisco.
+                                il confronto con quello che hai speso davvero in «Spese».
                             </div>`;
                       })()}
 
@@ -7355,7 +7355,7 @@
 
                     <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
                         <div>
-                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Spese e tasse</h2>
+                        <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Spese</h2>
                         <p class="text-gray-500 text-[13px] font-medium mt-0.5">Costo di una giornata, budget dei costi fissi e ripartizione delle uscite.</p>
                         </div>
                         ${pillolaAnno('spese')}
@@ -7675,7 +7675,7 @@
 
         // ============================================================
         //  LA STIMA DELLE TASSE STA CON IL COMMERCIALISTA
-        //  Stava in «Spese e tasse», in fondo a una pagina che parla di
+        //  Stava in «Spese», in fondo a una pagina che parla di
         //  carburante e manutenzione. Ma e' roba da scrivania: INPS, IRPEF,
         //  addizionali, la soglia del forfettario. Si guarda quando si fanno
         //  i conti con chi li firma, non mentre si segna un pieno.

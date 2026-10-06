@@ -73,7 +73,7 @@ const importi = async (prepara) => {
 
 const schermate = {
   'Andamento / anno':  () => { window.activeTab='dashboard'; window.periodoDashScelto='anno'; renderContent(); },
-  'Spese e tasse':     () => { window.activeTab='categorie'; renderContent(); },
+  'Spese':             () => { window.activeTab='categorie'; renderContent(); },
   'Commercialista':    () => { window.activeTab='report'; window.filterMonthReport='ALL'; renderContent(); },
   'Rendimento':        () => { window.activeTab='rendimento'; renderContent(); },
   // il registro spese parte filtrato sul giorno: per il totale dell'anno si toglie
@@ -92,10 +92,10 @@ console.log(`  incassi dell'anno: ${e(attesi.incassi)} · uscite ${e(attesi.usci
 console.log('  --- lo stesso numero deve comparire nelle schermate che lo mostrano ---');
 c(`gli incassi dell'anno in «Andamento / anno»`, ci('Andamento / anno', attesi.incassi));
 c(`le uscite dell'anno in «Andamento / anno»`, ci('Andamento / anno', attesi.uscite));
-// «Spese e tasse» non stampa il totale incassi: lo divide in tracciati e contanti,
+// «Spese» non stampa il totale incassi: lo divide in tracciati e contanti,
 // perche' sono le due cose che contano per il fisco. Si controlla la divisione.
 c(`gli incassi tracciati + contanti fanno il totale`, Math.abs(attesi.entrateTracciate + (attesi.incassi - attesi.entrateTracciate) - attesi.incassi) < 0.02);
-c(`le uscite dell'anno in «Spese e tasse»`, ci('Spese e tasse', attesi.uscite));
+c(`le uscite dell'anno in «Spese»`, ci('Spese', attesi.uscite));
 // Dalla v137 la stima delle tasse sta in «Commercialista»: e' roba da
 // scrivania, non da mentre si segna un pieno. I numeri sono gli stessi, cambia
 // la schermata che li ospita - ed e' esattamente quello che qui si controlla.
@@ -106,10 +106,10 @@ c(`l'utile fiscale in «Commercialista»`, ci('Commercialista', attesi.utileFisc
 c(`le tasse stimate in «Commercialista»`, ci('Commercialista', attesi.tasse));
 c(`gli incassi tracciati in «Commercialista»`, ci('Commercialista', attesi.entrateTracciate));
 c(`le spese deducibili in «Commercialista»`, ci('Commercialista', attesi.deducibili));
-// e non devono essere rimasti dov'erano: se ricompaiono in «Spese e tasse»
+// e non devono essere rimasti dov'erano: se ricompaiono in «Spese»
 // vuol dire che sono finiti in due posti invece di uno.
-c(`la stima non e' rimasta anche in «Spese e tasse»`,
-  !ci('Spese e tasse', attesi.tasse) && !ci('Spese e tasse', attesi.netto));
+c(`la stima non e' rimasta anche in «Spese»`,
+  !ci('Spese', attesi.tasse) && !ci('Spese', attesi.netto));
 c(`gli incassi dell'anno in «Commercialista»`, ci('Commercialista', attesi.incassi));
 c(`le uscite dell'anno in «Commercialista»`, ci('Commercialista', attesi.uscite));
 c(`le uscite dell'anno in «Uscite»`, ci('Uscite', attesi.uscite));

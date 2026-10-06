@@ -26,7 +26,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testLimiti.mjs` | nove situazioni scomode (archivio vuoto, zero ore, zero euro, anno bisestile, capodanno, caratteri speciali) e a video non deve comparire `NaN`, `Infinity`, `undefined` |
 | `coerenza.mjs` | 43 identità: gli incassi dell'anno contati in quattro modi, le ripartizioni che ricompongono il totale, le tasse come somma delle parti, il budget, il conguaglio |
 | `coerenza2.mjs` | 37 identità fra il report del commercialista, `aggrega`, `getStats`, le vetture e le medie |
-| `coerenzaVideo.mjs` | gli stessi importi **letti a video** in Andamento, Spese e tasse, Commercialista, Rendimento |
+| `coerenzaVideo.mjs` | gli stessi importi **letti a video** in Andamento, Spese, Commercialista, Rendimento |
 | `testIntegrita.mjs` | backup esportato e reimportato: tutto torna identico. E le scadenze rispettano la cadenza |
 | `testGiorni.mjs` | il giro dei giorni su cui poggia il budget: cinque anni, i due cambi dell'ora legale, gli anni bisestili |
 | `testPrevisioneRealta.mjs` | il budget è il pavimento, il conto vero comanda quando lo supera, le rate si sommano |

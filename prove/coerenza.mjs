@@ -155,7 +155,7 @@ c('categorie di spesa sommano al totale', d.aggrega.categorie, d.aggrega.uscite)
 c('tracciato + contanti = entrate', d.stats.entrateTracciate + d.stats.entrateContanti, d.stats.entrate);
 c('deducibili + non deducibili = uscite', d.stats.deducibili + d.stats.nonDeducibili, d.stats.uscite);
 
-console.log('  --- Spese e tasse contro il registro ---');
+console.log('  --- Spese contro il registro ---');
 c('getStats.entrate contro somma grezza', d.stats.entrate, d.grezzo.entrate);
 c('getStats.uscite contro somma grezza', d.stats.uscite, d.grezzo.uscite);
 c('getStats.entrateTracciate contro somma grezza', d.stats.entrateTracciate, d.grezzo.entrateTracciate);

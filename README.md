@@ -69,6 +69,24 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La scheda si chiama «Spese» (versione 138)
+
+Con la stima delle tasse passata in «Commercialista», il nome «Spese e tasse»
+prometteva qualcosa che liù non c'è più. Adesso la scheda si chiama **Spese**,
+sia nel titolo sia nell'indice di Gestione.
+
+Per strada sono venuti fuori **due rimandi a un nome ancora più vecchio**,
+«Spese & Fisco», rimasti da qualche versione fa:
+
+- nella scheda del pareggio, «accantonamento 51% · calcolato sulla stima di
+  Spese & Fisco» — e quella stima, dalla 137, sta in **Commercialista**:
+  il rimando era sbagliato due volte;
+- nel registro spese, «il confronto con quello che hai speso davvero in
+  Spese & Fisco» → adesso ««Spese»».
+
+Aggiornati anche i tre commenti nel codice che citavano il nome vecchio, e le
+prove che aprivano la schermata chiamandola per nome.
+
 ## La stima delle tasse va dal commercialista (versione 137)
 
 Stava in fondo a «Spese e tasse», sotto il carburante e la manutenzione. Ma è
