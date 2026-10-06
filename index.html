@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 135;
+        const VERSIONE_APP = 136;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -10827,16 +10827,19 @@
                             <span class="nome-voce font-bold text-gray-900 min-w-0 flex-1">${esc(v.nome || 'Voce senza nome')}</span>
                             ${alGiorno > 0 ? `<span class="text-[11px] font-black text-indigo-900 whitespace-nowrap shrink-0" title="Quanto pesa al giorno">${formatCurrency(alGiorno)}/g</span>` : ''}
                         </span>
-                        <span class="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] font-bold">
-                            ${unita !== 'anno' ? `<span class="text-gray-400 whitespace-nowrap">${formatCurrency(imp)}/${unita}</span>` : ''}
-                            ${cong ? rigaContiVoce(cong, inCorso) : ''}
-                            ${periodo !== 'sempre' ? `<span class="text-gray-400 whitespace-nowrap">${esc(periodo)}</span>` : ''}
-                            ${scadeTesto ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap ${scadenza.giorni < 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-100 text-yellow-800'}">${scadeTesto}</span>` : ''}
-                            ${oggi && !oggi.daPrevisione ? `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap" title="${esc(oggi.testo)}">oggi ${formatCurrency(oggi.quota)}</span>` : ''}
-                            ${conMovimenti
-                                ? `<span class="text-gray-500 whitespace-nowrap">${aperta ? '▾' : '▸'} ${cong.movimenti} ${cong.movimenti === 1 ? 'movimento' : 'movimenti'}</span>`
-                                : ''}
-                        </span>`;
+                        <span class="block mt-0.5 text-[11px] font-bold">
+                            ${cong ? rigaContiVoce(cong, inCorso, unita !== 'anno' ? `${formatCurrency(imp)}/${unita}` : '')
+                                   : `<span class="text-gray-400 whitespace-nowrap">${formatCurrency(imp)}/${unita}</span>`}
+                        </span>
+                        ${periodo !== 'sempre' || scadeTesto || (oggi && !oggi.daPrevisione) || conMovimenti ? `
+                            <span class="flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] font-bold">
+                                ${periodo !== 'sempre' ? `<span class="text-gray-400 whitespace-nowrap">${esc(periodo)}</span>` : ''}
+                                ${scadeTesto ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap ${scadenza.giorni < 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-100 text-yellow-800'}">${scadeTesto}</span>` : ''}
+                                ${oggi && !oggi.daPrevisione ? `<span class="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap" title="${esc(oggi.testo)}">oggi ${formatCurrency(oggi.quota)}</span>` : ''}
+                                ${conMovimenti
+                                    ? `<span class="text-gray-500 whitespace-nowrap">${aperta ? '▾' : '▸'} ${cong.movimenti} ${cong.movimenti === 1 ? 'movimento' : 'movimenti'}</span>`
+                                    : ''}
+                            </span>` : ''}`;
             return `
                 <div>
                 <div class="px-3 py-2 flex items-center gap-2">
@@ -11163,7 +11166,7 @@
         // La riga del conguaglio: budget previsto, speso davvero, differenza.
         // Compare sotto il nome, in una riga sola di testo piccolo: con dieci
         // voci una tabella a quattro colonne non ci sta su un telefono.
-        function rigaContiVoce(r, inCorso) {
+        function rigaContiVoce(r, inCorso, rata) {
             if (!r) return '';
             const d = r.budget - r.speso;
             const mat = r.maturato || 0;
@@ -11178,10 +11181,22 @@
             // barra dello stato di avanzamento lo dice per tutto il budget.
             const speso = r.speso > 0.005;
             const pari = Math.abs(d) < 0.005;
+            // DUE RIGHE FISSE, NON DOVE CAPITA
+            // Prima le tre cifre stavano in un unico blocco che andava a capo
+            // da se': con un budget da quattro cifre lo speso finiva sotto, con
+            // uno da tre restava accanto, e due voci di fila non si leggevano
+            // mai allo stesso modo. Adesso il budget sta sulla sua riga e sotto
+            // ci sono speso e differenza, separati da un punto. Sempre cosi',
+            // qualunque sia la cifra.
             return `
-                <span class="text-indigo-700 font-black whitespace-nowrap">budget ${formatCurrency(r.budget)}</span>
-                <span class="${speso ? 'text-red-600' : 'text-gray-400'} font-black whitespace-nowrap" ${inCorso && r.budget > 0 ? `title="A oggi ne è maturato ${formatCurrency(mat)}"` : ''}>speso ${formatCurrency(r.speso)}</span>
-                <span class="${pari ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')} font-black whitespace-nowrap">${d > 0 ? '+' : ''}${formatCurrency(d)}</span>`;
+                <span class="block">
+                    <span class="text-indigo-700 font-black whitespace-nowrap">budget ${formatCurrency(r.budget)}</span>${rata ? `<span class="text-gray-400 font-bold whitespace-nowrap"> (${rata})</span>` : ''}
+                </span>
+                <span class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                    <span class="${speso ? 'text-red-600' : 'text-gray-400'} font-black whitespace-nowrap" ${inCorso && r.budget > 0 ? `title="A oggi ne è maturato ${formatCurrency(mat)}"` : ''}>speso ${formatCurrency(r.speso)}</span>
+                    <span class="text-gray-300 font-black" aria-hidden="true">·</span>
+                    <span class="${pari ? 'text-gray-400' : (d > 0 ? 'text-green-700' : 'text-red-600')} font-black whitespace-nowrap">${d > 0 ? '+' : ''}${formatCurrency(d)}</span>
+                </span>`;
         }
 
         // La riga delle spese che non corrispondono a nessuna voce: non si

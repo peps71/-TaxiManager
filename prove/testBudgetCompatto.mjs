@@ -166,6 +166,42 @@ c('ed e\' rossa quando sfora',
   !!voce('Sforata') && voce('Sforata').differenza.colore === ROSSO);
 c('anche la differenza e\' in grassetto', col.every(x => grassetto(x.differenza)));
 
+// --- le tre cifre stanno sempre sulle stesse righe ---
+// Prima andavano a capo da se': con un budget da quattro cifre lo speso
+// finiva sotto, con uno da tre restava accanto, e due voci di fila non si
+// leggevano mai allo stesso modo. Qui si guarda la posizione verticale vera
+// degli elementi, a tre larghezze, su un budget grande e uno piccolo.
+for (const larghezza of [320, 390, 430]) {
+  await p.setViewportSize({ width: larghezza, height: 1200 });
+  await p.waitForTimeout(250);
+  const righe = await p.evaluate(() => {
+    const det = [...document.querySelectorAll('details')].find(d => /Budget dei costi fissi/.test(d.innerText));
+    return [...det.querySelectorAll('.divide-y > div')].map(r => {
+      const cerca = (pre) => [...r.querySelectorAll('span')]
+        .find(x => x.children.length === 0 && x.textContent.trim().startsWith(pre));
+      const b = cerca('budget'), sp = cerca('speso');
+      const diff = [...r.querySelectorAll('span')].filter(x => x.children.length === 0 && /^[+\u2212-]?\d/.test(x.textContent.trim())).pop();
+      const punto = [...r.querySelectorAll('span')].find(x => x.textContent.trim() === '\u00b7');
+      if (!b || !sp || !diff) return null;
+      const y = (e) => Math.round(e.getBoundingClientRect().top);
+      return { voce: r.innerText.split('\n')[0], yBudget: y(b), ySpeso: y(sp), yDiff: y(diff), punto: !!punto };
+    }).filter(Boolean);
+  });
+  c(`a ${larghezza}px lo speso sta sempre sotto il budget`,
+    righe.length > 0 && righe.every(r => r.ySpeso > r.yBudget));
+  // A 320px due cifre da quattro zeri una accanto all'altra non ci stanno:
+  // restano 180px di spazio e ne servirebbero 185. Li' il capo a riga e'
+  // inevitabile, e il separatore resta comunque fra le due. Da 390px in su -
+  // cioe' su qualsiasi telefono degli ultimi dieci anni - devono stare
+  // affiancate, che e' la cosa chiesta.
+  if (larghezza >= 390) {
+    c(`a ${larghezza}px lo speso e la differenza stanno sulla stessa riga`,
+      righe.every(r => Math.abs(r.yDiff - r.ySpeso) <= 2));
+  }
+  c(`a ${larghezza}px c'\u00e8 il separatore fra speso e differenza`,
+    righe.every(r => r.punto));
+}
+
 await b.close();
 console.log(`  ${ok} controlli passati`);
 ko.forEach(x => console.log(`  *** ${x}`));

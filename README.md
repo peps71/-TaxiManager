@@ -69,6 +69,49 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Righe sempre uguali, e un separatore (versione 136)
+
+Le tre cifre stavano in un blocco unico che andava a capo da sé. Con un budget
+da quattro cifre lo speso finiva sotto; con uno da tre restava accanto. Due
+voci di fila non si leggevano mai allo stesso modo:
+
+    budget 1.387,00 €   speso 0,00 €
+    +1.387,00 €
+    ---
+    budget 1.200,00 €
+    speso 370,00 €   +830,00 €
+
+Adesso la struttura è fissa, qualunque sia la cifra:
+
+    Assicurazione auto                      3,80 €/g
+    budget 1.387,00 €
+    speso 0,00 € · +1.387,00 €
+    ▸ 1 movimento
+
+Il **budget sulla sua riga**, sotto **speso e differenza separati da un punto**,
+e in fondo, solo quando c'è qualcosa da dire, le informazioni secondarie:
+periodo, scadenza, quota reale di oggi, movimenti.
+
+### La rata è rientrata nella riga del budget
+
+Per una voce mensile servono due numeri — la rata e il totale dell'anno. Prima
+stavano su righe diverse; adesso sono insieme, dove il confronto è immediato:
+`budget 9.564,00 € (797,00 €/mese)`.
+
+### Un limite, detto
+
+A **320 px** — iPhone SE di prima generazione e poco altro — due cifre da
+quattro zeri affiancate non ci stanno: restano 180 px di spazio e ne
+servirebbero 185. Lì la differenza va a capo lo stesso, con il separatore che
+resta comunque fra le due. **Da 390 px in su**, cioè su qualsiasi telefono degli
+ultimi dieci anni, stanno sulla stessa riga.
+
+La prova lo dice esplicitamente invece di nasconderlo: controlla la **posizione
+verticale vera** degli elementi a 320, 390 e 430 px, pretende che lo speso stia
+sempre sotto il budget e che il separatore ci sia a tutte le larghezze, e
+pretende l'affiancamento solo da 390 px in su. Otto controlli nuovi,
+ventinove in tutto.
+
 ## Tre cifre, tre colori, sempre gli stessi (versione 135)
 
 Le tre cifre sotto ogni voce del budget erano colorate con criteri diversi: il
