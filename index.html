@@ -1177,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 139;
+        const VERSIONE_APP = 140;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -11163,6 +11163,116 @@
             renderContent();
         }
 
+        // ============================================================
+        //  SPESE CHE HANNO PERSO LA LORO VOCE
+        //  Il controllo che trova da solo quello che un rinomino fatto prima
+        //  della v139 ha lasciato per strada - e qualunque altro scollamento
+        //  fra come hai scritto la spesa e come si chiama la voce.
+        //  Il criterio e' stretto di proposito: si guardano solo le spese che
+        //  NON si agganciano a nessuna voce, e di quelle solo quelle il cui
+        //  nome contiene il nome di una voce o e' contenuto in esso.
+        //  «Radio» e «Radio taxi» si trovano; «Carburante» e «Lavaggio» no.
+        //  Cosi' non si propone di agganciare cose che non c'entrano.
+        // ============================================================
+        function speseOrfaneDiVoce() {
+            return memo('orfane:' + annoAttivo() + ':' + (window.versioneDati || 0), speseOrfaneDiVoceCalcola);
+        }
+
+        function speseOrfaneDiVoceCalcola() {
+            const voci = elencoVociFisse().filter(v => String(v.nome || '').trim());
+            if (!voci.length) return [];
+            const anno = annoAttivo();
+            const chiaviVoci = voci.map(v => ({ v, k: chiaveNome(v.nome) })).filter(x => x.k.length >= 4);
+            if (!chiaviVoci.length) return [];
+            const per = new Map();
+
+            (window.dailyRecords || []).forEach(r => {
+                if (r.tipo !== 'USCITA') return;
+                if (String(r.data || '').slice(0, 4) !== anno) return;
+                // Se si aggancia a una voce, o e' gia' nel mucchio dei costi
+                // fissi fuori budget, non e' un orfano: di quelle parla gia'
+                // il conguaglio.
+                if (copertaDalBudget(r)) return;
+                const nome = nomeSpesaDiRecord(r);
+                const k = chiaveNome(nome);
+                if (k.length < 4) return;
+                // Una sola voce candidata: se ne somigliano due, meglio tacere
+                // che indovinare.
+                const simili = chiaviVoci.filter(x => x.k.includes(k) || k.includes(x.k));
+                if (simili.length !== 1) return;
+                const v = simili[0].v;
+                const g = per.get(v.slug) || { voce: v, spese: [], totale: 0 };
+                g.spese.push(r);
+                g.totale += parseFloat(r.importo || 0) || 0;
+                per.set(v.slug, g);
+            });
+
+            return [...per.values()]
+                .map(g => Object.assign(g, { spese: g.spese.slice().sort(perDataDecrescente) }))
+                .sort((a, b2) => b2.totale - a.totale);
+        }
+
+        // Riaggancia in blocco tutte le spese orfane di una voce.
+        async function agganciaOrfaneAVoce(slugVoce) {
+            const g = speseOrfaneDiVoce().find(x => String(x.voce.slug) === String(slugVoce));
+            if (!g) return;
+            const nomeVoce = String(g.voce.nome || '').trim();
+            if (!confirm(`Aggancio ${g.spese.length} ${g.spese.length === 1 ? 'spesa' : 'spese'} per ${formatCurrency(g.totale)} alla voce «${nomeVoce}»?\n\nSi riscrive solo l'etichetta: importi, date e metodi non si toccano.`)) return;
+            for (const r of g.spese) {
+                const det = dettaglioSpesaDiRecord(r);
+                const nuova = (det && chiaveNome(det) !== chiaveNome(nomeVoce)) ? `${nomeVoce} - ${det}` : nomeVoce;
+                await persistiRecord(Object.assign({}, r, { categoria: nuova }));
+            }
+            showToast(`${g.spese.length} ${g.spese.length === 1 ? 'spesa agganciata' : 'spese agganciate'} a «${nomeVoce}».`);
+            renderContent();
+        }
+
+        function bloccoSpeseOrfane() {
+            const gruppi = speseOrfaneDiVoce();
+            if (!gruppi.length) return '';
+            return `
+                <div class="border-2 border-yellow-300 bg-yellow-50 rounded-xl p-4 space-y-3">
+                    <div>
+                        <p class="text-sm font-black text-yellow-900">Spese che somigliano a una voce ma non le sono agganciate</p>
+                        <p class="text-xs text-yellow-800 leading-relaxed mt-1">
+                            Una spesa si aggancia al budget dal nome. Queste non si agganciano a niente: la voce risulta
+                            non pagata, e gli stessi soldi pesano sulla giornata <strong>due volte</strong> — come quota
+                            del budget e come spesa fuori budget. Succede quando una voce viene rinominata dopo che le
+                            spese erano già registrate.
+                        </p>
+                    </div>
+                    <div class="space-y-2">
+                        ${gruppi.map(g => `
+                            <div class="bg-white border border-yellow-200 rounded-xl px-3 py-2.5">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block nome-voce font-black text-gray-900">${esc(g.voce.nome)}</span>
+                                        <span class="block text-[11px] font-bold text-gray-500">
+                                            ${g.spese.length} ${g.spese.length === 1 ? 'spesa' : 'spese'} per ${formatCurrency(g.totale)}
+                                        </span>
+                                    </span>
+                                    <button onclick="agganciaOrfaneAVoce('${escJs(g.voce.slug)}')"
+                                            class="shrink-0 bg-gray-900 hover:bg-gray-800 text-yellow-400 text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap">Aggancia</button>
+                                </div>
+                                <div class="mt-2 divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                                    ${g.spese.slice(0, 6).map(r => `
+                                        <p class="px-2.5 py-1.5 flex flex-wrap items-center gap-2 text-[11px]">
+                                            <span class="font-bold text-gray-700 min-w-0 flex-1">${esc(r.categoria)}</span>
+                                            <span class="font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(r.data)}</span>
+                                            <span class="font-black text-red-600 whitespace-nowrap">−${formatCurrency(r.importo)}</span>
+                                        </p>`).join('')}
+                                    ${g.spese.length > 6 ? `<p class="px-2.5 py-1.5 text-[11px] font-bold text-gray-400">e altre ${g.spese.length - 6}</p>` : ''}
+                                </div>
+                            </div>`).join('')}
+                    </div>
+                    <p class="text-[11px] font-medium text-yellow-700 leading-relaxed">
+                        «Aggancia» riscrive solo l'etichetta della spesa perché combaci con la voce: importi, date e
+                        metodi non si toccano. Se invece non c'entrano davvero con quella voce, lascia stare: cambia
+                        il nome della spesa dal registro.
+                    </p>
+                </div>`;
+        }
+
         function bloccoProposteBudget() {
             const proposte = proposteBudget();
             if (!proposte.length) return '';
@@ -11336,7 +11446,7 @@
             const nessunaSpesa = c.speso === 0 && c.budget > 0;
 
             return `
-                <details class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || proposteBudget().length ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
+                <details class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || proposteBudget().length || speseOrfaneDiVoce().length ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
                     <summary class="flex flex-wrap items-start justify-between gap-3 cursor-pointer select-none">
                         <div class="min-w-0">
                             <h3 class="text-lg font-black text-gray-900">Budget dei costi fissi ${esc(anno)}</h3>
@@ -11359,6 +11469,7 @@
                         </div>
                     </summary>
 
+                    ${bloccoSpeseOrfane()}
                     ${bloccoProposteBudget()}
 
                     <button onclick="aggiungiVoceFissa()" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-4 rounded-xl text-sm">+ Inserisci una voce di budget</button>

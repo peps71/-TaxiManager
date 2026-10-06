@@ -69,6 +69,35 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il controllo che trova le spese rimaste senza voce (versione 140)
+
+La 139 chiede di riagganciare le spese **nel momento in cui** rinomini una
+voce. Ma chi l'ha rinominata prima si ritrova il danno già in archivio, e
+nessuno glielo dice. Adesso l'app lo cerca da sola.
+
+In cima al budget compare un avviso quando trova spese che **somigliano a una
+voce ma non le sono agganciate**: quante sono, quanto fanno, le prime sei con
+data e importo, e un tasto **«Aggancia»**. La sezione del budget si apre da
+sola quando ce n'è almeno una.
+
+### Il criterio è stretto di proposito
+
+Si guardano solo le spese che **non si agganciano a nessuna voce** e che non
+sono già nel mucchio dei costi fissi fuori budget (di quelle parla già il
+conguaglio). Di queste, solo quelle il cui nome **contiene il nome di una voce o
+è contenuto in esso**: «Radio» e «Radio taxi» si trovano, «Carburante» e
+«Lavaggio» no. E se una spesa somiglia a **due** voci, l'app tace invece di
+indovinare.
+
+«Aggancia» riscrive solo l'etichetta perché combaci con la voce — importi, date
+e metodi non si toccano — e conserva il dettaglio dopo il trattino. Chiede
+conferma dicendo quante spese e per quanti euro.
+
+Prova nuova, `prove/testOrfane.mjs`, sedici controlli. Oltre a verificare che il
+riaggancio funzioni, misura la cosa che conta davvero: **la giornata perde
+esattamente il doppione**, non un euro di più — carburante e lavaggio restano
+fuori budget perché fuori budget ci stanno per davvero.
+
 ## Controllo di coerenza, e la voce rinominata che si perdeva la storia (versione 139)
 
 Un giro completo sul motore costruito dopo la versione 121: il costo della
