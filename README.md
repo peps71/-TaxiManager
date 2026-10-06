@@ -69,6 +69,28 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Due caselle, non tutta la riga (versione 132)
+
+La 131 colorava la riga intera. Sbagliato: una riga tutta gialla dice che c'è
+qualcosa da guardare, ma non dice **dove** — e in un prospetto che si compila
+una colonna alla volta è proprio il «dove» che serve.
+
+Adesso si accendono **due caselle e due soltanto**: il **giorno** e il **metodo
+di pagamento** con cui quella corsa è stata incassata. Le altre colonne, la
+colonna del totale compresa, restano bianche.
+
+    Giorno    Contanti    POS        Conto     Totale
+    10/03 █    61,00     █ ⚑ 42,50       —      103,50
+    12/03       —            —          18,00    18,00
+
+La casella del giorno tiene la barra arancione sul bordo sinistro: sta nella
+colonna che resta ferma mentre la tabella scorre di lato, quindi la vedi da
+qualunque colonna tu stia guardando.
+
+La prova adesso controlla anche il contrario di quello che deve succedere:
+**una sola** casella colorata fra i metodi, il totale bianco, e le righe senza
+segno completamente pulite. Ventisette controlli.
+
 ## La riga da controllare si vede (versione 131)
 
 La cella colorata da sola non bastava: la tabella dei corrispettivi scorre di

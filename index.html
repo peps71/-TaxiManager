@@ -153,22 +153,22 @@
         .col-ferma-grigia { background-color: #f3f4f6; }
         .col-ferma-scura  { background-color: #111827; }
 
-        /* LA RIGA DEI CORRISPETTIVI CHE ASPETTA UN CONTROLLO
-           Colorare la sola cella del metodo non bastava: la tabella scorre di
-           lato, e se quella colonna e' fuori schermo non si vede piu' niente.
-           Qui si colora tutta la riga, con una barra sul bordo sinistro che
-           sta nella colonna del giorno - cioe' quella che resta ferma mentre
-           si scorre, quindi si vede sempre. Dentro la riga, la cella del
-           metodo tiene una tinta piu' decisa: la riga dice QUALE giorno
-           guardare, la cella dice QUALE cifra controllare.
+        /* I CORRISPETTIVI CHE ASPETTANO UN CONTROLLO
+           Si accendono due caselle e due soltanto: il GIORNO e il METODO con
+           cui quella corsa e' stata incassata. Le altre colonne restano
+           bianche, altrimenti una riga tutta gialla dice che c'e' qualcosa da
+           guardare ma non dice dove, e in un prospetto che si compila una
+           colonna alla volta e' proprio il «dove» che serve.
+           La casella del giorno porta anche una barra sul bordo sinistro: sta
+           nella colonna che resta ferma mentre la tabella scorre di lato, ed
+           e' quella che si vede sempre, da qualunque colonna si guardi.
            I colori non passano da Tailwind perche' devono scavalcare il fondo
-           fisso della colonna ferma, che altrimenti resta bianco. */
-        .riga-verifica > td { background-color: #fef3c7; }
+           fisso della colonna ferma, che altrimenti resterebbe bianco. */
         .riga-verifica .col-ferma-chiara {
             background-color: #fde68a;
             box-shadow: inset 4px 0 0 #d97706;
         }
-        .riga-verifica .cella-verifica { background-color: #fcd34d; }
+        .riga-verifica .cella-verifica { background-color: #fde68a; }
 
         /* ============================================================
            LA LINGUA VISIVA (v89 - direzione «Rifinitura»)
@@ -1173,7 +1173,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 131;
+        const VERSIONE_APP = 132;
 
         function profiloCompilato() {
             const p = window.profilo || {};
