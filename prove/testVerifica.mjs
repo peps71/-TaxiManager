@@ -57,14 +57,15 @@ const dopo = await p.evaluate(() => {
   const g = c.righe.find(x => x.iso.endsWith('-10'));
   return { segnata: !!r.daVerificare, importo: r.importo, categoria: r.categoria,
            nelGiorno: g ? g.daVerificare : null, nelMese: c.totali.daVerificare,
-           elenco: c.daVerificare.map(x => x.id) };
+           nelMetodo: g ? g.verifica.POS : null, altroMetodo: g ? g.verifica.Contanti : null };
 });
 c('il movimento porta il segno', dopo.segnata === true);
 c('l\'importo non si tocca', dopo.importo === 42.50);
 c('la descrizione non si tocca', dopo.categoria === 'Stazione');
 c('il giorno dei corrispettivi conta la corsa segnata', dopo.nelGiorno === 1);
 c('il mese dei corrispettivi la conta', dopo.nelMese === 1);
-c('l\'elenco del mese la contiene', dopo.elenco.length === 1 && dopo.elenco[0] === 'c1');
+c('il segno sta nella colonna del metodo con cui e\' stata pagata', dopo.nelMetodo === 1);
+c('le altre colonne restano pulite', dopo.altroMetodo === 0);
 
 const dopoTot = await totali();
 c('gli incassi dell\'anno non cambiano', prima.incassi === dopoTot.incassi);
@@ -85,13 +86,29 @@ await p.evaluate(() => {
   renderContent();
 });
 await p.waitForTimeout(500);
+// Il segno sta SOLO sulla cella del metodo: niente riquadro in cima, niente
+// pastiglia nella colonna del giorno. In un prospetto che si compila una
+// colonna alla volta, l'avviso serve dov'e' la cifra da controllare.
 const corrisp = await p.evaluate(() => {
-  const t = document.getElementById('main-container').innerText;
-  return { testo: t, avviso: /1 corsa da verificare in marzo/i.test(t), riga: /1 da verificare/i.test(t) };
+  const tabella = [...document.querySelectorAll('table')]
+    .find(t => /Giorno/i.test(t.querySelector('thead') ? t.querySelector('thead').innerText : ''));
+  if (!tabella) return null;
+  const intestazioni = [...tabella.querySelectorAll('thead th')].map(x => x.innerText.trim());
+  const celleSegnate = [];
+  tabella.querySelectorAll('tbody tr').forEach(tr => {
+    [...tr.children].forEach((td, i) => {
+      if (td.getAttribute('title') && /da verificare/i.test(td.getAttribute('title'))) {
+        celleSegnate.push({ colonna: intestazioni[i], giorno: tr.children[0].innerText.trim().split('\n')[0] });
+      }
+    });
+  });
+  return { intestazioni, celleSegnate, testoSezione: document.getElementById('main-container').innerText };
 });
-c('i corrispettivi avvisano quante ce ne sono', corrisp.avviso);
-c('la riga del giorno porta il segno', corrisp.riga);
-c('l\'elenco nomina la corsa', /Stazione/.test(corrisp.testo));
+c('la tabella dei corrispettivi c\'e\'', !!corrisp);
+c('una sola cella porta il segno', corrisp.celleSegnate.length === 1);
+c('ed e\' quella del metodo giusto', corrisp.celleSegnate[0] && /POS/i.test(corrisp.celleSegnate[0].colonna));
+c('ed e\' quella del giorno giusto', corrisp.celleSegnate[0] && corrisp.celleSegnate[0].giorno.startsWith('10/'));
+c('niente riquadro in cima ai corrispettivi', !/cors[ae] da verificare in marzo/i.test(corrisp.testoSezione));
 
 // --- il prospetto in CSV porta la colonna solo quando serve ---
 const csv = await p.evaluate((anno) => {

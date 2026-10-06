@@ -1156,7 +1156,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 129;
+        const VERSIONE_APP = 130;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3900,8 +3900,8 @@
             const per = {};
             const tocca = (iso) => {
                 if (!per[iso]) {
-                    per[iso] = { iso, giorno: parseInt(iso.slice(8, 10), 10), tot: 0, n: 0, daVerificare: 0 };
-                    METODI_CORRISPETTIVI.forEach(k => per[iso][k] = 0);
+                    per[iso] = { iso, giorno: parseInt(iso.slice(8, 10), 10), tot: 0, n: 0, daVerificare: 0, verifica: {} };
+                    METODI_CORRISPETTIVI.forEach(k => { per[iso][k] = 0; per[iso].verifica[k] = 0; });
                 }
                 return per[iso];
             };
@@ -3920,7 +3920,10 @@
                 g[col] += imp;
                 g.tot += imp;
                 g.n++;
-                if (daVerificare(x)) g.daVerificare++;
+                // Il segno si conta nella colonna del metodo con cui e' stata
+                // pagata: a fine mese i corrispettivi si compilano una colonna
+                // alla volta, ed e' li' che la nota serve.
+                if (daVerificare(x)) { g.daVerificare++; g.verifica[col]++; }
             });
 
             const righe = Object.values(per).sort((x, y) => x.giorno - y.giorno);
@@ -3938,8 +3941,7 @@
             const usati = METODI_CORRISPETTIVI.filter(k => totali[k] > 0);
             return {
                 righe, totali, usati, giorniMese,
-                senzaIncasso: giorniMese - righe.length,
-                daVerificare: corseDaVerificareMese(ym)
+                senzaIncasso: giorniMese - righe.length
             };
         }
 
@@ -4817,9 +4819,8 @@
                                                 ${String(r.giorno).padStart(2, '0')}/${String(mese).padStart(2, '0')}
                                             </button>
                                             <span class="block text-xs font-bold text-gray-400">${giornoBreve(r.iso)} · ${r.n} cors${r.n === 1 ? 'a' : 'e'}</span>
-                                            ${r.daVerificare ? `<span class="inline-flex items-center gap-1 mt-1 bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${iconaVerifica(true)} ${r.daVerificare} da verificare</span>` : ''}
                                         </td>
-                                        ${colonne.map(k => `<td class="px-3 py-2 text-right font-bold ${r[k] > 0 ? 'text-gray-900' : 'text-gray-300'} whitespace-nowrap">${formatCurrency(r[k])}</td>`).join('')}
+                                        ${colonne.map(k => `<td class="px-3 py-2 text-right font-bold ${r.verifica[k] ? 'bg-yellow-50 text-yellow-900' : (r[k] > 0 ? 'text-gray-900' : 'text-gray-300')} whitespace-nowrap" ${r.verifica[k] ? `title="${r.verifica[k]} cors${r.verifica[k] === 1 ? 'a' : 'e'} da verificare in ${METODI_BREVI[k]} — tocca il giorno per aprirla"` : ''}>${r.verifica[k] ? `<span class="inline-flex items-center gap-1 text-yellow-600 align-middle mr-1">${iconaVerifica(true)}${r.verifica[k] > 1 ? `<span class="text-[10px] font-black">${r.verifica[k]}</span>` : ''}</span>` : ''}${formatCurrency(r[k])}</td>`).join('')}
                                         ${colonne.length > 1 ? `<td class="px-3 py-2 text-right font-black text-green-700 whitespace-nowrap">${formatCurrency(r.tot)}</td>` : ''}
                                     </tr>
                                 `).join('')}
@@ -4845,31 +4846,6 @@
                         <span class="text-xs font-black text-gray-400 no-print">apri / chiudi</span>
                     </summary>
                     <div class="border-t border-gray-100">
-                        ${c.daVerificare.length ? `
-                        <div class="m-4 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 no-print">
-                            <p class="flex items-center gap-2 font-black text-yellow-800 text-sm">
-                                <span class="shrink-0 text-yellow-600">${iconaVerifica(true)}</span>
-                                ${c.daVerificare.length} cors${c.daVerificare.length === 1 ? 'a' : 'e'} da verificare in ${nomeMese(mese)}
-                            </p>
-                            <div class="mt-2.5 divide-y divide-gray-100 border border-yellow-200 rounded-xl bg-white overflow-hidden">
-                                ${c.daVerificare.map(r => `
-                                    <div class="px-3 py-2 flex items-center gap-2">
-                                        <button onclick="setDashGiorno('${r.data}')" title="Apri questa giornata" class="min-w-0 flex-1 text-left">
-                                            <span class="flex items-baseline gap-2">
-                                                <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 truncate">${esc(r.categoria)}</span>
-                                                <span class="text-sm font-black text-green-600 whitespace-nowrap shrink-0">${cifraEuro(r.importo)}</span>
-                                            </span>
-                                            <span class="block text-[11px] font-bold text-gray-400 mt-0.5">${ggMmAaaa(r.data)}${r.ora ? ' · ' + esc(r.ora) : ''} · ${esc(metodoBreve(r.metodo))}</span>
-                                        </button>
-                                        <button onclick="alternaVerificaCorsa('${escJs(r.id)}')" title="Verificata: togli il segno"
-                                                class="shrink-0 bg-white border border-yellow-300 hover:bg-yellow-50 text-yellow-800 text-xs font-black px-3 py-1.5 rounded-lg whitespace-nowrap">Verificata</button>
-                                    </div>`).join('')}
-                            </div>
-                            <p class="text-[11px] font-medium text-yellow-700 mt-2 leading-relaxed">
-                                Tocca una riga per aprire quella giornata, oppure «Verificata» per togliere il segno.
-                                Il segno è solo un promemoria: non cambia nessun importo.
-                            </p>
-                        </div>` : ''}
                         ${c.usati.length > 1 ? `
                         <div class="flex flex-wrap gap-2 p-4 no-print">
                             <button onclick="cambiaMetodoCorrispettivi('ALL')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === 'ALL' ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">Tutti</button>
@@ -11431,13 +11407,6 @@
                 ? `Segnata da verificare: ${formatCurrency(r.importo)} del ${ggMmAaaa(r.data)}.`
                 : 'Segno tolto.');
             renderContent();
-        }
-
-        // Le corse segnate di un mese, dalla piu' recente.
-        function corseDaVerificareMese(ym) {
-            return (window.dailyRecords || [])
-                .filter(r => r.tipo === 'ENTRATA' && daVerificare(r) && String(r.data || '').startsWith(ym + '-'))
-                .sort(perDataDecrescente);
         }
 
         // La bandierina: un'icona disegnata, dello stesso tratto di tutte le

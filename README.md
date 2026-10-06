@@ -69,6 +69,26 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il segno va sulla colonna del metodo (versione 130)
+
+Nella 129 i corrispettivi portavano il promemoria in due posti: un riquadro
+giallo in cima alla sezione, con l'elenco di tutte le corse da controllare, e
+una pastiglia nella colonna del giorno. Era troppo, e soprattutto era nel posto
+sbagliato: il prospetto dei corrispettivi si compila **una colonna alla volta**,
+quindi la nota serve dov'è la cifra da controllare, non sopra tutto il resto.
+
+Adesso il segno sta **solo nella cella del metodo di pagamento** con cui quella
+corsa è stata incassata. La cella prende un fondo giallo chiaro e una
+bandierina; se le corse da verificare in quel giorno e con quel metodo sono più
+d'una, accanto alla bandierina c'è il numero. Il resto della tabella non cambia.
+
+Via il riquadro in cima e via la pastiglia nella colonna del giorno. La
+funzione che costruiva l'elenco del mese non la guardava più nessuno ed è stata
+tolta.
+
+Nel registro della giornata e sulla testata della giornata non cambia niente:
+lì il segno resta dov'era.
+
 ## Una corsa da ricontrollare a fine mese (versione 129)
 
 Capita di registrare una corsa su cui resta qualcosa da verificare: un importo
