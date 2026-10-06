@@ -25,6 +25,7 @@ titolo "indice dei pagamenti";    giro testIndiceVivo.mjs
 titolo "budget e proposte";       giro testBudget118.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs
 titolo "costo e pareggio";        giro testPareggio.mjs
+titolo "corse da verificare";     giro testVerifica.mjs
 titolo "riassegna a una voce";    giro testAssegna.mjs
 titolo "scadenze dal budget";     giro testScadenzeBudget.mjs
 titolo "confronto anno su anno";  giro testConfronto.mjs

@@ -69,6 +69,42 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una corsa da ricontrollare a fine mese (versione 129)
+
+Capita di registrare una corsa su cui resta qualcosa da verificare: un importo
+da confermare, una ricevuta da cercare, una convenzione da controllare. Finora
+l'unico modo era ricordarselo.
+
+Adesso ogni corsa ha una **bandierina**. Toccandola la corsa si segna, e il
+segno la segue dappertutto:
+
+- **nel registro della giornata**: la riga diventa gialla e porta la pastiglia
+  «da verificare»;
+- **sulla testata della giornata**, anche chiusa: «2 da verificare», così non
+  serve aprire l'elenco per accorgersene;
+- **nei corrispettivi**, che è il posto dove i conti del mese si chiudono: in
+  cima alla sezione c'è l'elenco di quello che resta da controllare — data,
+  importo, metodo — con un tasto «Verificata» per togliere il segno, e ogni
+  riga apre la giornata corrispondente. La riga del giorno, nella tabella,
+  porta il suo conteggio.
+
+Si può anche segnare al momento: nel modulo della corsa c'è la spunta **«Da
+verificare a fine mese»**.
+
+### Quello che il segno NON fa
+
+Non è una nota e non cambia nessun importo: incassi, totali del mese, numero
+di corse e stima delle tasse restano quelli di prima. È un promemoria, e si
+toglie toccandolo di nuovo. Il campo si scrive sul movimento solo quando c'è:
+una corsa senza niente da verificare resta pulita com'era.
+
+Nel **prospetto CSV** la colonna «Da verificare» compare solo se quel mese ha
+almeno una corsa segnata: nei mesi normali il file che va al commercialista
+resta identico a prima.
+
+Prova nuova, `prove/testVerifica.mjs`: diciassette controlli sul dato, sulle
+tre schermate e sul fatto che nessun importo si muova.
+
 ## L'aggiornamento non arrivava sul telefono (versione 128)
 
 «L'hai rilasciata la v127? Perché anche se aggiorno rimane alla precedente.»
