@@ -23,6 +23,7 @@ titolo "il giro dei giorni";      giro testGiorni.mjs
 titolo "previsione e realta'";    giro testPrevisioneRealta.mjs
 titolo "indice dei pagamenti";    giro testIndiceVivo.mjs
 titolo "budget e proposte";       giro testBudget118.mjs
+titolo "budget compatto";         giro testBudgetCompatto.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs
 titolo "costo e pareggio";        giro testPareggio.mjs
 titolo "corse da verificare";     giro testVerifica.mjs

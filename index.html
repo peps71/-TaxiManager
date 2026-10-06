@@ -347,7 +347,11 @@
            spezzarla a meta' («Carburan-te») si legge peggio di un corpo un po'
            piu' piccolo. Come per le cifre: il corpo si adatta, il testo resta
            intero. */
-        .nome-voce { font-size: clamp(0.75rem, 3.6vw, 0.875rem); line-height: 1.25; }
+        .nome-voce {
+            font-size: clamp(0.75rem, 3.6vw, 0.875rem);
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
         @media (min-width: 390px) { .nome-voce { font-size: 0.875rem; } }
 
         /* ============================================================
@@ -1173,7 +1177,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 132;
+        const VERSIONE_APP = 133;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -10800,36 +10804,36 @@
             return Math.round((Date.UTC(y2, m2 - 1, g2) - Date.UTC(y1, m1 - 1, g1)) / 86400000);
         }
 
+        // Una voce chiusa sta su due righe, come una corsa nel registro: il nome
+        // e la quota giornaliera sopra, il resto in piccolo sotto. Prima ogni
+        // voce era una scheda col suo bordo, il suo fondo e due pulsanti
+        // scritti a parole: con dieci voci la pagina non finiva piu'.
         function rigaVoceFissaChiusa(v, anno) {
             const imp = parseFloat(v.importo || 0);
             const unita = v.unita === 'anno' ? 'anno' : (v.unita === 'mese' ? 'mese' : 'giorno');
             const alGiorno = pesoGiornalieroVoce(v, anno);
             const oggi = comandaOggiVoce(v);
             const scadenza = avvisoScadenzaVoce(v);
+            const scadeTesto = !scadenza ? '' : (scadenza.giorni < 0
+                ? `scaduta il ${ggMmAaaa(scadenza.data)}`
+                : scadenza.giorni === 0 ? 'scade oggi' : `scade fra ${scadenza.giorni} gg`);
             return `
-                <div class="flex flex-wrap items-center justify-between gap-3 border border-gray-200 rounded-xl px-4 py-3 bg-gray-50/60">
-                    <div class="min-w-0">
-                        <p class="font-bold text-gray-900 truncate">${esc(v.nome || 'Voce senza nome')}</p>
-                        <p class="text-xs text-gray-500">
-                            ${formatCurrency(imp)} ogni ${unita} · ${esc(periodoVoce(v))}${alGiorno > 0 ? ` · <strong>${formatCurrency(alGiorno)}</strong> al giorno` : ''}
-                        </p>
-                        ${oggi && !oggi.daPrevisione ? `
-                            <p class="text-xs font-bold text-indigo-700 mt-0.5 leading-relaxed">
-                                Oggi pesa ${formatCurrency(oggi.quota)} al giorno <span class="font-medium text-indigo-400">· ${esc(oggi.testo)}</span>
-                            </p>` : ''}
-                        ${scadenza ? `
-                            <p class="text-xs font-bold ${scadenza.giorni < 0 ? 'text-red-600' : 'text-orange-600'} mt-0.5 leading-relaxed">
-                                ${scadenza.giorni < 0
-                                    ? `Scaduta il ${ggMmAaaa(scadenza.data)} e non l'hai ancora registrata`
-                                    : scadenza.giorni === 0
-                                        ? 'Scade oggi'
-                                        : `Scade fra ${scadenza.giorni} ${scadenza.giorni === 1 ? 'giorno' : 'giorni'}, il ${ggMmAaaa(scadenza.data)}`}
-                            </p>` : ''}
-                    </div>
-                    <div class="flex-shrink-0 flex gap-2">
-                        <button type="button" onclick="apriVoceFissa('${escJs(v.slug)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-2 rounded-lg">Modifica</button>
-                        <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" class="text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg">Rimuovi</button>
-                    </div>
+                <div class="px-3 py-2 flex items-center gap-2">
+                    <span class="min-w-0 flex-1">
+                        <span class="flex items-baseline gap-2">
+                            <span class="nome-voce font-bold text-gray-900 min-w-0 flex-1">${esc(v.nome || 'Voce senza nome')}</span>
+                            ${alGiorno > 0 ? `<span class="text-[11px] font-black text-indigo-900 whitespace-nowrap shrink-0" title="Quanto pesa al giorno">${formatCurrency(alGiorno)}/g</span>` : ''}
+                        </span>
+                        <span class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span class="text-[11px] font-bold text-gray-400 whitespace-nowrap">${formatCurrency(imp)} ogni ${unita} · ${esc(periodoVoce(v))}</span>
+                            ${scadeTesto ? `<span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${scadenza.giorni < 0 ? 'bg-red-50 text-red-700' : 'bg-yellow-100 text-yellow-800'}">${scadeTesto}</span>` : ''}
+                            ${oggi && !oggi.daPrevisione ? `<span class="shrink-0 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap" title="${esc(oggi.testo)}">oggi ${formatCurrency(oggi.quota)}</span>` : ''}
+                        </span>
+                    </span>
+                    <button type="button" onclick="apriVoceFissa('${escJs(v.slug)}')" title="Modifica questa voce" aria-label="Modifica ${esc(v.nome || 'questa voce')}"
+                            class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+                    <button type="button" onclick="eliminaVoceFissa('${escJs(v.slug)}')" title="Elimina questa voce" aria-label="Elimina ${esc(v.nome || 'questa voce')}"
+                            class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-300 hover:text-red-700 hover:bg-red-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>
                 </div>`;
         }
 
@@ -11099,27 +11103,12 @@
             const scostaDallaPrevisione = Math.abs(realeNellAnno - nellAnno) >= 1;
 
             return `
-                <details class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || proposteBudget().length ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
+                <details class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-4 print-card" ${apertoPieghevole('budget', false) || proposteBudget().length ? 'open' : ''} ontoggle="ricordaPieghevole('budget', this.open)">
                     <summary class="flex flex-wrap items-start justify-between gap-3 cursor-pointer select-none">
-                        <div>
+                        <div class="min-w-0">
                             <h3 class="text-lg font-black text-gray-900">Budget dei costi fissi</h3>
                             <p class="text-xs text-gray-500 leading-relaxed mt-1 max-w-2xl">
-                                Quanto ti costa lavorare, prima ancora di uscire di casa: la licenza, il radio taxi, il
-                                commercialista, le assicurazioni. <strong>Non sono movimenti</strong>: sono una
-                                previsione che matura ogni giorno, e serve a sapere quanto devi incassare oggi.
-                            </p>
-                            <p class="text-xs text-gray-500 leading-relaxed mt-1.5 max-w-2xl">
-                                <strong>Gli importi inseriti qui sono la base minima del calcolo.</strong> La giornata pesa almeno quanto hai
-                                previsto, tutto l'anno: se hai messo 4.800 € di tasse e a ottobre ne hai pagati 2.523, la
-                                giornata continua a portare la quota dei 4.800 — quei soldi li devi tirare fuori lo stesso,
-                                e di qui a dicembre arrivano.
-                            </p>
-                            <p class="text-xs text-gray-500 leading-relaxed mt-1.5 max-w-2xl">
-                                <strong>Quando il conto vero supera la previsione, comanda lui.</strong> L'assicurazione
-                                rinnovata a 1.500 invece dei 1.387 previsti: da quel giorno la giornata pesa 1.500, per
-                                tutto il periodo che copre. Non devi correggere niente a mano. E se a fine anno il budget
-                                risulta più alto del dovuto, a dirtelo c'è il <strong>conguaglio</strong>, qui sotto: è il
-                                suo mestiere.
+                                ${voci.length ? `${voci.length} ${voci.length === 1 ? 'voce' : 'voci'} · ` : ''}quello che ti costa lavorare, prima di uscire di casa.
                             </p>
                         </div>
                         <div class="text-right">
@@ -11136,18 +11125,41 @@
 
                     ${bloccoProposteBudget()}
 
-                    <div class="space-y-2">
-                        ${voci.map(rigaVoceFissa).join('') || '<p class="text-sm text-gray-400">Nessuna voce: aggiungine una qui sotto.</p>'}
-                    </div>
+                    <button onclick="aggiungiVoceFissa()" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-4 rounded-xl text-sm">+ Inserisci una voce di budget</button>
 
-                    <div class="flex flex-wrap gap-2">
-                        <button onclick="aggiungiVoceFissa()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">+ Aggiungi una voce</button>
-                        <button onclick="salvaModificheVociFisse()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Salva il budget</button>
-                    </div>
+                    ${voci.length ? `
+                        <div>
+                            <p class="etichetta block mb-1.5">Budget del ${esc(anno)}</p>
+                            <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                ${voci.map(rigaVoceFissa).join('')}
+                            </div>
+                        </div>`
+                      : '<p class="text-sm text-gray-400">Nessuna voce: inseriscine una con il tasto qui sopra.</p>'}
+
+                    ${window.voceFissaInModifica ? `
+                        <button onclick="salvaModificheVociFisse()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-sm">Salva il budget</button>` : ''}
 
                     <details class="text-xs text-gray-500">
-                        <summary class="cursor-pointer font-bold text-gray-600 hover:text-gray-900">Come si compila</summary>
+                        <summary class="cursor-pointer font-bold text-gray-600 hover:text-gray-900">Come funziona, e come si compila</summary>
                         <div class="mt-2 space-y-2 leading-relaxed">
+                            <p>
+                                Quanto ti costa lavorare, prima ancora di uscire di casa: la licenza, il radio taxi, il
+                                commercialista, le assicurazioni. <strong>Non sono movimenti</strong>: sono una
+                                previsione che matura ogni giorno, e serve a sapere quanto devi incassare oggi.
+                            </p>
+                            <p>
+                                <strong>Gli importi inseriti qui sono la base minima del calcolo.</strong> La giornata pesa almeno quanto hai
+                                previsto, tutto l'anno: se hai messo 4.800 € di tasse e a ottobre ne hai pagati 2.523, la
+                                giornata continua a portare la quota dei 4.800 — quei soldi li devi tirare fuori lo stesso,
+                                e di qui a dicembre arrivano.
+                            </p>
+                            <p>
+                                <strong>Quando il conto vero supera la previsione, comanda lui.</strong> L'assicurazione
+                                rinnovata a 1.500 invece dei 1.387 previsti: da quel giorno la giornata pesa 1.500, per
+                                tutto il periodo che copre. Non devi correggere niente a mano. E se a fine anno il budget
+                                risulta più alto del dovuto, a dirtelo c'è il <strong>conguaglio</strong>, qui sotto: è il
+                                suo mestiere.
+                            </p>
                             <p>
                                 L'importo si scrive con la virgola o con il punto, e ha la sua unità: <strong>mese</strong>
                                 per una rata sempre uguale (il finanziamento della licenza), <strong>anno</strong> per una

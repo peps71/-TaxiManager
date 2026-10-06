@@ -32,6 +32,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testPrevisioneRealta.mjs` | il budget è il pavimento, il conto vero comanda quando lo supera, le rate si sommano |
 | `testIndiceVivo.mjs` | l'indice dei pagamenti si rifà quando registri o cancelli **dai tasti veri** |
 | `testBudget118.mjs` | una spesa «Famiglia - Dettaglio» si aggancia alla voce giusta; le proposte dal registro |
+| `testBudgetCompatto.mjs` | la sezione del budget resta compatta con dieci voci, e inserisci/modifica/elimina funzionano dai tasti veri |
 | `testConguaglio.mjs` | le righe si aprono e dicono quali movimenti contengono, con la provenienza |
 | `testPareggio.mjs` | il costo fisso al giorno comprende la quota IRPEF, e l'etichetta del pareggio segue il segno: «Sopra» col più in verde, «Sotto» col meno in rosso |
 | `testVerifica.mjs` | una corsa segnata «da verificare» compare nel registro e nei corrispettivi, e non tocca nessun importo |

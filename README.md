@@ -69,6 +69,50 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il budget compattato (versione 133)
+
+Con dieci voci, la sezione del budget era alta **2181 px** su un telefono: si
+scorreva mezzo minuto per arrivare al conguaglio. Adesso è **969 px**, meno
+della metà, con le stesse dieci voci.
+
+### Da dove venivano tutti quei pixel
+
+**Tre paragrafi di spiegazione sempre aperti** nella testata della sezione:
+cosa sono i costi fissi, perché il budget è la base minima, cosa succede quando
+il conto vero supera la previsione. Testo giusto, ma da leggere una volta, non
+ogni volta che apri la pagina. Sono finiti nel pieghevole «Come funziona, e
+come si compila», insieme a quelli che c'erano già. Nella testata restano il
+titolo, il numero di voci e la previsione giornaliera.
+
+**Ogni voce era una scheda** col suo bordo, il suo fondo grigio e due pulsanti
+scritti a parole («Modifica», «Rimuovi»). Adesso l'elenco è un blocco solo con
+le righe divise da una linea, come il registro delle corse: nome e quota
+giornaliera sopra, importo e periodo in piccolo sotto, e due icone — matita e
+cestino — a destra. Da ~110 px a **60 px** per voce.
+
+**Il tasto «Salva il budget»** stava sempre lì, anche quando non c'era niente
+da salvare. Adesso compare solo mentre una voce è aperta in modifica: chiudendo
+con «Fatto» il salvataggio avviene già.
+
+### Com'è adesso
+
+Il tasto **«+ Inserisci una voce di budget»** in cima, e sotto l'elenco
+intitolato **«Budget del 2026»** con modifica ed eliminazione su ogni riga.
+
+### Quello che è saltato fuori per strada
+
+Stringendo le righe, due nomi finivano tagliati a 375 e 390 px — «Commercialista»
+e «Finanziamento» sono parole singole e lunghe, e non vanno a capo. La scheda è
+passata da `p-6` a `p-5` (sedici pixel di larghezza in più, che su un telefono
+stretto contano) e la classe del nome adesso spezza la parola invece di
+lasciarla tagliare: una parola spezzata si legge, una tagliata no.
+
+Prova nuova, `prove/testBudgetCompatto.mjs`: undici controlli. Misura
+**l'altezza** della sezione e di una riga con dieci voci — non è una prova di
+stile, è una prova di quanta pagina occupa, che è la cosa che si era rotta —
+controlla che le spiegazioni ci siano ancora ma chiuse, e percorre
+inserisci / modifica / elimina dai tasti veri.
+
 ## Due caselle, non tutta la riga (versione 132)
 
 La 131 colorava la riga intera. Sbagliato: una riga tutta gialla dice che c'è
