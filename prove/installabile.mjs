@@ -331,6 +331,22 @@ for (const dove of [...man.icons.map(i => i.src), './apple-touch-icon-180.png', 
 const paginaVera = await p2.goto(SITO + '/index.html');
 dire(/text\/html/.test(paginaVera.headers()['content-type'] || ''),
      'index.html: apre ancora l\'app');
+
+// CON UNA CODA NELL'INDIRIZZO
+// L'iPhone si tiene in memoria l'icona che ha gia' costruito per un
+// indirizzo: per fargliela rifare si rimette l'app sulla Home da
+// index.html?v=146. Quella coda non deve rompere niente - ne' l'apertura, ne'
+// il funzionamento senza campo (il service worker deve guardare il percorso,
+// non l'indirizzo intero), ne' i dati, che sono gli stessi perche' il sito e'
+// lo stesso.
+const conCoda = await p2.goto(SITO + '/index.html?v=' + Date.now());
+dire(/text\/html/.test(conCoda.headers()['content-type'] || ''), 'index.html con una coda: apre l\'app');
+offline = true;
+await p2.goto(SITO + '/index.html?v=senzacampo').catch(() => {});
+const vivaConCoda = await p2.waitForFunction(() => typeof window.switchTab === 'function', { timeout: 20000 })
+  .then(() => true).catch(() => false);
+dire(vivaConCoda, vivaConCoda ? 'e si apre anche senza campo' : 'con la coda, senza campo l\'app non si apre');
+offline = false;
 await p2.close();
 
 // ------------------------------------------------------------------
