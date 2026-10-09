@@ -112,9 +112,16 @@ const out = await p.evaluate(async (uri) => {
     return k.toDataURL('image/png');
   };
 
+  // L'ARTE DENTRO LA CORNICE GIALLA, A TUTTE LE MISURE
+  // Prima le icone grandi erano a pieno campo e solo la "maskable" aveva la
+  // cornice. Adesso il disegno con la cornice e' l'icona, punto: e' quella che
+  // il telefono mostra sulla schermata Home, e un'icona che sta bene anche
+  // quando il sistema la ritaglia a cerchio e' il caso migliore, non un
+  // ripiego. Le favicon restano a pieno campo: a 16 e 32 punti una cornice si
+  // mangerebbe meta' dell'auto.
   return {
     riquadro: [Math.round(sx), Math.round(sy), Math.round(lato)],
-    '512': rendi(512), '192': rendi(192), '180': rendi(180),
+    '512': rendi(512, true), '192': rendi(192, true), '180': rendi(180, true),
     '64': rendi(64), '32': rendi(32), '16': rendi(16),
     'mask': rendi(512, true)
   };

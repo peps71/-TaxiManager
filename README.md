@@ -69,6 +69,42 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'icona con la cornice, a tutte le misure (versione 149)
+
+L'icona grande era a pieno campo e solo la versione «ritagliabile» aveva la
+cornice gialla. Adesso **il disegno con la cornice è l'icona**, a 180, 192 e 512
+punti: è quella che si vede sulla schermata Home, e un'icona che sta bene anche
+quando il sistema la ritaglia a cerchio è il caso migliore, non un ripiego. Le
+favicon da 16 e 32 restano a pieno campo — a quelle misure una cornice si
+mangerebbe metà dell'auto.
+
+Cambiato in `strumenti/icone.mjs`, non a mano: i file si rigenerano dalla
+sorgente.
+
+### Cosa era cambiato davvero, visto che adesso si sa
+
+La domanda era: «prima funzionava, cosa è cambiato?». La risposta onesta è
+**niente, in quello che faceva funzionare l'icona**.
+
+L'icona di un'app sulla schermata Home viene presa **una volta sola**, nel
+momento in cui la si aggiunge, e da lì non si aggiorna più. Quella che
+funzionava era stata presa tanto tempo fa e se ne stava lì, immune a qualunque
+versione. La versione 142, rifacendo l'icona ritagliabile, ha dato il motivo di
+rimetterla sulla Home — e **rimetterla** è la sola operazione che quel difetto
+poteva colpire.
+
+Il difetto c'era da prima, e non era nell'icona: il service worker rispondeva
+con la pagina dell'app a qualunque indirizzo, anche quando gli si chiedeva un
+file (versione 145). Chi aggiungeva l'app alla Home riceveva una pagina HTML al
+posto dell'icona e del manifesto. Nessuno l'aveva mai visto perché nessuno
+rimetteva mai l'icona.
+
+Quindi: la 142 non ha rotto niente. Ha fatto scoprire una cosa rotta da tempo,
+nel momento peggiore — e le sette versioni che sono seguite sono servite a
+trovarla (145), a renderla visibile (146, 147) e a sistemare tutto quello che
+nel frattempo saltava fuori intorno (148). Quello che resta da fare non è più
+codice: è convincere l'iPhone a dimenticare il quadrato che si è disegnato.
+
 ## Le impostazioni fiscali sul Cloud, e il manifesto col tipo giusto (versione 148)
 
 ### Il buco: le impostazioni fiscali stavano solo sul telefono
