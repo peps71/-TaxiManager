@@ -69,6 +69,58 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La lettera T al posto del taxi: trovata (versione 145)
+
+La causa era qui dentro, nel service worker, e la 144 non l'aveva presa.
+
+Il service worker rispondeva con la pagina dell'app a **qualunque** navigazione
+dentro la sua cartella — compresa quella verso un file. Chiedendo
+`apple-touch-icon-180.png` arrivava `index.html`; chiedendo `manifest.json`,
+pure. Nessuno apre a mano l'indirizzo di un'icona, e per questo il difetto non
+si era mai visto: **l'app funzionava benissimo**. Ma l'iPhone quell'indirizzo lo
+apre, nel momento in cui si tocca «Aggiungi alla schermata Home». Riceveva una
+pagina HTML al posto dell'icona *e* al posto del manifesto, non poteva usare né
+l'una né l'altro, e si disegnava da solo un quadrato con il colore della barra e
+la prima lettera del nome: giallo, con una T.
+
+Due file irraggiungibili per la stessa ragione, un unico effetto visibile. Si
+spiega anche perché la 142 sembrava la colpevole: non lo era. Il difetto c'era
+da prima, e si vede solo quando si rimette l'icona sulla Home — cosa che la 142,
+cambiando l'icona ritagliabile, aveva dato il motivo di fare.
+
+La correzione è una domanda sola, prima di servire la pagina: **questo indirizzo
+è una pagina o un file?** Senza estensione è una pagina dell'app; con
+un'estensione che non sia `.html` è un file, e va servito quel file.
+
+```js
+function eUnaPaginaDellApp(url) { ... }
+if (richiesta.mode === 'navigate' && eUnaPaginaDellApp(richiesta.url)) { ... }
+```
+
+### La prova che mancava, e che adesso c'è
+
+`prove/installabile.mjs` installa il service worker e poi **va agli indirizzi dei
+file come ci va il telefono**, guardando che cosa arriva:
+
+```
+8bis. andando all'indirizzo di un file arriva il file, non l'app
+  apple-touch-icon-180.png: arriva image/png
+  manifest.json: arriva application/manifest+json
+  index.html: apre ancora l'app
+```
+
+Rimettendo il service worker com'era, la prova segnala cinque guasti. È il
+controllo che serviva: tutte le prove di prima chiedevano i file con `fetch`, e
+con `fetch` arrivavano giusti — il difetto stava **solo** sulla navigazione, che
+è esattamente la strada che fa il telefono.
+
+### Che fine fa la 144
+
+La 144 aveva tolto `id` dal manifesto e semplificato i percorsi delle icone: un
+tentativo al buio, perché da qui il sito pubblicato non si raggiungeva. Non era
+la causa. Le semplificazioni restano — sono innocue e più semplici — ma vanno
+messe in conto per quello che sono: non hanno sistemato niente.
+
 ## L'icona sulla schermata Home, e un limite di queste prove (versione 144)
 
 Dopo l'aggiornamento alla 142, rimettendo l'app sulla schermata Home dell'iPhone

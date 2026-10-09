@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v144';
+const VERSIONE = 'taximanager-v145';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -138,6 +138,21 @@ function salvaInCache(richiesta, risposta) {
     .catch(() => { /* cache piena o richiesta non salvabile: pazienza */ });
 }
 
+// Una pagina o un file?
+// Senza estensione (./ oppure /-TaxiManager/) e' una pagina dell'app.
+// Con un'estensione che non sia .html e' un file, e va servito quel file:
+// un'icona, il manifesto, un'immagine. Si guarda solo l'ultimo pezzo del
+// percorso, cosi' una cartella che contiene un punto non inganna.
+function eUnaPaginaDellApp(url) {
+  let percorso;
+  try { percorso = new URL(url).pathname; } catch (err) { return true; }
+  const punto = percorso.lastIndexOf('.');
+  const barra = percorso.lastIndexOf('/');
+  if (punto < barra) return true;
+  const estensione = percorso.slice(punto + 1).toLowerCase();
+  return estensione === 'html' || estensione === 'htm';
+}
+
 self.addEventListener('fetch', (evento) => {
   const richiesta = evento.request;
 
@@ -152,7 +167,18 @@ self.addEventListener('fetch', (evento) => {
   // copia coerente con questo service worker, mai un misto fra due versioni.
   // Senza copia salvata (primissimo avvio, o installazione interrotta) si
   // prende la rete, e senza nemmeno quella la paginetta qui sopra.
-  if (richiesta.mode === 'navigate') {
+  //
+  // MA SOLO SE E' DAVVERO UNA PAGINA (vedi eUnaPaginaDellApp)
+  // Prima qui dentro ci finiva QUALUNQUE navigazione dentro la cartella
+  // dell'app, compresa quella verso un file: chiedendo
+  // apple-touch-icon-180.png si riceveva index.html, e chiedendo
+  // manifest.json pure. Nessuno apre a mano l'indirizzo di un'icona - ma
+  // l'iPhone lo fa, quando si tocca «Aggiungi alla schermata Home». Riceveva
+  // una pagina HTML al posto dell'icona e del manifesto, non poteva usare ne'
+  // l'una ne' l'altro, e si disegnava da solo un quadrato giallo con la
+  // lettera T. Il difetto era invisibile da dentro l'app: l'app funzionava
+  // benissimo.
+  if (richiesta.mode === 'navigate' && eUnaPaginaDellApp(richiesta.url)) {
     evento.respondWith(
       caches.match('./index.html')
         .then((salvata) => salvata || fetch(richiesta))

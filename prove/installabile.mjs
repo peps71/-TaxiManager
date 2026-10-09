@@ -307,6 +307,30 @@ const manOffline = await p2.evaluate(async () => {
 });
 dire(manOffline, manOffline ? 'anche il manifesto si legge senza campo' : 'senza campo il manifesto non si legge');
 offline = false;
+
+// ------------------------------------------------------------------
+// IL CASO CHE HA FATTO COMPARIRE LA LETTERA AL POSTO DEL TAXI
+// Il service worker rispondeva con la pagina dell'app a QUALUNQUE navigazione
+// dentro la sua cartella, compresa quella verso un file. Chiedendo l'icona
+// arrivava index.html; chiedendo il manifesto, pure. Nessuno apre a mano
+// l'indirizzo di un'icona - ma l'iPhone lo fa, quando si tocca «Aggiungi alla
+// schermata Home»: riceveva una pagina HTML al posto dell'icona e del
+// manifesto, non poteva usare ne' l'una ne' l'altro, e si disegnava da solo un
+// quadrato con la lettera iniziale. Da dentro l'app non si vedeva niente:
+// l'app funzionava benissimo. Qui si va a quegli indirizzi come ci va il
+// telefono, e si guarda che cosa arriva.
+console.log('\n8bis. andando all\'indirizzo di un file arriva il file, non l\'app');
+for (const dove of [...man.icons.map(i => i.src), './apple-touch-icon-180.png', './manifest.json']) {
+  const risposta = await p2.goto(new URL(dove, SITO + '/').href);
+  const tipo = (risposta && risposta.headers()['content-type']) || '';
+  const buono = !/text\/html/.test(tipo);
+  dire(buono, `${dove.replace('./', '')}: arriva ${tipo || 'niente'}`
+       + (buono ? '' : ' - al telefono arriva la pagina dell\'app al posto del file'));
+}
+// e una pagina vera deve continuare ad aprire l'app
+const paginaVera = await p2.goto(SITO + '/index.html');
+dire(/text\/html/.test(paginaVera.headers()['content-type'] || ''),
+     'index.html: apre ancora l\'app');
 await p2.close();
 
 // ------------------------------------------------------------------
