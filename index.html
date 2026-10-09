@@ -58,6 +58,10 @@
     <!-- PWA: installazione su telefono -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#facc15">
+    <!-- Le due righe che dicono "aggiunta alla Home, aprimi come un'app, senza
+         la barra del browser": la prima e' quella che capisce Android, la
+         seconda quella che capisce l'iPhone. Servono tutte e due. -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="TaxiManager">
@@ -277,6 +281,17 @@
             box-shadow: 0 -2px 12px rgba(24,22,17,.05);
         }
 
+        /* IL MESSAGGIO DI SERVIZIO SOPRA LA BARRA, ANCHE SULL'IPHONE
+           Il messaggio stava a 6rem dal fondo: giusto su un telefono senza
+           barra di casa, perche' la barra in basso e' alta 63 punti. Ma
+           sull'iPhone la barra in basso si allunga di altri 34 punti per
+           stare sopra la barra di casa - e il messaggio ci finiva sopra,
+           proprio mentre dice «corsa registrata». Qui l'altezza si somma
+           invece di indovinarla. Da tablet in su la barra non c'e' e il
+           messaggio torna in basso a destra. */
+        #toast { bottom: calc(6rem + env(safe-area-inset-bottom)); }
+        @media (min-width: 768px) { #toast { bottom: 1.25rem; } }
+
         /* Il simbolo dell'euro accanto a una cifra grande: piu' piccolo e piu'
            tenue del numero. Da lontano si legge «116,50», non «€». */
         .cifra-euro { font-size: 0.6em; font-weight: 600; opacity: 0.45; margin-left: 0.12em; }
@@ -429,7 +444,7 @@
     </div>
 
     <!-- Toast Notifica -->
-    <div id="toast" role="status" aria-live="polite" class="hidden fixed bottom-24 md:bottom-5 right-5 left-5 md:left-auto justify-center md:justify-start bg-gray-900 text-yellow-400 px-5 py-3 rounded-xl shadow-2xl z-50 items-center space-x-2 border border-yellow-400/30 slide-in font-bold text-sm no-print">
+    <div id="toast" role="status" aria-live="polite" class="hidden fixed right-5 left-5 md:left-auto justify-center md:justify-start bg-gray-900 text-yellow-400 px-5 py-3 rounded-xl shadow-2xl z-50 items-center space-x-2 border border-yellow-400/30 slide-in font-bold text-sm no-print">
         <span id="toast-text">Messaggio</span>
     </div>
 
@@ -1230,7 +1245,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 141;
+        const VERSIONE_APP = 142;
 
         function profiloCompilato() {
             const p = window.profilo || {};

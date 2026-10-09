@@ -42,6 +42,7 @@ titolo "media fuori budget";      giro mediaAltre.mjs
 titolo "iniezione dal backup";    giro testIniezione.mjs
 titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "disegni accodati";        giro testDisegni.mjs
+titolo "si installa come app";    giro installabile.mjs
 titolo "service worker";          giro testSW.mjs
 titolo "arrivo degli aggiornamenti"; giro testAggiorna.mjs
 titolo "prestazioni";             giro avvio.mjs

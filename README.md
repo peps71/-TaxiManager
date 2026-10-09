@@ -69,6 +69,46 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Si installa come una vera app: il controllo, e sei difetti che nascondeva (versione 142)
+
+TaxiManager è una PWA: aggiunta alla schermata Home di un iPhone o di un telefono
+Android si apre a tutto schermo, senza la barra del browser, e funziona senza campo.
+Quello che decide se si comporta da app o da pagina web non si vede mai guardando
+l'app: sta nel manifesto, nelle icone e in tre righe dell'intestazione. Finché
+nessuno lo misura, un difetto lì dentro non dà nessun segnale.
+
+La prova nuova, `prove/installabile.mjs`, lo misura. Il giudizio sul manifesto non
+lo diamo noi: lo chiede al browser stesso (`Page.getAppManifest`), che è lo stesso
+codice che decide se proporre l'installazione. Poi apre davvero le icone e le
+misura un punto alla volta, legge l'intestazione della pagina, confronta il colore
+della schermata di apertura con lo sfondo vero, calcola se la barra in basso e il
+messaggio di servizio stanno sopra la barra di casa dell'iPhone, e infine stacca la
+rete per controllare che `start_url` apra l'app e non la pagina di errore.
+
+Alla prima passata ha trovato sei cose, tutte vere, tutte invisibili a occhio:
+
+| Cosa | Perché contava |
+| --- | --- |
+| L'icona ritagliabile non aveva una vera cornice | Android non mostra l'icona com'è: la taglia con la forma di sistema. Al posto del margine c'era l'arte stessa sfocata e ingrandita - sembrava una cornice, ma restava disegno: il ritaglio tondo si portava via il muso e la coda dell'auto |
+| La stessa icona aveva punti trasparenti | Sull'iPhone i punti trasparenti diventano neri |
+| `background_color` era `#f9fafb`, lo sfondo vero `#faf9f6` | La carta dell'app era diventata calda e il manifesto era rimasto al grigio di prima: all'apertura si vedeva un lampo di colore diverso |
+| Mancava `id` nel manifesto | È il nome con cui il telefono riconosce l'app: senza, cambiando l'indirizzo di partenza la crede un'altra |
+| Mancava `mobile-web-app-capable` | C'era solo la riga per l'iPhone, non quella che legge Android |
+| Il messaggio di servizio stava a 96 punti dal fondo | La barra in basso è alta 63, ma sull'iPhone si allunga di altri 34 per stare sopra la barra di casa: il messaggio ci finiva sopra, proprio mentre dice «corsa registrata». Adesso l'altezza si somma invece di indovinarla |
+
+L'icona non è stata ritoccata a mano: è stato corretto `strumenti/icone.mjs`, che la
+rigenera da `icona-sorgente.jpg`. Ora il margine è giallo taxi pieno e l'arte sta
+tutta dentro la zona sicura. Le altre sei icone sono tornate identiche al byte, il
+che dice che lo strumento è deterministico.
+
+**Un difetto della prova stessa, per ricordarselo.** Il controllo sul messaggio di
+servizio continuava a fallire anche dopo la correzione. Il valore già calcolato non
+serviva - `env(safe-area-inset-bottom)` sul computer vale zero - e bisognava andare a
+leggere la regola nel foglio di stile. Ma la ricerca saltava proprio quella regola:
+nei browser nuovi ogni regola CSS ha una lista di regole annidate, quasi sempre
+vuota, e scendendo lì dentro la regola stessa non la si guardava mai. Una prova che
+dice «rotto» quando è a posto fa perdere tempo quanto una che tace.
+
 ## Le note: quello che è successo, con la sua data (versione 141)
 
 Una scheda nuova in **Gestione → Note**. Serve a rispondere a una domanda che

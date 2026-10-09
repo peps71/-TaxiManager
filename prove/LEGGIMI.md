@@ -54,6 +54,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testCspViva.mjs` | la protezione sugli indirizzi è davvero applicata, e l'interruttore la toglie |
 | `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei |
 | `testAggiorna.mjs` | con un server che si comporta come GitHub Pages (`max-age=600`), la versione nuova si porta la pagina nuova e non quella rimasta nella cache HTTP |
+| `installabile.mjs` | si installa come una vera app: manifesto giudicato dal browser, icone misurate davvero, zona sicura dell'icona ritagliabile, colore della barra, schermata di apertura, spazio per la barra di casa dell'iPhone, apertura senza campo |
 | `testSW.mjs` | il service worker su HTTP: apertura dalla copia salvata, versione nuova in attesa |
 | `avvio.mjs`, `profilo2.mjs` | quanto costa avviare l'app e disegnare ogni schermata |
 

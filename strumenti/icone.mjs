@@ -80,14 +80,30 @@ const out = await p.evaluate(async (uri) => {
     const g = k.getContext('2d');
     g.imageSmoothingQuality = 'high';
     if (dentro) {
-      // versione "maskable": l'arte al 78% su se stessa sfocata, cosi' il ritaglio
-      // tondo di Android non taglia mai l'auto e non si vede nessun bordo netto.
-      g.filter = 'blur(' + Math.round(n / 16) + 'px)';
-      g.drawImage(img, sx, sy, lato, lato, -n * 0.12, -n * 0.12, n * 1.24, n * 1.24);
-      g.filter = 'none';
-      const m = n * 0.78, o = (n - m) / 2;
+      // VERSIONE "MASKABLE": QUELLA CHE IL TELEFONO RITAGLIA
+      // Android non mostra l'icona com'e': la taglia con la forma di sistema -
+      // cerchio, goccia, quadrato stondato - e quello che sta sul bordo sparisce.
+      // La regola e' lasciare attorno una cornice di sfondo pieno larga almeno
+      // un decimo del lato: la si puo' mangiare senza perdere niente.
+      // Prima qui c'era l'arte stessa sfocata e ingrandita: sembrava una
+      // cornice ma non lo era - restava disegno, e il ritaglio tondo si
+      // portava via il muso e la coda dell'auto. Adesso e' giallo taxi pieno,
+      // e l'arte sta tutta dentro la zona sicura.
+      g.fillStyle = '#facc15';
+      g.fillRect(0, 0, n, n);
+      const m = n * 0.78, o = (n - m) / 2, r = m * 0.18;
+      g.save();
+      g.beginPath();
+      g.moveTo(o + r, o);
+      g.arcTo(o + m, o, o + m, o + m, r);
+      g.arcTo(o + m, o + m, o, o + m, r);
+      g.arcTo(o, o + m, o, o, r);
+      g.arcTo(o, o, o + m, o, r);
+      g.closePath();
+      g.clip();
       g.drawImage(img, sx, sy, lato, lato, o, o, m, m);
       baffo(g, o, o, m);
+      g.restore();
     } else {
       const zoom = n <= 64;
       g.drawImage(img, zoom ? sxS : sx, zoom ? syS : sy, zoom ? stretto : lato, zoom ? stretto : lato, 0, 0, n, n);
