@@ -2,17 +2,17 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v146';
+const VERSIONE = 'taximanager-v147';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
   './',
   './index.html',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  './icon-512-maskable.png',
-  './apple-touch-icon-180.png',
+  './icona-192-2.png',
+  './icona-512-2.png',
+  './icona-ritagliabile-512-2.png',
+  './icona-iphone-180-2.png',
   './favicon-32.png',
   './favicon-16.png',
   './favicon.ico'
@@ -178,7 +178,7 @@ self.addEventListener('fetch', (evento) => {
   // MA SOLO SE E' DAVVERO UNA PAGINA (vedi eUnaPaginaDellApp)
   // Prima qui dentro ci finiva QUALUNQUE navigazione dentro la cartella
   // dell'app, compresa quella verso un file: chiedendo
-  // apple-touch-icon-180.png si riceveva index.html, e chiedendo
+  // icona-iphone-180-2.png si riceveva index.html, e chiedendo
   // manifest.json pure. Nessuno apre a mano l'indirizzo di un'icona - ma
   // l'iPhone lo fa, quando si tocca «Aggiungi alla schermata Home». Riceveva
   // una pagina HTML al posto dell'icona e del manifesto, non poteva usare ne'

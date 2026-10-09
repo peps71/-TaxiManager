@@ -145,7 +145,7 @@ const misure = await p.evaluate(async (elenco) => {
   return fuori;
 }, [
   ...man.icons.map(i => ({ src: i.src, dichiarata: i.sizes, scopo: i.purpose || 'any' })),
-  { src: './apple-touch-icon-180.png', dichiarata: '180x180', scopo: 'iphone' }
+  { src: './icona-iphone-180-2.png', dichiarata: '180x180', scopo: 'iphone' }
 ]);
 for (const i of misure) {
   const nome = i.src.replace('./', '');
@@ -191,7 +191,7 @@ for (const i of misure.filter(i => i.scopo === 'any' && i.larghezza === 512)) {
 // un'app installata non si aggiorna da sola. Quindi non basta che il file
 // esista: deve arrivare, con il tipo giusto, a chi lo chiede.
 console.log('\n4bis. le icone arrivano davvero a chi le chiede');
-const indirizzi = [...man.icons.map(i => i.src), './apple-touch-icon-180.png', './favicon.ico'];
+const indirizzi = [...man.icons.map(i => i.src), './icona-iphone-180-2.png', './favicon.ico'];
 for (const src of indirizzi) {
   const risposta = await p.evaluate(async (s) => {
     try {
@@ -293,7 +293,7 @@ const inCache = await p.evaluate(async (elenco) => {
   const dentro = [];
   for (const f of elenco) dentro.push([f, !!(await c.match(f))]);
   return { cache: nomi, dentro };
-}, ['./index.html', './manifest.json', ...man.icons.map(i => i.src), './apple-touch-icon-180.png']);
+}, ['./index.html', './manifest.json', ...man.icons.map(i => i.src), './icona-iphone-180-2.png']);
 for (const [f, c] of inCache.dentro) dire(c, `${f.replace('./', '')} ${c ? 'salvato sul telefono' : 'NON salvato: senza campo manca'}`);
 
 offline = true;
@@ -320,7 +320,7 @@ offline = false;
 // l'app funzionava benissimo. Qui si va a quegli indirizzi come ci va il
 // telefono, e si guarda che cosa arriva.
 console.log('\n8bis. andando all\'indirizzo di un file arriva il file, non l\'app');
-for (const dove of [...man.icons.map(i => i.src), './apple-touch-icon-180.png', './manifest.json']) {
+for (const dove of [...man.icons.map(i => i.src), './icona-iphone-180-2.png', './manifest.json']) {
   const risposta = await p2.goto(new URL(dove, SITO + '/').href);
   const tipo = (risposta && risposta.headers()['content-type']) || '';
   const buono = !/text\/html/.test(tipo);
@@ -378,6 +378,27 @@ const numeroPagina = (fs.readFileSync(join(RADICE, 'index.html'), 'utf8')
 dire(numeroPagina !== null && numeroSW === numeroPagina,
      `pagina v${numeroPagina} e copia salvata v${numeroSW}`
      + (numeroSW === numeroPagina ? ': allineate' : ' - NON allineate: ricordati di cambiarle tutte e due'));
+
+// ------------------------------------------------------------------
+// IL CONTROLLO CHE GIRA SUL TELEFONO
+// Queste prove girano su un computer, e un computer non e' un iPhone: quando
+// l'icona della schermata Home e' uscita sbagliata non c'era modo di sapere
+// che cosa arrivasse al telefono. Il tasto «Controlla i file
+// dell'installazione» (in Gestione) chiede manifesto e icone uno per uno da
+// dentro l'app, sul dispositivo che ha il problema. Qui si controlla che quel
+// tasto funzioni: se si rompe lui, si resta di nuovo ciechi.
+console.log('\n8quater. il controllo che l\'app fa su se stessa');
+await p.evaluate(() => { switchTab('cloud'); renderContent(); });
+await p.evaluate(() => controllaInstallazione());
+await p.waitForFunction(() => window.esitoInstallazione && window.esitoInstallazione !== 'in corso', { timeout: 30000 });
+const suoEsito = await p.evaluate(() => ({
+  dichiarata: window.esitoInstallazione.dichiarata,
+  righe: window.esitoInstallazione.righe.map(r => ({ nome: r.nome, buona: r.buona, riga: r.riga }))
+}));
+dire(suoEsito.righe.length >= 4, `file controllati dall'app: ${suoEsito.righe.length}`);
+for (const r of suoEsito.righe) dire(r.buona, `${r.nome}: ${r.riga}`);
+dire(suoEsito.dichiarata === testa.iconaApple,
+     `l'app sa quale icona dichiara: ${suoEsito.dichiarata}`);
 
 // ------------------------------------------------------------------
 console.log('\n9. lamentele del browser');

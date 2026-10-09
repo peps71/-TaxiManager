@@ -126,12 +126,12 @@ const salva = (nome, chiave) => {
   fs.writeFileSync(dove, Buffer.from(out[chiave].split(',')[1], 'base64'));
   console.log(nome, fs.statSync(dove).size + ' byte');
 };
-salva('icon-512.png', '512');
-salva('icon-192.png', '192');
-salva('apple-touch-icon-180.png', '180');
+salva('icona-512-2.png', '512');
+salva('icona-192-2.png', '192');
+salva('icona-iphone-180-2.png', '180');
 salva('favicon-32.png', '32');
 salva('favicon-16.png', '16');
-salva('icon-512-maskable.png', 'mask');
+salva('icona-ritagliabile-512-2.png', 'mask');
 
 // favicon.ico: un PNG 32x32 dentro il contenitore ICO
 const png = Buffer.from(out['32'].split(',')[1], 'base64');

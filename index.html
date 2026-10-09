@@ -76,8 +76,8 @@
          lettera iniziale e quella resta finche' non si rifa' l'operazione.
          Ce ne sono due, la stessa immagine: la seconda e' il nome che
          cercano le versioni vecchie di iOS. -->
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
-    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-180.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icona-iphone-180-2.png">
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="icona-iphone-180-2.png">
     <title>TaxiManager</title>
     <!-- ============================================================
          TAILWIND, DENTRO IL FILE
@@ -1307,7 +1307,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 146;
+        const VERSIONE_APP = 147;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -5336,6 +5336,99 @@
                 </div>`;
         }
 
+        // ============================================================
+        //  CHE COSA VEDE DAVVERO QUESTO TELEFONO
+        //  Le prove girano su un computer, e un computer non e' un iPhone.
+        //  Quando l'icona della schermata Home e' uscita sbagliata non c'era
+        //  modo di sapere che cosa arrivasse al telefono: si tirava a
+        //  indovinare da lontano. Questo controllo gira QUI, sul telefono che
+        //  ha il problema, e chiede i file dell'installazione uno per uno:
+        //  arrivano? sono del tipo giusto? l'immagine si apre davvero?
+        //  Il risultato e' una lista da fotografare e mandare.
+        // ============================================================
+        async function provaRisorsa(indirizzo, tipoAtteso) {
+            try {
+                const r = await fetch(indirizzo, { cache: 'reload' });
+                const tipo = (r.headers.get('content-type') || '').split(';')[0];
+                const blob = await r.blob();
+                let dettaglio = '';
+                let buona = r.ok;
+                if (tipoAtteso === 'immagine') {
+                    const apre = await new Promise((ok) => {
+                        const img = new Image();
+                        const url = URL.createObjectURL(blob);
+                        img.onload = () => { URL.revokeObjectURL(url); ok(true); };
+                        img.onerror = () => { URL.revokeObjectURL(url); ok(false); };
+                        img.src = url;
+                    });
+                    buona = buona && /^image\//.test(tipo) && apre;
+                    dettaglio = apre ? 'si apre' : 'NON si apre';
+                } else {
+                    try { const m = JSON.parse(await blob.text()); dettaglio = m && m.name ? 'si legge' : 'senza nome'; buona = buona && !!(m && m.name); }
+                    catch (err) { dettaglio = 'NON si legge'; buona = false; }
+                }
+                return { nome: indirizzo, buona, riga: `${r.status} · ${tipo || 'senza tipo'} · ${Math.round(blob.size / 1024)} KB · ${dettaglio}` };
+            } catch (err) {
+                return { nome: indirizzo, buona: false, riga: 'non arriva: ' + String(err).slice(0, 60) };
+            }
+        }
+
+        window.esitoInstallazione = null;
+
+        async function controllaInstallazione() {
+            window.esitoInstallazione = 'in corso';
+            renderContent();
+            const dichiarata = document.querySelector('link[rel="apple-touch-icon"]');
+            const righe = [];
+            righe.push(await provaRisorsa('manifest.json', 'manifesto'));
+            if (dichiarata) righe.push(await provaRisorsa(dichiarata.getAttribute('href'), 'immagine'));
+            try {
+                const m = await (await fetch('manifest.json', { cache: 'reload' })).json();
+                for (const i of (m.icons || [])) righe.push(await provaRisorsa(i.src, 'immagine'));
+            } catch (err) { /* il manifesto non si legge: lo dice gia' la riga sopra */ }
+            window.esitoInstallazione = {
+                righe,
+                dichiarata: dichiarata ? dichiarata.getAttribute('href') : 'nessuna',
+                quando: new Date().toLocaleTimeString('it-IT')
+            };
+            renderContent();
+        }
+
+        function bloccoControlloInstallazione() {
+            const esito = window.esitoInstallazione;
+            if (esito === 'in corso') return `<p class="text-xs text-gray-400">Controllo i file dell'installazione...</p>`;
+            if (!esito) return `
+                <div>
+                    <button onclick="controllaInstallazione()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
+                        Controlla i file dell'installazione
+                    </button>
+                    <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+                        Chiede a questo telefono il manifesto e le icone, uno per uno, e dice se arrivano. È il
+                        controllo che serve quando l'icona sulla schermata Home esce sbagliata: le prove girano su un
+                        computer, e un computer non è un iPhone.
+                    </p>
+                </div>`;
+            const tutteBuone = esito.righe.every(r => r.buona);
+            return `
+                <div class="${tutteBuone ? 'bg-gray-50' : 'bg-yellow-100'} p-3 rounded-xl">
+                    <p class="text-xs font-black ${tutteBuone ? 'text-gray-700' : 'text-yellow-800'}">
+                        ${tutteBuone ? 'Tutti i file dell\'installazione arrivano' : 'Qualcosa non arriva'} · ${esc(esito.quando)}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">icona dichiarata: ${esc(esito.dichiarata)}</p>
+                    <div class="mt-2 space-y-1">
+                        ${esito.righe.map(r => `
+                            <p class="text-xs leading-relaxed">
+                                <span class="font-black ${r.buona ? 'text-green-700' : 'text-red-600'}">${r.buona ? 'OK' : 'NO'}</span>
+                                <span class="font-bold text-gray-700"> ${esc(r.nome)}</span><br>
+                                <span class="text-gray-500">${esc(r.riga)}</span>
+                            </p>`).join('')}
+                    </div>
+                    <button onclick="controllaInstallazione()" class="mt-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-xl text-xs">
+                        Ricontrolla
+                    </button>
+                </div>`;
+        }
+
         // L'ULTIMA SPIAGGIA QUANDO LA COPIA SALVATA E' INCASTRATA
         // Toglie la registrazione del service worker e svuota le sue cache, poi
         // ricarica: al riavvio il telefono se la rifa' da zero, dalla rete.
@@ -9146,6 +9239,7 @@
                                 non si toccano.
                             </p>
                             ${bloccoCopiaSalvata()}
+                            ${bloccoControlloInstallazione()}
                         </div>
 
                         ${bloccoProtezioneIndirizzi()}

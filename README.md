@@ -69,6 +69,52 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Nomi nuovi alle icone, e un controllo che gira sul telefono (versione 147)
+
+Con la 146 tutto quello che si poteva misurare da qui era a posto: il file
+dell'icona arriva, il manifesto arriva come testo, la pagina e la copia salvata
+sono la stessa versione. E l'icona sulla schermata Home esce ancora con la
+lettera.
+
+Quando quello che si misura è a posto e il risultato no, la cosa da cambiare
+non è un'altra riga di codice: è **smettere di misurare da lontano**.
+
+### Due mosse insieme
+
+**1. Nomi nuovi alle icone.** L'iPhone si tiene in memoria l'icona che ha già
+costruito per un indirizzo, e gliela si richiede uguale ogni volta. Per un
+indirizzo che non ha mai visto non ha niente da ripescare ed è costretto a
+scaricare:
+
+| Prima | Adesso |
+| --- | --- |
+| `apple-touch-icon-180.png` | `icona-iphone-180-2.png` |
+| `icon-192.png` | `icona-192-2.png` |
+| `icon-512.png` | `icona-512-2.png` |
+| `icon-512-maskable.png` | `icona-ritagliabile-512-2.png` |
+
+Le immagini sono identiche — `strumenti/icone.mjs` le rigenera dalla stessa
+sorgente, byte per byte. Cambia solo il nome.
+
+**2. Un controllo che gira sul telefono.** In **Gestione → Backup e
+impostazioni**, il tasto **«Controlla i file dell'installazione»** chiede a
+*quel* dispositivo il manifesto e ogni icona, uno per uno, e per ognuno dice
+stato, tipo, peso e se l'immagine **si apre davvero**:
+
+```
+OK manifest.json              200 · application/manifest+json · 1 KB · si legge
+OK icona-iphone-180-2.png     200 · image/png · 78 KB · si apre
+OK icona-192-2.png            200 · image/png · 87 KB · si apre
+```
+
+È una lista da fotografare. Queste prove girano su un computer, e **un computer
+non è un iPhone**: finché l'unico modo di sapere cosa arriva al telefono era
+indovinare, si tiravano colpi al buio — la 142, la 144 e la 146 sono tre colpi
+al buio, due dei quali non hanno sistemato niente.
+
+`prove/installabile.mjs` (8quater) controlla che quel tasto funzioni: se si
+rompe lui, si torna ciechi.
+
 ## Vedere quale copia sta usando davvero il telefono (versione 146)
 
 Dopo la 145 l'icona del taxi compare nella schermata di condivisione di Safari,
