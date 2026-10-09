@@ -58,7 +58,7 @@ for (const larghezza of [320, 390, 768]) {
   });
   const schede = [['giornata',null],['dashboard','giorno'],['dashboard','mese'],['dashboard','anno'],
                   ['uscite',null],['categorie',null],['scadenze',null],['auto',null],
-                  ['rendimento',null],['report',null],['cloud',null],['altro',null]];
+                  ['rendimento',null],['report',null],['note',null],['cloud',null],['altro',null]];
   for (const [tab, per] of schede) {
     await p.evaluate(({tab, per}) => { window.activeTab = tab; if (per) window.periodoDashScelto = per; renderContent(); }, {tab, per});
     await p.waitForTimeout(160);

@@ -33,6 +33,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testPrevisioneRealta.mjs` | il budget è il pavimento, il conto vero comanda quando lo supera, le rate si sommano |
 | `testIndiceVivo.mjs` | l'indice dei pagamenti si rifà quando registri o cancelli **dai tasti veri** |
 | `testBudget118.mjs` | una spesa «Famiglia - Dettaglio» si aggancia alla voce giusta; le proposte dal registro |
+| `testNote.mjs` | le note con data e tipo: si scrivono, si filtrano, si modificano, compaiono sotto la giornata, viaggiano nel backup e non toccano nessun conto |
 | `testOrfane.mjs` | il controllo che trova le spese rimaste senza voce dopo un rinomino, e il tasto che le riaggancia |
 | `testRinomina.mjs` | rinominare una voce di budget non le fa perdere le spese già registrate, e non fa pesare due volte la stessa cifra sulla giornata |
 | `testBudgetCompatto.mjs` | la sezione del budget resta compatta con dieci voci, e inserisci/modifica/elimina funzionano dai tasti veri |

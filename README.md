@@ -69,6 +69,49 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le note: quello che è successo, con la sua data (versione 141)
+
+Una scheda nuova in **Gestione → Note**. Serve a rispondere a una domanda che
+dentro l'app non aveva risposta: *«quand'è che mi era successo?»*. La gomma
+cambiata, la grandinata, il cliente da ricordare, la multa contestata, la visita
+medica.
+
+Una nota ha tre cose: **quando**, **che tipo** e **che cosa è successo**. I tipi
+proposti sono guasto o riparazione, incidente, multa o contestazione, cliente,
+documenti e pratiche, vettura, salute, lavoro, altro — più «Altro (scrivi tu)»
+per uno che non c'è in elenco, come già funziona per le spese.
+
+### Dove si vedono
+
+Nella scheda **Note**, raggruppate per mese e dalla più recente, con un filtro
+per tipo che compare quando i tipi usati sono più d'uno. E, soprattutto,
+**sotto la giornata a cui si riferiscono**: aprendo quel giorno in «Giornate» o
+in «Andamento», la nota è lì con il suo tipo. Scriverle e non ritrovarle dove
+quella giornata si legge sarebbe stato metà lavoro.
+
+### Quello che le note NON fanno
+
+**Non sono movimenti e non entrano in nessun conto.** Incassi, spese, numero di
+corse, budget, conguaglio, costo della giornata e stima delle tasse non le
+vedono nemmeno. La prova lo verifica una per una: dopo aver scritto due note,
+ognuno di quei numeri è identico al centesimo.
+
+Viaggiano nel **backup** e si sincronizzano sul **Cloud** come scadenze e
+vetture, con lo stesso trattamento prudente: un elenco vuoto che arriva dal
+server si applica solo dopo che il Cloud ha dimostrato di accettare le
+scritture.
+
+### Una guardia che ha fatto il suo mestiere
+
+Registrando la scheda nuova mi ero dimenticato la lista bianca delle schede
+valide. Il risultato non è stato una schermata rotta: `switchTab('note')`
+riportava tranquillamente alla dashboard, perché l'app scarta i nomi di scheda
+che non conosce. Il difetto è saltato fuori alla prima riga della prova, che non
+trovava il campo della data.
+
+Prova nuova, `prove/testNote.mjs`, venti controlli dai tasti veri. Le due sonde
+di impaginazione adesso guardano anche questa schermata.
+
 ## Il controllo che trova le spese rimaste senza voce (versione 140)
 
 La 139 chiede di riagganciare le spese **nel momento in cui** rinomini una

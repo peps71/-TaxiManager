@@ -678,6 +678,7 @@
             const scadenzeCol = colDati('taxi_scadenze');
             const veicoliCol = colDati('taxi_veicoli');
             const vociFisseCol = colDati('taxi_voci_fisse');
+            const noteCol = colDati('taxi_note');
 
             // Il profilo: un documento solo, quindi basta ascoltarlo. Se sul
             // Cloud non c'e' ancora ma qui si', si porta su - e' il caso di chi
@@ -771,6 +772,35 @@
                 window.renderDifferito();
             }, (error) => console.error("Errore Sync Scadenze:", error)));
 
+            // Le note: stesso trattamento delle scadenze. Uno snapshot vuoto si
+            // applica solo dopo aver visto che il Cloud accetta i dati.
+            annullaAscolti.push(onSnapshot(noteCol, async (snapshot) => {
+                const cloudNote = [];
+                snapshot.forEach(d => cloudNote.push({ id: d.id, ...d.data() }));
+
+                if (!snapshot.empty) noteCloudOk = true;
+
+                if (snapshot.empty && (window.note || []).length && !noteCloudOk) {
+                    try {
+                        for (const n of window.note) {
+                            await setDoc(docDati('taxi_note', String(n.id)), n);
+                        }
+                        noteCloudOk = true;
+                        if (window.showToast) window.showToast('Note caricate sul Cloud.');
+                    } catch (err) {
+                        console.error("Errore migrazione note:", err);
+                        if (window.showToast) window.showToast('Note salvate solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
+                    }
+                    return;
+                }
+
+                cloudNote.sort(perDataDecrescente);
+                window.note = cloudNote;
+                window.scriviLocale('taxi_note', cloudNote);
+                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
+                window.renderDifferito();
+            }, (error) => console.error("Errore Sync Note:", error)));
+
             // Parco auto: stesso trattamento delle scadenze. Uno snapshot vuoto si
             // applica solo dopo aver visto che il Cloud accetta i dati, altrimenti
             // al primo avvio cancellerebbe le vetture salvate solo qui.
@@ -834,6 +864,7 @@
         // o perche' conteneva gia' dei dati, o perche' ha accettato una scrittura.
         let scadenzeMigrate = false;
         let scadenzeCloudOk = false;
+        let noteCloudOk = false;
         let veicoliCloudOk = false;
         let vociFisseCloudOk = false;
 
@@ -932,6 +963,28 @@
                 } catch (err) {
                     console.error("Errore scrittura Cloud scadenza:", err);
                     if (window.showToast) window.showToast('Scadenza salvata solo su questo dispositivo.', 'avviso');
+                }
+            }
+        };
+
+        window.saveNotaToCloud = async function(nota) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    await setDoc(docDati('taxi_note', String(nota.id)), nota);
+                } catch (err) {
+                    console.error("Errore scrittura Cloud nota:", err);
+                    if (window.showToast) window.showToast('Nota salvata solo su questo dispositivo.', 'avviso');
+                }
+            }
+        };
+
+        window.deleteNotaFromCloud = async function(id) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    await deleteDoc(docDati('taxi_note', String(id)));
+                } catch (err) {
+                    console.error("Errore eliminazione Cloud nota:", err);
+                    if (window.showToast) window.showToast('Eliminata solo su questo dispositivo.', 'avviso');
                 }
             }
         };
@@ -1177,7 +1230,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 140;
+        const VERSIONE_APP = 141;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1335,7 +1388,7 @@
         window.shifts = leggiLocale('taxi_shifts', defaultShifts);
         // IMPOSTATO 'dashboard' COME TAB PREDEFINITO
         // Schede valide: serve a non ripristinare una scheda che non esiste piu'
-        const SCHEDE = ['dashboard', 'giornata', 'uscite', 'auto', 'scadenze', 'rendimento', 'categorie', 'report', 'cloud', 'altro'];
+        const SCHEDE = ['dashboard', 'giornata', 'uscite', 'auto', 'scadenze', 'rendimento', 'categorie', 'report', 'note', 'cloud', 'altro'];
         let schedaSalvata = localStorage.getItem('taxi_tab');
         // Le vecchie schede separate ora sono viste della scheda unificata
         if (schedaSalvata === 'corse' || schedaSalvata === 'turni') schedaSalvata = 'giornata';
@@ -1383,6 +1436,9 @@
         window.catSpesaAperta = null;
         // Scadenze (revisione, RCA, bollo, tassametro, licenza...): locali e sincronizzate sul Cloud.
         window.scadenze = leggiLocale('taxi_scadenze', []);
+        // Le note: quello che e' successo, con la sua data. Non sono movimenti e
+        // non entrano in nessun conto - servono a ricordare quando.
+        window.note = leggiLocale('taxi_note', []);
         // Parco auto: le vetture avute, quella in uso e quelle che verranno.
         window.veicoli = leggiLocale('taxi_veicoli', []);
         // Le voci di costo fisso: elenco modificabile, ognuna con il suo periodo.
@@ -1521,6 +1577,8 @@
         // salvaScadenze() / salvaVeicoli(): qui non serve altro
         window.saveScadenzaToCloud = function() {};
         window.deleteScadenzaFromCloud = function() {};
+        window.saveNotaToCloud = function() {};
+        window.deleteNotaFromCloud = function() {};
         window.saveVeicoloToCloud = function() {};
         window.deleteVeicoloFromCloud = function() {};
         window.saveVoceFissaToCloud = function() {};
@@ -2322,6 +2380,135 @@
         //  Salvate in locale e sincronizzate sul Cloud come corse e turni,
         //  cosi' si vedono da tutti i dispositivi collegati.
         // ============================================================
+
+        // ============================================================
+        //  LE NOTE: QUELLO CHE E' SUCCESSO, CON LA SUA DATA
+        //  Non sono movimenti e non entrano in nessun conto: incassi, spese,
+        //  budget e tasse non le vedono nemmeno. Servono a rispondere a una
+        //  domanda che prima non aveva risposta dentro l'app: «quand'e' che
+        //  mi era successo?». La gomma cambiata, la grandinata, il cliente da
+        //  ricordare, la multa contestata, la visita medica.
+        //  Il tipo serve a ritrovarle: cercare «quando ho fatto le gomme» in
+        //  tre anni di note senza un filtro e' peggio che non averle scritte.
+        // ============================================================
+        const TIPI_NOTA = [
+            'Guasto o riparazione',
+            'Incidente',
+            'Multa o contestazione',
+            'Cliente',
+            'Documenti e pratiche',
+            'Vettura',
+            'Salute',
+            'Lavoro',
+            'Altro'
+        ];
+
+        function elencoNote() {
+            if (!Array.isArray(window.note)) window.note = [];
+            return window.note;
+        }
+
+        function salvaNote() {
+            scriviLocale('taxi_note', elencoNote());
+        }
+
+        // Le note di una data, per mostrarle dove quella giornata si legge.
+        function noteDelGiorno(iso) {
+            const g = String(iso || '');
+            if (!g) return [];
+            return elencoNote().filter(n => String(n.data || '') === g);
+        }
+
+        function tipoNota(n) {
+            const t = String((n && n.tipo) || '').trim();
+            return t || 'Altro';
+        }
+
+        function aggiungiNota(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            const leggi = (id) => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+            const data = leggi('nota-data');
+            const testo = leggi('nota-testo');
+            let tipo = leggi('nota-tipo');
+            if (tipo === '__altro__') tipo = leggi('nota-tipo-altro') || 'Altro';
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { showToast('Serve una data valida.'); return; }
+            if (!testo) { showToast('Scrivi che cosa e\' successo.'); return; }
+            const nota = { id: nuovoId(), data, tipo: tipo || 'Altro', testo, creata: new Date().toISOString() };
+            window.note = elencoNote().concat([nota]).sort(perDataDecrescente);
+            salvaNote();
+            if (window.saveNotaToCloud) window.saveNotaToCloud(nota);
+            window.notaInModifica = null;
+            showToast(`Nota del ${ggMmAaaa(data)} salvata.`);
+            renderContent();
+            // Il campo torna pronto: spesso se ne scrive piu' d'una di fila.
+            setTimeout(() => { const el = document.getElementById('nota-testo'); if (el) el.focus(); }, 0);
+        }
+
+        function apriModificaNota(id) {
+            window.notaInModifica = String(id);
+            renderContent();
+        }
+
+        function annullaModificaNota() {
+            window.notaInModifica = null;
+            renderContent();
+        }
+
+        function salvaModificaNota(id) {
+            const n = elencoNote().find(x => String(x.id) === String(id));
+            if (!n) return;
+            const leggi = (p) => { const el = document.getElementById(p + id); return el ? String(el.value || '').trim() : ''; };
+            const data = leggi('nt-data-');
+            const testo = leggi('nt-testo-');
+            let tipo = leggi('nt-tipo-');
+            if (tipo === '__altro__') tipo = leggi('nt-altro-') || 'Altro';
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { showToast('Serve una data valida.'); return; }
+            if (!testo) { showToast('Scrivi che cosa e\' successo.'); return; }
+            const aggiornata = Object.assign({}, n, { data, tipo: tipo || 'Altro', testo });
+            window.note = elencoNote().map(x => String(x.id) === String(id) ? aggiornata : x).sort(perDataDecrescente);
+            salvaNote();
+            if (window.saveNotaToCloud) window.saveNotaToCloud(aggiornata);
+            window.notaInModifica = null;
+            showToast('Nota aggiornata.');
+            renderContent();
+        }
+
+        function eliminaNota(id) {
+            const n = elencoNote().find(x => String(x.id) === String(id));
+            if (!n) return;
+            if (!confirm(`Elimino la nota del ${ggMmAaaa(n.data)}?\n\n«${n.testo}»`)) return;
+            window.note = elencoNote().filter(x => String(x.id) !== String(id));
+            salvaNote();
+            if (window.deleteNotaFromCloud) window.deleteNotaFromCloud(id);
+            if (String(window.notaInModifica) === String(id)) window.notaInModifica = null;
+            showToast('Nota eliminata.');
+            renderContent();
+        }
+
+        function filtroTipoNota() {
+            return window.filtroNota || 'ALL';
+        }
+
+        function cambiaFiltroNota(v) {
+            window.filtroNota = v;
+            renderContent();
+        }
+
+        // Mostra o nasconde il campo per scrivere un tipo che non c'e' in elenco
+        function alternaTipoNotaAltro(sel, idCampo) {
+            const campo = document.getElementById(idCampo);
+            if (!campo) return;
+            const serve = sel && sel.value === '__altro__';
+            campo.classList.toggle('hidden', !serve);
+            if (serve) campo.focus();
+        }
+
+        function opzioniTipoNota(scelto, conAltro) {
+            const dentro = TIPI_NOTA.includes(scelto);
+            return TIPI_NOTA.map(t => `<option value="${esc(t)}" ${t === scelto ? 'selected' : ''}>${esc(t)}</option>`).join('')
+                + (scelto && !dentro ? `<option value="${esc(scelto)}" selected>${esc(scelto)}</option>` : '')
+                + (conAltro ? '<option value="__altro__">Altro (scrivi tu)</option>' : '');
+        }
 
         function salvaScadenze() {
             scriviLocale('taxi_scadenze', window.scadenze || []);
@@ -3387,6 +3574,7 @@
             { id: 'auto',       label: 'Parco auto',               desc: 'Vetture, chilometri e valore residuo'     ,      icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6.5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm15 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/><path d="M3 17v-4.2a2 2 0 0 1 .4-1.2L5.7 8.4A2 2 0 0 1 7.3 7.6h9.4a2 2 0 0 1 1.6.8l2.3 3.2a2 2 0 0 1 .4 1.2V17"/><path d="M4 12h16"/></svg>' },
             { id: 'rendimento', label: 'Rendimento',            desc: 'Euro all\'ora, al chilometro, per corsa',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>' },
             { id: 'report',     label: 'Commercialista',        desc: 'Riepilogo da stampare e stima delle tasse',       icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' },
+            { id: 'note',       label: 'Note',                 desc: 'Quello che è successo, con la data'    , icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>' },
             { id: 'cloud',      label: 'Backup e impostazioni', desc: 'Copie automatiche, accesso, aliquote fiscali',  icona: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 3 16.3"/><path d="M16 16l2 2 4-4"/><path d="M20 16.5A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 3 14.5"/></svg>' }
         ];
 
@@ -5929,6 +6117,25 @@
                             </div>
                         </div>
                     ` : ''}
+
+                    <!-- Le note di quella data. Scriverle e non trovarle mai piu'
+                         sotto la giornata a cui si riferiscono sarebbe meta'
+                         lavoro: qui compaiono da sole. -->
+                    ${(() => {
+                        const note = noteDelGiorno(g.iso);
+                        if (!note.length) return '';
+                        return `
+                            <div>
+                                <p class="etichetta block px-1 mb-1.5">${note.length === 1 ? 'Nota della giornata' : 'Note della giornata'}</p>
+                                <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                    ${note.map(n => `
+                                        <p class="px-3 py-2 flex flex-wrap items-baseline gap-2">
+                                            <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 leading-relaxed">${esc(n.testo)}</span>
+                                            <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(tipoNota(n))}</span>
+                                        </p>`).join('')}
+                                </div>
+                            </div>`;
+                    })()}
                 </div>`;
 
             // Con un giorno solo selezionato la testata ripeteva parola per
@@ -6804,6 +7011,7 @@
             auto:       'bg-indigo-100 text-indigo-700',
             rendimento: 'bg-green-100 text-green-700',
             report:     'bg-stone-100 text-stone-600',
+            note:       'bg-purple-100 text-purple-700',
             cloud:      'bg-blue-100 text-blue-700'
         };
 
@@ -7405,6 +7613,117 @@
                         percentuale — lo dice il commercialista: questa è la somma, non la dichiarazione.
                     </p>
 
+                </div>
+            `;
+        }
+
+        // La riga di una nota: due righe come tutto il resto dell'app, con la
+        // data e il tipo in piccolo sotto il testo.
+        function rigaNota(n) {
+            if (String(window.notaInModifica) === String(n.id)) {
+                return `
+                    <div class="p-3 bg-gray-50 space-y-2">
+                        <div class="flex flex-wrap gap-2">
+                            <input type="date" id="nt-data-${esc(n.id)}" value="${esc(n.data)}" aria-label="Data della nota"
+                                   class="p-2 border rounded-lg text-sm outline-none bg-white" />
+                            <select id="nt-tipo-${esc(n.id)}" aria-label="Tipo di nota"
+                                    onchange="alternaTipoNotaAltro(this, 'nt-altro-${escJs(n.id)}')"
+                                    class="p-2 border rounded-lg text-sm outline-none bg-white font-bold">${opzioniTipoNota(tipoNota(n), true)}</select>
+                            <input type="text" id="nt-altro-${esc(n.id)}" placeholder="Che tipo?" class="hidden flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
+                        </div>
+                        <input type="text" id="nt-testo-${esc(n.id)}" value="${esc(n.testo)}" aria-label="Che cosa e' successo"
+                               class="w-full p-2 border rounded-lg text-sm outline-none" />
+                        <div class="flex gap-2">
+                            <button onclick="salvaModificaNota('${escJs(n.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
+                            <button onclick="annullaModificaNota()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
+                            <button onclick="eliminaNota('${escJs(n.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg ml-auto">Elimina</button>
+                        </div>
+                    </div>`;
+            }
+            return `
+                <div class="px-3 py-2 flex items-center gap-2">
+                    <span class="min-w-0 flex-1">
+                        <span class="block text-sm font-bold text-gray-800 leading-relaxed">${esc(n.testo)}</span>
+                        <span class="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            <span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(n.data)}</span>
+                            <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(tipoNota(n))}</span>
+                        </span>
+                    </span>
+                    <button onclick="apriModificaNota('${escJs(n.id)}')" title="Modifica questa nota" aria-label="Modifica la nota del ${esc(ggMmAaaa(n.data))}"
+                            class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+                </div>`;
+        }
+
+        function renderSchedaNote() {
+            const anno = annoAttivo();
+            const tutte = elencoNote().slice().sort(perDataDecrescente);
+            const dellAnno = tutte.filter(n => String(n.data || '').slice(0, 4) === anno);
+            const tipiUsati = [...new Set(dellAnno.map(tipoNota))].sort();
+            const filtro = filtroTipoNota();
+            const viste = filtro === 'ALL' ? dellAnno : dellAnno.filter(n => tipoNota(n) === filtro);
+            const fuoriAnno = tutte.length - dellAnno.length;
+
+            // Raggruppate per mese: scorrendo si cerca un periodo, non una riga.
+            const perMese = [];
+            viste.forEach(n => {
+                const ym = String(n.data || '').slice(0, 7);
+                const ultimo = perMese[perMese.length - 1];
+                if (ultimo && ultimo.ym === ym) ultimo.note.push(n);
+                else perMese.push({ ym, note: [n] });
+            });
+
+            return `
+                <div class="fade-in space-y-4 max-w-3xl mx-auto">
+                    ${intestazioneGestione('note')}
+
+                    <header class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Note</h2>
+                            <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quello che è successo, con la sua data: per ritrovarlo quando serve.</p>
+                        </div>
+                        ${pillolaAnno('note')}
+                    </header>
+
+                    <form onsubmit="aggiungiNota(event)" class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+                        <p class="etichetta block">Scrivi una nota</p>
+                        <div class="flex flex-wrap gap-2">
+                            <div class="min-w-[8rem]">
+                                <label for="nota-data" class="block text-xs font-bold text-gray-700 mb-1">Quando</label>
+                                <input type="date" id="nota-data" required value="${oggiISO()}" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                            </div>
+                            <div class="flex-1 min-w-[8rem]">
+                                <label for="nota-tipo" class="block text-xs font-bold text-gray-700 mb-1">Tipo</label>
+                                <select id="nota-tipo" onchange="alternaTipoNotaAltro(this, 'nota-tipo-altro')"
+                                        class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-bold bg-white">${opzioniTipoNota('', true)}</select>
+                            </div>
+                        </div>
+                        <input type="text" id="nota-tipo-altro" placeholder="Che tipo?" class="hidden w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                        <div>
+                            <label for="nota-testo" class="block text-xs font-bold text-gray-700 mb-1">Che cosa è successo</label>
+                            <input type="text" id="nota-testo" required placeholder="Es. Gomme nuove sull'anteriore, gommista di via Firenze"
+                                   class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
+                        </div>
+                        <button type="submit" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl text-sm">Salva la nota</button>
+                    </form>
+
+                    ${tipiUsati.length > 1 ? `
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="cambiaFiltroNota('ALL')" class="px-3 py-1.5 rounded-xl text-xs font-black transition-colors ${filtro === 'ALL' ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">Tutte</button>
+                            ${tipiUsati.map(t => `
+                                <button onclick="cambiaFiltroNota('${escJs(t)}')" class="px-3 py-1.5 rounded-xl text-xs font-black transition-colors ${filtro === t ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${esc(t)}</button>
+                            `).join('')}
+                        </div>` : ''}
+
+                    ${perMese.length ? perMese.map(g => `
+                        <div>
+                            <p class="etichetta block mb-1.5">${esc(nomeMese(parseInt(g.ym.slice(5, 7), 10)))} ${esc(g.ym.slice(0, 4))}</p>
+                            <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden bg-white">
+                                ${g.note.map(rigaNota).join('')}
+                            </div>
+                        </div>`).join('')
+                      : `<p class="text-sm text-gray-400">${dellAnno.length ? 'Nessuna nota di questo tipo nel ' + esc(anno) + '.' : 'Nessuna nota nel ' + esc(anno) + '. Scrivine una qui sopra.'}</p>`}
+
+                    ${fuoriAnno ? `<p class="text-xs text-gray-400">Altre ${fuoriAnno} note stanno in altri anni: cambia anno qui sopra per vederle.</p>` : ''}
                 </div>
             `;
         }
@@ -8376,6 +8695,7 @@
             auto: renderSchedaAuto,
             scadenze: renderSchedaScadenze,
             report: renderSchedaCommercialista,
+            note: renderSchedaNote,
             cloud: renderSchedaBackup,
         };
 
@@ -9634,6 +9954,7 @@
                 scadenze: window.scadenze || [],
                 veicoli: window.veicoli || [],
                 vociFisse: window.vociFisse || [],
+                note: window.note || [],
                 impostazioniFiscali: window.fiscalSettings,
                 profilo: window.profilo || null,
                 date: new Date().toISOString()
@@ -9858,6 +10179,8 @@
                 .filter(v => v && idBuono(v.id) && String(v.modello || '').trim());
             const vociImportate = (Array.isArray(data.vociFisse) ? data.vociFisse : [])
                 .filter(v => v && idBuono(v.slug) && String(v.nome || '').trim());
+            const noteImportate = (Array.isArray(data.note) ? data.note : [])
+                .filter(n => valida(n) && String(n.testo || '').trim());
             const scartati = (Array.isArray(data.records) ? data.records.length : 0) - records.length
                 + (Array.isArray(data.shifts) ? data.shifts.length : 0) - shifts.length;
 
@@ -9878,7 +10201,7 @@
                 }
             }
 
-            if (!records.length && !shifts.length && !scadenze.length && !veicoli.length && !vociImportate.length) {
+            if (!records.length && !shifts.length && !scadenze.length && !veicoli.length && !vociImportate.length && !noteImportate.length) {
                 showToast(schedaTornata
                     ? 'Rimessa la tua scheda. Di movimenti e turni in questo backup non ce n\'erano.'
                     : 'Non ci sono movimenti, turni o scadenze validi da rimettere.');
@@ -9905,6 +10228,14 @@
                     .sort((a, b) => String(a.data).localeCompare(String(b.data)));
                 salvaScadenze();
                 if (window.saveScadenzaToCloud) scadenze.forEach(x => window.saveScadenzaToCloud(x));
+            }
+
+            if (noteImportate.length) {
+                const mappa = new Map(elencoNote().map(x => [String(x.id), x]));
+                noteImportate.forEach(x => mappa.set(String(x.id), x));
+                window.note = Array.from(mappa.values()).sort(perDataDecrescente);
+                salvaNote();
+                if (window.saveNotaToCloud) noteImportate.forEach(x => window.saveNotaToCloud(x));
             }
 
             if (vociImportate.length) {

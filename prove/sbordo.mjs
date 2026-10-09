@@ -30,7 +30,7 @@ for (const w of [320, 375, 390, 768, 820, 1024, 1280]) {
     }
     window.dailyRecords = rec; window.shifts = tur; window.annoScelto = '2026';
   });
-  const schede = ['dashboard','giornata','uscite','auto','scadenze','rendimento','categorie','report','cloud'];
+  const schede = ['dashboard','giornata','uscite','auto','scadenze','rendimento','categorie','report','note','cloud'];
   const problemi = [];
   for (const t of schede) {
     await p.evaluate(x => { switchTab(x); }, t);
