@@ -334,6 +334,36 @@ dire(/text\/html/.test(paginaVera.headers()['content-type'] || ''),
 await p2.close();
 
 // ------------------------------------------------------------------
+// LA PAGINA E LA COPIA SALVATA DEVONO DIRE LO STESSO NUMERO
+// A servire i file dell'app - la pagina, le icone, il manifesto - non e' la
+// pagina: e' il service worker. Se e' rimasto indietro, l'app che si vede e'
+// aggiornata e quello che il telefono serve a se' stesso no, e i difetti
+// diventano impossibili da capire. Qui si controlla che le due coincidano, e
+// che il service worker sappia rispondere a chi gliel'ha chiesto.
+console.log('\n8ter. la pagina e la copia salvata sono la stessa versione');
+const versioni = await p.evaluate(async () => {
+  const attivo = navigator.serviceWorker && navigator.serviceWorker.controller;
+  const dalSW = await new Promise((risolvi) => {
+    if (!attivo) return risolvi(null);
+    const canale = new MessageChannel();
+    const scadenza = setTimeout(() => risolvi(null), 4000);
+    canale.port1.onmessage = (e) => { clearTimeout(scadenza); risolvi((e.data && e.data.versione) || null); };
+    attivo.postMessage({ tipo: 'CHE_VERSIONE' }, [canale.port2]);
+  });
+  return { pagina: window.VERSIONE_APP || null, copia: dalSW };
+});
+const numeroSW = versioni.copia ? String(versioni.copia).replace('taximanager-v', '') : null;
+dire(numeroSW !== null, 'il service worker risponde a «che versione sei?»: ' + (versioni.copia || 'NON RISPONDE'));
+
+// Il numero della pagina si legge nel file: dentro la pagina e' una costante
+// che non sta su window.
+const numeroPagina = (fs.readFileSync(join(RADICE, 'index.html'), 'utf8')
+  .match(/const VERSIONE_APP = (\d+);/) || [])[1] || null;
+dire(numeroPagina !== null && numeroSW === numeroPagina,
+     `pagina v${numeroPagina} e copia salvata v${numeroSW}`
+     + (numeroSW === numeroPagina ? ': allineate' : ' - NON allineate: ricordati di cambiarle tutte e due'));
+
+// ------------------------------------------------------------------
 console.log('\n9. lamentele del browser');
 const serie = lamentele.filter(t => !/favicon|firebase|gstatic|net::ERR/i.test(t));
 dire(serie.length === 0, serie.length === 0 ? 'nessun errore in console' : 'errori: ' + serie.slice(0, 3).join(' | '));

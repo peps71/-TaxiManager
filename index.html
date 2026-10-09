@@ -1307,7 +1307,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 145;
+        const VERSIONE_APP = 146;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -5276,6 +5276,92 @@
             });
         }
 
+        // ============================================================
+        //  QUALE COPIA STA USANDO DAVVERO IL TELEFONO
+        //  La pagina dice la sua versione. Ma a servire i file - l'icona, il
+        //  manifesto, la pagina stessa - e' il service worker, che e' un'altra
+        //  cosa e puo' essere rimasto indietro. Quando le due non coincidono i
+        //  difetti diventano impossibili da capire: si guarda l'app, l'app e'
+        //  aggiornata, e intanto fuori qualcuno sta servendo roba vecchia.
+        //  E' successo con l'icona della schermata Home. Da qui si vede.
+        // ============================================================
+        function chiediVersioneAlServiceWorker() {
+            const attivo = navigator.serviceWorker && navigator.serviceWorker.controller;
+            if (!attivo || typeof MessageChannel === 'undefined') return Promise.resolve(null);
+            return new Promise((risolvi) => {
+                const canale = new MessageChannel();
+                const scadenza = setTimeout(() => risolvi(null), 4000);
+                canale.port1.onmessage = (e) => { clearTimeout(scadenza); risolvi((e.data && e.data.versione) || null); };
+                try { attivo.postMessage({ tipo: 'CHE_VERSIONE' }, [canale.port2]); }
+                catch (err) { clearTimeout(scadenza); risolvi(null); }
+            });
+        }
+
+        // Si chiede una volta e si tiene da parte: la risposta arriva dopo il
+        // disegno, quindi al primo giro la riga dice «controllo...» e poi si
+        // ridisegna da sola.
+        window.versioneCopiaSalvata = undefined;
+        async function aggiornaVersioneCopiaSalvata() {
+            if (window.versioneCopiaSalvata !== undefined) return;
+            window.versioneCopiaSalvata = await chiediVersioneAlServiceWorker();
+            if (window.activeTab === 'cloud') renderContent();
+        }
+
+        function bloccoCopiaSalvata() {
+            if (!('serviceWorker' in navigator)) return '';
+            setTimeout(aggiornaVersioneCopiaSalvata, 0);
+            const salvata = window.versioneCopiaSalvata;
+            if (salvata === undefined) return `<p class="text-xs text-gray-400">Copia salvata sul telefono: controllo...</p>`;
+            const numero = salvata ? String(salvata).replace('taximanager-v', '') : null;
+            const pari = numero === String(VERSIONE_APP);
+            return `
+                <div class="${pari ? '' : 'bg-yellow-100 p-3 rounded-xl'}">
+                    <p class="text-xs font-bold ${pari ? 'text-gray-400' : 'text-yellow-800'} leading-relaxed">
+                        Pagina v${VERSIONE_APP} · copia salvata sul telefono ${numero ? 'v' + esc(numero) : 'nessuna'}
+                        ${pari ? '· tutto allineato' : '· NON allineate'}
+                    </p>
+                    ${pari ? '' : `
+                        <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
+                            A servire i file dell'app - la pagina, le icone, il manifesto - è la copia salvata, non la
+                            pagina. Finché le due non coincidono, l'app che vedi è aggiornata ma quello che il telefono
+                            serve a sé stesso no. Premi «Aggiorna adesso»; se dopo due tentativi restano diverse, usa
+                            il tasto qui sotto.
+                        </p>
+                        <button onclick="rifaiCopiaSalvata()" class="mt-2 bg-gray-900 hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-xl text-xs">
+                            Butta via la copia salvata e rifalla
+                        </button>
+                        <p class="text-xs text-yellow-800 mt-1 leading-relaxed">
+                            Tocca solo i file dell'app: corse, spese, turni, note e foto non si toccano.
+                        </p>`}
+                </div>`;
+        }
+
+        // L'ULTIMA SPIAGGIA QUANDO LA COPIA SALVATA E' INCASTRATA
+        // Toglie la registrazione del service worker e svuota le sue cache, poi
+        // ricarica: al riavvio il telefono se la rifa' da zero, dalla rete.
+        // I dati non c'entrano niente e restano dove sono: stanno in un altro
+        // magazzino (vedi scriviLocale e il magazzino delle foto).
+        async function rifaiCopiaSalvata() {
+            if (!confirm('Butto via la copia dei file salvata sul telefono e la rifaccio da zero?\n\nServe la rete. I tuoi dati - corse, spese, turni, note, foto - non si toccano.')) return;
+            showToast('Butto via la copia salvata...');
+            try {
+                if (navigator.serviceWorker) {
+                    const registrazioni = await navigator.serviceWorker.getRegistrations();
+                    for (const r of registrazioni) await r.unregister();
+                }
+                if (window.caches) {
+                    const chiavi = await caches.keys();
+                    for (const k of chiavi) await caches.delete(k);
+                }
+            } catch (err) {
+                console.error('Non sono riuscito a buttare via la copia salvata:', err);
+                showToast('Non ci sono riuscito: controlla la rete e riprova.', 'avviso');
+                return;
+            }
+            showToast('Fatto: riapro l\'app dalla rete.');
+            setTimeout(() => window.location.reload(), 800);
+        }
+
         async function aggiornaApp() {
             showToast('Controllo se c\'e\' una versione nuova...');
             try {
@@ -9051,14 +9137,15 @@
                             </p>
                         `}
 
-                        <div class="pt-3 border-t border-gray-100">
+                        <div class="pt-3 border-t border-gray-100 space-y-3">
                             <button onclick="aggiornaApp()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
                                 Aggiorna adesso
                             </button>
-                            <p class="text-xs text-gray-400 mt-2 leading-relaxed">
+                            <p class="text-xs text-gray-400 leading-relaxed">
                                 Cerca una versione più recente e la mette in uso senza chiudere l'app. I dati registrati
                                 non si toccano.
                             </p>
+                            ${bloccoCopiaSalvata()}
                         </div>
 
                         ${bloccoProtezioneIndirizzi()}

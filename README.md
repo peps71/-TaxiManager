@@ -69,6 +69,50 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Vedere quale copia sta usando davvero il telefono (versione 146)
+
+Dopo la 145 l'icona del taxi compare nella schermata di condivisione di Safari,
+ma aggiungendo alla schermata Home esce ancora la lettera. Il che dice una cosa
+precisa: **il file dell'icona arriva**, e a non arrivare è qualcos'altro — il
+manifesto, oppure la correzione della 145 non è ancora in uso su quel telefono.
+
+Qui si smette di indovinare e si rende visibile la cosa che finora era invisibile.
+
+### Due versioni, non una
+
+A servire i file dell'app — la pagina, le icone, il manifesto — **non è la
+pagina: è il service worker**, che è un'altra cosa e può essere rimasto
+indietro. Quando le due non coincidono i difetti diventano impossibili da
+capire: si guarda l'app, l'app è aggiornata, e intanto fuori qualcuno sta
+servendo roba vecchia. È esattamente quello che è successo con l'icona.
+
+In **Gestione → Backup e impostazioni**, sotto «Aggiorna adesso», adesso c'è
+scritto:
+
+```
+Pagina v146 · copia salvata sul telefono v146 · tutto allineato
+```
+
+e se non lo sono la riga diventa gialla, lo dice, e compare un tasto **«Butta
+via la copia salvata e rifalla»**: toglie la registrazione del service worker,
+svuota le sue cache e ricarica dalla rete. Tocca solo i file dell'app — corse,
+spese, turni, note e foto stanno in un altro magazzino e non si toccano.
+
+La stessa coppia di numeri la controlla `prove/installabile.mjs` (8ter), così
+una versione cambiata a metà — in `index.html` e non in `sw.js` — non arriva
+mai sul telefono.
+
+### Il punto cieco del controllo delle classi, chiuso
+
+`prove/classi.py` guardava solo gli attributi `class="..."` scritti per esteso.
+Una classe dentro un pezzo calcolato — `class="${pari ? '' : 'bg-yellow-100'}"` —
+spariva insieme al pezzo, e se non esisteva non se ne accorgeva nessuno: è già
+successo due volte (`w-14`, `h-14` alle miniature delle foto). Adesso si
+guardano anche quelle: si prendono i pezzi fra apici e si tengono solo le parole
+che possono essere una classe (con un trattino o due punti), così un «sì»/«no»
+di un ternario non viene scambiato per una. Dalle 510 controllate si passa a
+536, tutte definite.
+
 ## La lettera T al posto del taxi: trovata (versione 145)
 
 La causa era qui dentro, nel service worker, e la 144 non l'aveva presa.

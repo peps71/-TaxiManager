@@ -13,7 +13,18 @@ usate = set()
 for i, r in enumerate(righe):
     if i == idx: continue
     for m in re.finditer(r'class="([^"]*)"', r):
-        t = re.sub(r'\$\{[^}]*\}', ' ', m.group(1))
+        dentro = m.group(1)
+        # Le classi scritte dentro un pezzo calcolato - class="${pari ? '' :
+        # 'bg-yellow-100'}" - prima sparivano insieme al pezzo, e una classe
+        # inesistente li' dentro non la vedeva nessuno. Adesso si guardano
+        # anche quelle: si prendono i pezzi fra apici e si tengono solo le
+        # parole che possono essere una classe (con un trattino o due punti),
+        # cosi' un «si»/«no» di un ternario non viene scambiato per una.
+        for lett in re.findall(r"'([^']*)'|`([^`]*)`", dentro):
+            for pezzo in lett:
+                for c in pezzo.split():
+                    if re.fullmatch(r'[a-z0-9:\[\]/.%\-]+', c) and ('-' in c or ':' in c): usate.add(c)
+        t = re.sub(r'\$\{[^}]*\}', ' ', dentro)
         for c in t.split():
             if c and '$' not in c and '{' not in c: usate.add(c)
 # Le classi non stanno solo negli attributi class="...": alcune vivono in una

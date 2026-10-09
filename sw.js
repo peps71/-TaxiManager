@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v145';
+const VERSIONE = 'taximanager-v146';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -89,6 +89,13 @@ self.addEventListener('activate', (evento) => {
 self.addEventListener('message', (evento) => {
   const dati = evento.data || {};
   if (dati.tipo === 'AGGIORNA_SUBITO') { self.skipWaiting(); return; }
+  // «Tu che versione sei?» La pagina lo chiede per poterlo mostrare: se la
+  // pagina e' la 145 e la copia salvata e' la 143, da fuori non si vede
+  // niente - e si cercano difetti in posti dove non ci sono.
+  if (dati.tipo === 'CHE_VERSIONE') {
+    if (evento.ports && evento.ports[0]) evento.ports[0].postMessage({ versione: VERSIONE });
+    return;
+  }
   if (dati.tipo === 'RISCARICA_APP') {
     const rispondi = (esito) => {
       if (evento.ports && evento.ports[0]) evento.ports[0].postMessage(esito);
