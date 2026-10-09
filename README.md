@@ -69,6 +69,81 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le foto: lo scontrino, il danno, il documento (versione 143)
+
+Una nota dice «gomme nuove, gommista di via Firenze». Con la foto dello
+scontrino attaccata, tre mesi dopo dal carrozziere o dall'assicurazione non si
+cerca più niente in nessun cassetto. Da qui ogni nota può portarsi dietro fino a
+sei foto.
+
+Si scatta dal pulsante **Aggiungi una foto** nel modulo della nota, oppure dalla
+matita su una nota già scritta. Il pulsante non ha l'attributo `capture`: così il
+telefono apre un menu invece della sola fotocamera, e lo scontrino fotografato al
+distributore la mattina si può allegare la sera. Le foto si vedono sia in
+**Gestione → Note** sia **sotto la giornata** a cui la nota si riferisce; si
+toccano e si aprono a tutto schermo.
+
+### Dove stanno le foto, e perché non dove sta il resto
+
+Tutti gli archivi dell'app vivono in `localStorage`, che ha un tetto fra i 5 e i
+10 MB. **Una sola foto dell'iPhone, da 3 a 5 MB, lo riempirebbe.** Quindi due
+accorgimenti, e sono tutti e due obbligatori, non eleganze:
+
+1. **la foto si rimpicciolisce nel telefono prima di salvarla** (`comprimiFoto`):
+   lato lungo 1600 punti e qualità calante finché non sta sotto il quarto di
+   mega. Nella prova una foto da 798 KB a 3000×2000 esce a **243 KB a 1600×1067**,
+   e lo scontrino resta leggibile;
+2. **finisce in IndexedDB**, il magazzino grande del browser, che quel tetto non
+   ce l'ha. Nei dati dei conti entra solo l'identificativo della foto, che sono
+   sedici cifre.
+
+Il risultato lo misura la prova: con una foto allegata il file di backup resta di
+**1 KB** mentre la foto, fuori, ne pesa 243. Nel backup e in tutto `localStorage`
+non c'è nessuna immagine — la prova le cerca una chiave alla volta.
+
+### Sul Cloud, ma non in continuo
+
+Tutti gli altri archivi hanno un `onSnapshot` che tiene i dispositivi allineati da
+solo. Per le foto no: sarebbero megabyte riscaricati a ogni apertura dell'app, in
+mezzo al traffico, a spese del telefono. Si caricano quando si scattano e si
+leggono **una per una, solo quando servono davvero** — cioè quando le si guarda da
+un altro dispositivo. Una volta scese restano nel magazzino locale e non si
+ripassano più. Le regole di Firestore non vanno toccate: coprono già tutta la
+cartella dell'account.
+
+### Il backup delle foto viaggia per conto suo
+
+Dentro il backup normale le foto lo farebbero passare da qualche centinaio di
+kilobyte a decine di megabyte, e quel file deve restare leggero perché lo si fa
+spesso. In **Gestione → Backup** c'è un pulsante a parte, *Scarica le N foto
+allegate*, e il suo gemello per rimetterle. Le note sanno già quali foto cercare:
+nel backup normale ognuna porta la lista degli identificativi. Se una foto manca,
+la nota si disegna lo stesso e il riquadro resta grigio — non si rompe niente.
+
+### Quando una nota se ne va
+
+Una foto senza la sua nota non la ritrova più nessuno: viene eliminata con lei, e
+la domanda di conferma lo dice prima («se ne vanno anche le 2 foto allegate»).
+Staccare una singola foto dalla matita la elimina qui e sul Cloud.
+
+### Due difetti presi mentre si costruiva
+
+**Il riquadro che restava vuoto per sempre.** Le foto non si caricano durante il
+disegno — la schermata resterebbe ferma ad aspettare il magazzino — ma subito
+dopo, riempiendo i riquadri lasciati vuoti. Per non far partire dieci caricamenti
+insieme avevo messo un interruttore: se un riempimento era in corso, il successivo
+si lasciava perdere. Sembrava prudente ed era un difetto: la schermata si
+ridisegna in continuo, e il ridisegno che capitava mentre le foto stavano
+arrivando restava con i riquadri vuoti **per sempre**. Adesso le richieste si
+mettono in fila invece di sparire. È uscito dalla prova, non dall'occhio.
+
+**Due classi che non esistevano.** Le miniature erano larghe `w-14` e alte `h-14`:
+due classi che il foglio di stile dell'app non conosce, quindi due righe che non
+facevano niente, in silenzio. Il controllo delle classi non le aveva viste perché
+stavano dentro una costante JavaScript e non in un attributo `class="..."`. La
+misura adesso sta nello stile, e `prove/classi.py` guarda anche dentro le costanti
+`CLASSE_*`.
+
 ## Si installa come una vera app: il controllo, e sei difetti che nascondeva (versione 142)
 
 TaxiManager è una PWA: aggiunta alla schermata Home di un iPhone o di un telefono

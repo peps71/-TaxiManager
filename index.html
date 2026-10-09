@@ -448,6 +448,21 @@
         <span id="toast-text">Messaggio</span>
     </div>
 
+    <!-- ============================================================
+         GUARDARE UNA FOTO GRANDE
+         Sta fuori dal contenuto perche' il contenuto si ridisegna di
+         continuo: il visore no, resta dov'e' e si apre e si chiude.
+         Si chiude toccando ovunque, anche la foto: con una mano sola,
+         in macchina, cercare la crocetta e' una cosa in piu' da fare.
+         ============================================================ -->
+    <div id="visore-foto" onclick="chiudiFoto()" role="dialog" aria-modal="true" aria-label="Foto allegata"
+         class="hidden fixed top-0 bottom-0 left-0 right-0 z-50 bg-gray-900 items-center justify-center p-4 no-print">
+        <img id="visore-foto-img" alt="Foto allegata" class="max-w-full rounded-xl" style="max-height: 100%;" />
+        <button onclick="chiudiFoto()" aria-label="Chiudi la foto"
+                class="absolute bg-gray-800 text-white rounded-xl px-3 py-2 text-sm font-bold"
+                style="top: calc(1rem + env(safe-area-inset-top)); right: 1rem;">Chiudi</button>
+    </div>
+
     <!-- Sidebar / Navigazione -->
     <aside class="hidden md:flex w-52 lg:w-64 bg-yellow-400 text-gray-900 flex flex-col shadow-lg z-10 md:min-h-screen border-r border-yellow-500 flex-shrink-0 no-print">
         <div class="p-4 lg:p-6 flex items-center gap-2.5 bg-yellow-500">
@@ -993,6 +1008,44 @@
             }
         };
 
+        // LE FOTO NON SI ASCOLTANO
+        // Tutti gli altri archivi hanno un onSnapshot che tiene i dispositivi
+        // allineati da solo. Per le foto no: sarebbero megabyte riscaricati a
+        // ogni apertura dell'app. Si caricano quando si scattano, si leggono
+        // una per una quando servono - e quando sono scese restano nel
+        // magazzino del telefono e non si ripassano piu'.
+        window.saveFotoToCloud = async function(foto) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    await setDoc(docDati('taxi_foto', String(foto.id)), foto);
+                } catch (err) {
+                    console.error("Errore scrittura Cloud foto:", err);
+                    if (window.showToast) window.showToast('Foto salvata solo su questo dispositivo.', 'avviso');
+                }
+            }
+        };
+
+        window.leggiFotoDalCloud = async function(id) {
+            if (!(isCloudActive && db && auth.currentUser)) return null;
+            try {
+                const d = await getDoc(docDati('taxi_foto', String(id)));
+                return d.exists() ? { id: String(id), ...d.data() } : null;
+            } catch (err) {
+                console.error("Errore lettura Cloud foto:", err);
+                return null;
+            }
+        };
+
+        window.deleteFotoFromCloud = async function(id) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    await deleteDoc(docDati('taxi_foto', String(id)));
+                } catch (err) {
+                    console.error("Errore eliminazione Cloud foto:", err);
+                }
+            }
+        };
+
         window.deleteNotaFromCloud = async function(id) {
             if (isCloudActive && db && auth.currentUser) {
                 try {
@@ -1245,7 +1298,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 142;
+        const VERSIONE_APP = 143;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1594,6 +1647,11 @@
         window.deleteScadenzaFromCloud = function() {};
         window.saveNotaToCloud = function() {};
         window.deleteNotaFromCloud = function() {};
+        // Senza Cloud le foto restano nel magazzino del telefono: niente da
+        // caricare, e da leggere c'e' solo quello (vedi fotoDaId).
+        window.saveFotoToCloud = function() {};
+        window.deleteFotoFromCloud = function() {};
+        window.leggiFotoDalCloud = function() { return Promise.resolve(null); };
         window.saveVeicoloToCloud = function() {};
         window.deleteVeicoloFromCloud = function() {};
         window.saveVoceFissaToCloud = function() {};
@@ -2439,7 +2497,7 @@
             return t || 'Altro';
         }
 
-        function aggiungiNota(e) {
+        async function aggiungiNota(e) {
             if (e && e.preventDefault) e.preventDefault();
             const leggi = (id) => { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
             const data = leggi('nota-data');
@@ -2448,7 +2506,11 @@
             if (tipo === '__altro__') tipo = leggi('nota-tipo-altro') || 'Altro';
             if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { showToast('Serve una data valida.'); return; }
             if (!testo) { showToast('Scrivi che cosa e\' successo.'); return; }
+            // Le foto si depositano prima: se il magazzino le rifiuta, la nota
+            // si salva lo stesso senza - il testo e la data valgono da soli.
+            const foto = await depositaFotoInAttesa();
             const nota = { id: nuovoId(), data, tipo: tipo || 'Altro', testo, creata: new Date().toISOString() };
+            if (foto.length) nota.foto = foto;
             window.note = elencoNote().concat([nota]).sort(perDataDecrescente);
             salvaNote();
             if (window.saveNotaToCloud) window.saveNotaToCloud(nota);
@@ -2479,6 +2541,8 @@
             if (tipo === '__altro__') tipo = leggi('nt-altro-') || 'Altro';
             if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) { showToast('Serve una data valida.'); return; }
             if (!testo) { showToast('Scrivi che cosa e\' successo.'); return; }
+            // Object.assign parte dalla nota di prima, quindi le foto restano
+            // attaccate: qui si cambiano solo data, tipo e testo.
             const aggiornata = Object.assign({}, n, { data, tipo: tipo || 'Altro', testo });
             window.note = elencoNote().map(x => String(x.id) === String(id) ? aggiornata : x).sort(perDataDecrescente);
             salvaNote();
@@ -2488,10 +2552,14 @@
             renderContent();
         }
 
-        function eliminaNota(id) {
+        async function eliminaNota(id) {
             const n = elencoNote().find(x => String(x.id) === String(id));
             if (!n) return;
-            if (!confirm(`Elimino la nota del ${ggMmAaaa(n.data)}?\n\n«${n.testo}»`)) return;
+            const quante = (n.foto || []).length;
+            const avviso = quante ? `\n\nSe ne ${quante === 1 ? 'va anche la foto allegata' : 'vanno anche le ' + quante + ' foto allegate'}.` : '';
+            if (!confirm(`Elimino la nota del ${ggMmAaaa(n.data)}?\n\n«${n.testo}»${avviso}`)) return;
+            // Una foto senza la sua nota non la ritrova piu' nessuno: va via con lei.
+            for (const idFoto of (n.foto || [])) await eliminaFoto(idFoto);
             window.note = elencoNote().filter(x => String(x.id) !== String(id));
             salvaNote();
             if (window.deleteNotaFromCloud) window.deleteNotaFromCloud(id);
@@ -2523,6 +2591,366 @@
             return TIPI_NOTA.map(t => `<option value="${esc(t)}" ${t === scelto ? 'selected' : ''}>${esc(t)}</option>`).join('')
                 + (scelto && !dentro ? `<option value="${esc(scelto)}" selected>${esc(scelto)}</option>` : '')
                 + (conAltro ? '<option value="__altro__">Altro (scrivi tu)</option>' : '');
+        }
+
+        // ============================================================
+        //  LE FOTO: LO SCONTRINO, IL DANNO, IL DOCUMENTO
+        //  Una nota dice «gomme nuove, gommista di via Firenze». Con la foto
+        //  dello scontrino attaccata, tre mesi dopo dal carrozziere o
+        //  dall'assicurazione non si cerca piu' niente in nessun cassetto.
+        //
+        //  PERCHE' LE FOTO NON STANNO DOVE STA IL RESTO
+        //  Tutti gli archivi dell'app vivono in localStorage, che ha un tetto
+        //  fra i 5 e i 10 MB: una sola foto dell'iPhone, da 3 a 5 MB, lo
+        //  riempirebbe. Quindi due accorgimenti, e sono tutti e due
+        //  obbligatori, non eleganze:
+        //   1. la foto si rimpicciolisce nel telefono PRIMA di salvarla
+        //      (vedi comprimiFoto): da 4 MB a un quarto di mega;
+        //   2. finisce in IndexedDB, il magazzino grande del browser, che non
+        //      ha quel tetto e non toglie spazio ai dati dei conti.
+        //
+        //  E SUL CLOUD?
+        //  Le foto NON si ascoltano in continuo come movimenti e turni:
+        //  sarebbero megabyte riscaricati a ogni apertura dell'app, in mezzo
+        //  al traffico, a spese del telefono. Si caricano quando si scattano,
+        //  e si riscaricano una per una solo quando servono davvero - cioe'
+        //  quando le si guarda da un altro dispositivo. Una volta scese
+        //  restano nel magazzino locale e non si ripassano piu'.
+        // ============================================================
+
+        const FOTO_LATO_MAX = 1600;                       // il lato lungo, in punti
+        const FOTO_QUALITA = [0.72, 0.6, 0.48, 0.38];     // si cala finche' non sta nel peso
+        const FOTO_PESO_MAX = 260 * 1024;                 // il peso della foto salvata
+        const FOTO_PER_NOTA = 6;
+
+        // ------------------------------------------------------------
+        //  Il magazzino (IndexedDB)
+        // ------------------------------------------------------------
+        const FOTO_DB = 'taxi_foto';
+        const FOTO_DEPOSITO = 'foto';
+        let fotoDb = null;
+        window.fotoMagazzinoOk = true;
+
+        function apriMagazzinoFoto() {
+            if (fotoDb) return Promise.resolve(fotoDb);
+            return new Promise((risolvi) => {
+                let richiesta;
+                try { richiesta = indexedDB.open(FOTO_DB, 1); }
+                catch (err) { window.fotoMagazzinoOk = false; risolvi(null); return; }
+                richiesta.onupgradeneeded = () => {
+                    const d = richiesta.result;
+                    if (!d.objectStoreNames.contains(FOTO_DEPOSITO)) d.createObjectStore(FOTO_DEPOSITO, { keyPath: 'id' });
+                };
+                richiesta.onsuccess = () => { fotoDb = richiesta.result; risolvi(fotoDb); };
+                richiesta.onerror = () => { window.fotoMagazzinoOk = false; risolvi(null); };
+                richiesta.onblocked = () => { window.fotoMagazzinoOk = false; risolvi(null); };
+            });
+        }
+
+        // Una sola strada per tutte le operazioni: se il magazzino non c'e'
+        // (navigazione privata, spazio negato) si risponde null e l'app va
+        // avanti senza foto invece di fermarsi.
+        function operazioneFoto(modo, fare) {
+            return apriMagazzinoFoto().then((d) => {
+                if (!d) return null;
+                return new Promise((risolvi) => {
+                    let transazione;
+                    try { transazione = d.transaction(FOTO_DEPOSITO, modo); }
+                    catch (err) { risolvi(null); return; }
+                    let esito = null;
+                    const richiesta = fare(transazione.objectStore(FOTO_DEPOSITO));
+                    if (richiesta) richiesta.onsuccess = () => { esito = richiesta.result; };
+                    transazione.oncomplete = () => risolvi(esito === undefined ? true : esito);
+                    transazione.onerror = () => risolvi(null);
+                    transazione.onabort = () => risolvi(null);
+                });
+            }).catch(() => null);
+        }
+
+        // CHIEDERE AL TELEFONO DI NON BUTTARE VIA NIENTE
+        // Quando lo spazio scarseggia il browser puo' svuotare il magazzino di
+        // un sito senza avvisare. Un'app aggiunta alla schermata Home di
+        // solito e' al riparo, ma chiederlo esplicitamente costa una riga e
+        // toglie il dubbio. Si chiede una volta sola, alla prima foto: prima
+        // non c'e' niente da difendere.
+        let permessoChiesto = false;
+        async function chiediDiTenereLeFoto() {
+            if (permessoChiesto) return;
+            permessoChiesto = true;
+            try {
+                if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
+            } catch (err) { /* se non si puo' chiedere, pazienza */ }
+        }
+
+        const fotoScrivi   = (rec) => { chiediDiTenereLeFoto(); return operazioneFoto('readwrite', (s) => s.put(rec)); };
+        const fotoLeggi    = (id)  => operazioneFoto('readonly',  (s) => s.get(String(id)));
+        const fotoCancella = (id)  => operazioneFoto('readwrite', (s) => s.delete(String(id)));
+        const fotoTutte    = ()    => operazioneFoto('readonly',  (s) => s.getAll()).then(v => Array.isArray(v) ? v : []);
+
+        // ------------------------------------------------------------
+        //  Il conto, tenuto a parte
+        //  Per sapere quante foto ci sono e quanto pesano non si caricano le
+        //  foto: sarebbero decine di megabyte in memoria solo per fare una
+        //  somma. Si tiene un elenco leggero - identificativo e peso - che
+        //  costa qualche decina di byte a foto.
+        // ------------------------------------------------------------
+        function indiceFoto() {
+            if (!window.fotoIndice) {
+                try { window.fotoIndice = JSON.parse(localStorage.getItem('taxi_foto_indice') || '{}') || {}; }
+                catch (err) { window.fotoIndice = {}; }
+            }
+            return window.fotoIndice;
+        }
+
+        function salvaIndiceFoto() {
+            try { localStorage.setItem('taxi_foto_indice', JSON.stringify(indiceFoto())); } catch (err) { /* pazienza */ }
+        }
+
+        function segnaFoto(id, byte) { indiceFoto()[String(id)] = byte || 0; salvaIndiceFoto(); }
+        function scordaFoto(id) { delete indiceFoto()[String(id)]; salvaIndiceFoto(); }
+
+        function contoFoto() {
+            const i = indiceFoto();
+            const chiavi = Object.keys(i);
+            return { quante: chiavi.length, byte: chiavi.reduce((t, k) => t + (i[k] || 0), 0) };
+        }
+
+        // ------------------------------------------------------------
+        //  Rimpicciolire
+        //  Una foto dell'iPhone e' da 3 a 5 MB: dentro l'app non ci sta e sul
+        //  Cloud non ci passa (il limite di una scheda e' un mega). Qui si
+        //  ridisegna piu' piccola e si cala la qualita' finche' non sta sotto
+        //  il quarto di mega. Uno scontrino resta leggibile, una targa pure.
+        //  L'orientamento: le foto dell'iPhone portano scritto da che parte
+        //  sta l'alto, e chi disegna su tela a mano quella riga la ignora -
+        //  la foto esce coricata. createImageBitmap con 'from-image' la
+        //  raddrizza; se il browser non lo conosce si passa dall'immagine
+        //  normale, che oggi la raddrizza da sola.
+        // ------------------------------------------------------------
+        async function comprimiFoto(file) {
+            const url = URL.createObjectURL(file);
+            try {
+                let sorgente = null;
+                if (window.createImageBitmap) {
+                    try { sorgente = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+                    catch (err) { sorgente = null; }
+                }
+                if (!sorgente) {
+                    const img = new Image();
+                    img.src = url;
+                    await img.decode();
+                    sorgente = img;
+                }
+                const L = sorgente.width || sorgente.naturalWidth || 0;
+                const A = sorgente.height || sorgente.naturalHeight || 0;
+                if (!L || !A) return null;
+                let lato = FOTO_LATO_MAX;
+                let ultima = null;
+                for (let giro = 0; giro < 3; giro++) {
+                    const scala = Math.min(1, lato / Math.max(L, A));
+                    const l = Math.max(1, Math.round(L * scala));
+                    const a = Math.max(1, Math.round(A * scala));
+                    const tela = document.createElement('canvas');
+                    tela.width = l; tela.height = a;
+                    const g = tela.getContext('2d');
+                    g.imageSmoothingQuality = 'high';
+                    g.drawImage(sorgente, 0, 0, l, a);
+                    for (const q of FOTO_QUALITA) {
+                        const jpeg = tela.toDataURL('image/jpeg', q);
+                        ultima = { jpeg, larghezza: l, altezza: a, byte: jpeg.length };
+                        if (jpeg.length <= FOTO_PESO_MAX) return ultima;
+                    }
+                    lato = Math.round(lato * 0.7);
+                }
+                return ultima;
+            } catch (err) {
+                console.error('Foto non leggibile:', err);
+                return null;
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        // ------------------------------------------------------------
+        //  Prendere una foto: prima qui, poi dal Cloud
+        // ------------------------------------------------------------
+        async function fotoDaId(id) {
+            const chiave = String(id || '');
+            if (!chiave) return null;
+            // Le foto appena scattate e non ancora salvate stanno in memoria.
+            if (chiave.startsWith('attesa:')) {
+                const n = parseInt(chiave.slice(7), 10);
+                return (window.fotoInAttesa || [])[n] || null;
+            }
+            const locale = await fotoLeggi(chiave);
+            if (locale && locale.jpeg) return locale;
+            if (window.leggiFotoDalCloud) {
+                const dal = await window.leggiFotoDalCloud(chiave);
+                if (dal && dal.jpeg) {
+                    await fotoScrivi(dal);
+                    segnaFoto(dal.id, dal.byte || String(dal.jpeg).length);
+                    return dal;
+                }
+            }
+            return null;
+        }
+
+        // ------------------------------------------------------------
+        //  Mettere le foto nella pagina
+        //  Nel disegno si lascia un riquadro vuoto con scritto dentro quale
+        //  foto ci va: caricarle durante il disegno vorrebbe dire aspettare il
+        //  magazzino con la schermata ferma. Si riempiono subito dopo.
+        // ------------------------------------------------------------
+        function riquadroFoto(id, classi, stile) {
+            return `<img data-foto="${esc(id)}" alt="Foto allegata" loading="lazy" class="${classi || ''}" style="background-color:#e5e7eb; ${stile || ''}" />`;
+        }
+
+        // UNA RICHIESTA PER VOLTA, MA NESSUNA BUTTATA VIA
+        // Prima qui c'era un interruttore: se un riempimento era in corso, il
+        // successivo si lasciava perdere. Sembrava prudente ed era un difetto:
+        // la schermata si ridisegna in continuo, e il ridisegno che capitava
+        // mentre le foto stavano arrivando restava con i riquadri vuoti per
+        // sempre. Adesso le richieste si mettono in fila invece di sparire -
+        // e i riquadri dei disegni vecchi, che non sono piu' nella pagina, si
+        // saltano da soli (img.isConnected).
+        let codaRiempimento = Promise.resolve();
+        function riempiFoto(radice) {
+            codaRiempimento = codaRiempimento.then(() => riempiDavvero(radice)).catch(() => {});
+            return codaRiempimento;
+        }
+
+        async function riempiDavvero(radice) {
+            const dove = radice && radice.isConnected ? radice : document;
+            const vuote = [...dove.querySelectorAll('img[data-foto]')].filter(i => !i.getAttribute('src'));
+            for (const img of vuote) {
+                if (!img.isConnected) continue;
+                const f = await fotoDaId(img.getAttribute('data-foto'));
+                if (!img.isConnected) continue;
+                if (f && f.jpeg) { img.src = f.jpeg; }
+                else { img.alt = 'Foto non disponibile su questo dispositivo'; img.title = img.alt; }
+            }
+        }
+        window.riempiFoto = riempiFoto;
+
+        // ------------------------------------------------------------
+        //  Guardarla grande
+        // ------------------------------------------------------------
+        window.apriFoto = async function (id) {
+            const visore = document.getElementById('visore-foto');
+            const img = document.getElementById('visore-foto-img');
+            if (!visore || !img) return;
+            img.removeAttribute('src');
+            visore.classList.remove('hidden');
+            visore.classList.add('flex');
+            const f = await fotoDaId(id);
+            if (f && f.jpeg) img.src = f.jpeg;
+            else { showToast('Questa foto non e\' su questo dispositivo.', 'avviso'); chiudiFoto(); }
+        };
+
+        window.chiudiFoto = function () {
+            const visore = document.getElementById('visore-foto');
+            const img = document.getElementById('visore-foto-img');
+            if (img) img.removeAttribute('src');
+            if (visore) { visore.classList.add('hidden'); visore.classList.remove('flex'); }
+        };
+
+        // ------------------------------------------------------------
+        //  Scattare: una riga sola apre la fotocamera, senza passare da
+        //  nessun negozio. Su iPhone e su Android si comporta uguale.
+        // ------------------------------------------------------------
+        window.fotoInAttesa = [];
+
+        window.scegliFoto = function (idCampo) {
+            const campo = document.getElementById(idCampo);
+            if (campo) campo.click();
+        };
+
+        // Le foto scelte per una nota che non e' ancora stata salvata: restano
+        // in memoria, e finiscono nel magazzino solo quando la nota si salva.
+        // Cosi' chi cambia idea non lascia in giro foto senza padrone.
+        window.fotoScelteInAttesa = async function (campo) {
+            const file = [...(campo.files || [])];
+            campo.value = '';
+            if (!file.length) return;
+            const spazio = FOTO_PER_NOTA - window.fotoInAttesa.length;
+            if (spazio <= 0) { showToast(`Massimo ${FOTO_PER_NOTA} foto per nota.`, 'avviso'); return; }
+            showToast(file.length > 1 ? 'Rimpicciolisco le foto...' : 'Rimpicciolisco la foto...');
+            for (const f of file.slice(0, spazio)) {
+                const piccola = await comprimiFoto(f);
+                if (!piccola) { showToast('Una foto non si e\' potuta leggere.', 'avviso'); continue; }
+                window.fotoInAttesa.push(piccola);
+            }
+            renderContent();
+        };
+
+        window.togliFotoInAttesa = function (n) {
+            window.fotoInAttesa.splice(n, 1);
+            renderContent();
+        };
+
+        // Dalla memoria al magazzino: succede quando la nota si salva.
+        async function depositaFotoInAttesa() {
+            const ids = [];
+            for (const f of window.fotoInAttesa) {
+                const rec = { id: nuovoId(), jpeg: f.jpeg, larghezza: f.larghezza, altezza: f.altezza,
+                              byte: f.byte, creata: new Date().toISOString() };
+                const scritta = await fotoScrivi(rec);
+                if (!scritta) { showToast('Il telefono non ha accettato la foto.', 'avviso'); continue; }
+                segnaFoto(rec.id, rec.byte);
+                ids.push(rec.id);
+                if (window.saveFotoToCloud) window.saveFotoToCloud(rec);
+            }
+            window.fotoInAttesa = [];
+            return ids;
+        }
+
+        // Una foto aggiunta a una nota che esiste gia': niente attesa, si
+        // salva subito.
+        window.fotoScelteSuNota = async function (campo, idNota) {
+            const file = [...(campo.files || [])];
+            campo.value = '';
+            if (!file.length) return;
+            const n = elencoNote().find(x => String(x.id) === String(idNota));
+            if (!n) return;
+            const gia = Array.isArray(n.foto) ? n.foto.slice() : [];
+            const spazio = FOTO_PER_NOTA - gia.length;
+            if (spazio <= 0) { showToast(`Massimo ${FOTO_PER_NOTA} foto per nota.`, 'avviso'); return; }
+            showToast(file.length > 1 ? 'Rimpicciolisco le foto...' : 'Rimpicciolisco la foto...');
+            for (const f of file.slice(0, spazio)) {
+                const piccola = await comprimiFoto(f);
+                if (!piccola) { showToast('Una foto non si e\' potuta leggere.', 'avviso'); continue; }
+                const rec = { id: nuovoId(), jpeg: piccola.jpeg, larghezza: piccola.larghezza,
+                              altezza: piccola.altezza, byte: piccola.byte, creata: new Date().toISOString() };
+                if (!(await fotoScrivi(rec))) { showToast('Il telefono non ha accettato la foto.', 'avviso'); continue; }
+                segnaFoto(rec.id, rec.byte);
+                gia.push(rec.id);
+                if (window.saveFotoToCloud) window.saveFotoToCloud(rec);
+            }
+            const aggiornata = Object.assign({}, n, { foto: gia });
+            window.note = elencoNote().map(x => String(x.id) === String(idNota) ? aggiornata : x);
+            salvaNote();
+            if (window.saveNotaToCloud) window.saveNotaToCloud(aggiornata);
+            showToast('Foto allegata alla nota.');
+            renderContent();
+        };
+
+        window.staccaFoto = async function (idNota, idFoto) {
+            const n = elencoNote().find(x => String(x.id) === String(idNota));
+            if (!n) return;
+            if (!confirm('Tolgo questa foto dalla nota?\n\nLa foto viene eliminata, qui e sul Cloud.')) return;
+            const aggiornata = Object.assign({}, n, { foto: (n.foto || []).filter(x => String(x) !== String(idFoto)) });
+            window.note = elencoNote().map(x => String(x.id) === String(idNota) ? aggiornata : x);
+            salvaNote();
+            if (window.saveNotaToCloud) window.saveNotaToCloud(aggiornata);
+            await eliminaFoto(idFoto);
+            showToast('Foto eliminata.');
+            renderContent();
+        };
+
+        async function eliminaFoto(id) {
+            await fotoCancella(id);
+            scordaFoto(id);
+            if (window.deleteFotoFromCloud) window.deleteFotoFromCloud(id);
         }
 
         function salvaScadenze() {
@@ -6144,10 +6572,13 @@
                                 <p class="etichetta block px-1 mb-1.5">${note.length === 1 ? 'Nota della giornata' : 'Note della giornata'}</p>
                                 <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
                                     ${note.map(n => `
-                                        <p class="px-3 py-2 flex flex-wrap items-baseline gap-2">
-                                            <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 leading-relaxed">${esc(n.testo)}</span>
-                                            <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(tipoNota(n))}</span>
-                                        </p>`).join('')}
+                                        <div class="px-3 py-2">
+                                            <p class="flex flex-wrap items-baseline gap-2">
+                                                <span class="text-sm font-bold text-gray-800 min-w-0 flex-1 leading-relaxed">${esc(n.testo)}</span>
+                                                <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(tipoNota(n))}</span>
+                                            </p>
+                                            ${miniatureNota(n)}
+                                        </div>`).join('')}
                                 </div>
                             </div>`;
                     })()}
@@ -7632,6 +8063,59 @@
             `;
         }
 
+        const ICONA_FOTO = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>';
+
+        // La misura sta nello stile e non fra le classi: 3,5rem non e' una
+        // delle misure che il foglio di stile dell'app conosce, e una classe
+        // che non esiste non da' errore - semplicemente non fa niente.
+        const CLASSE_MINIATURA = 'rounded-lg border border-gray-200';
+        const STILE_MINIATURA = 'width: 3.5rem; height: 3.5rem; object-fit: cover;';
+
+        // Le foto gia' scattate ma non ancora salvate con la nota.
+        function riquadroFotoInAttesa() {
+            const attesa = window.fotoInAttesa || [];
+            if (!attesa.length) return '';
+            return `
+                <div class="flex flex-wrap items-center gap-2">
+                    ${attesa.map((f, i) => `
+                        <span class="relative inline-flex">
+                            <img data-foto="attesa:${i}" alt="Foto da allegare" class="${CLASSE_MINIATURA}" style="${STILE_MINIATURA}" />
+                            <button type="button" onclick="togliFotoInAttesa(${i})" aria-label="Togli questa foto"
+                                    class="absolute bg-gray-900 text-white rounded-xl text-xs font-black px-1.5"
+                                    style="top:-6px; right:-6px;">×</button>
+                        </span>`).join('')}
+                    <span class="text-xs font-bold text-gray-400">${attesa.length === 1 ? 'una foto' : attesa.length + ' foto'} da allegare</span>
+                </div>`;
+        }
+
+        // Le miniature di una nota salvata: si toccano e si aprono grandi.
+        function miniatureNota(n) {
+            const foto = Array.isArray(n.foto) ? n.foto : [];
+            if (!foto.length) return '';
+            return `
+                <span class="flex flex-wrap gap-1.5 mt-1.5">
+                    ${foto.map(id => `
+                        <button type="button" onclick="apriFoto('${escJs(id)}')" title="Guarda la foto" aria-label="Guarda la foto allegata"
+                                class="shrink-0 inline-flex">${riquadroFoto(id, CLASSE_MINIATURA, STILE_MINIATURA)}</button>`).join('')}
+                </span>`;
+        }
+
+        function miniatureNotaInModifica(n) {
+            const foto = Array.isArray(n.foto) ? n.foto : [];
+            if (!foto.length) return '';
+            return `
+                <div class="flex flex-wrap items-center gap-2">
+                    ${foto.map(id => `
+                        <span class="relative inline-flex">
+                            <button type="button" onclick="apriFoto('${escJs(id)}')" aria-label="Guarda la foto allegata"
+                                    class="inline-flex">${riquadroFoto(id, CLASSE_MINIATURA, STILE_MINIATURA)}</button>
+                            <button type="button" onclick="staccaFoto('${escJs(n.id)}', '${escJs(id)}')" aria-label="Elimina questa foto"
+                                    class="absolute bg-gray-900 text-white rounded-xl text-xs font-black px-1.5"
+                                    style="top:-6px; right:-6px;">×</button>
+                        </span>`).join('')}
+                </div>`;
+        }
+
         // La riga di una nota: due righe come tutto il resto dell'app, con la
         // data e il tipo in piccolo sotto il testo.
         function rigaNota(n) {
@@ -7648,8 +8132,11 @@
                         </div>
                         <input type="text" id="nt-testo-${esc(n.id)}" value="${esc(n.testo)}" aria-label="Che cosa e' successo"
                                class="w-full p-2 border rounded-lg text-sm outline-none" />
-                        <div class="flex gap-2">
+                        ${miniatureNotaInModifica(n)}
+                        <div class="flex flex-wrap gap-2">
                             <button onclick="salvaModificaNota('${escJs(n.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
+                            <input type="file" id="nt-foto-${esc(n.id)}" accept="image/*" multiple class="hidden" onchange="fotoScelteSuNota(this, '${escJs(n.id)}')" />
+                            <button onclick="scegliFoto('nt-foto-${escJs(n.id)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5">${ICONA_FOTO}Foto</button>
                             <button onclick="annullaModificaNota()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
                             <button onclick="eliminaNota('${escJs(n.id)}')" class="text-red-600 bg-red-50 hover:bg-red-100 text-xs font-bold px-3 py-2 rounded-lg ml-auto">Elimina</button>
                         </div>
@@ -7663,6 +8150,7 @@
                             <span class="text-[11px] font-bold text-gray-400 tabular-nums whitespace-nowrap">${ggMmAaaa(n.data)}</span>
                             <span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap">${esc(tipoNota(n))}</span>
                         </span>
+                        ${miniatureNota(n)}
                     </span>
                     <button onclick="apriModificaNota('${escJs(n.id)}')" title="Modifica questa nota" aria-label="Modifica la nota del ${esc(ggMmAaaa(n.data))}"
                             class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
@@ -7695,6 +8183,13 @@
                         <div class="min-w-0">
                             <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Note</h2>
                             <p class="text-gray-500 text-[13px] font-medium mt-0.5">Quello che è successo, con la sua data: per ritrovarlo quando serve.</p>
+                            ${(() => {
+                                const c = contoFoto();
+                                // Le foto non pesano sui dati dei conti: stanno nel
+                                // magazzino grande del browser. Il numero si vede lo
+                                // stesso, perche' lo spazio del telefono e' di tutti.
+                                return c.quante ? `<p class="text-xs text-gray-400 font-bold mt-1">${c.quante === 1 ? 'Una foto allegata' : c.quante + ' foto allegate'} · ${pesoLeggibile(c.byte)}</p>` : '';
+                            })()}
                         </div>
                         ${pillolaAnno('note')}
                     </header>
@@ -7718,7 +8213,18 @@
                             <input type="text" id="nota-testo" required placeholder="Es. Gomme nuove sull'anteriore, gommista di via Firenze"
                                    class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400" />
                         </div>
-                        <button type="submit" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl text-sm">Salva la nota</button>
+                        ${riquadroFotoInAttesa()}
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="submit" class="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-5 rounded-xl text-sm">Salva la nota</button>
+                            <!-- Senza l'attributo capture il telefono apre un menu: scattare
+                                 adesso oppure pescare dalla galleria. Lo scontrino lo si
+                                 fotografa spesso al distributore e lo si allega la sera. -->
+                            <input type="file" id="nota-foto-campo" accept="image/*" multiple class="hidden" onchange="fotoScelteInAttesa(this)" />
+                            <button type="button" onclick="scegliFoto('nota-foto-campo')"
+                                    class="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 px-4 rounded-xl text-sm flex items-center justify-center gap-2">
+                                ${ICONA_FOTO}Aggiungi una foto
+                            </button>
+                        </div>
                     </form>
 
                     ${tipiUsati.length > 1 ? `
@@ -8611,6 +9117,18 @@
                             <button onclick="exportCSV()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors">
                                 Scarica il CSV ${annoAttivo()} per il commercialista
                             </button>
+                            <!-- Le foto viaggiano per conto loro: dentro il backup
+                                 normale lo farebbero passare da qualche centinaio di
+                                 kilobyte a decine di megabyte, e quel file deve
+                                 restare leggero perche' lo si fa spesso. -->
+                            ${(() => {
+                                const c = contoFoto();
+                                if (!c.quante) return '';
+                                return `
+                                    <button onclick="exportFoto()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-xl shadow-sm transition-colors">
+                                        Scarica le ${c.quante} foto allegate (${pesoLeggibile(c.byte)})
+                                    </button>`;
+                            })()}
 
                             <div class="pt-3 border-t border-gray-100">
                                 ${(() => {
@@ -8641,6 +9159,10 @@
                                 <input type="file" accept=".json" onchange="importBackup(event)" class="hidden" />
                             </label>
                             <p class="text-xs text-gray-400 leading-relaxed">L'import unisce i dati esistenti con quelli del file: i movimenti con lo stesso identificativo vengono aggiornati, non duplicati.</p>
+                            <label class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 px-4 rounded-xl flex justify-center items-center cursor-pointer transition-colors">
+                                <span>Rimetti le foto allegate (.json)</span>
+                                <input type="file" accept=".json" onchange="importFoto(event)" class="hidden" />
+                            </label>
                         </div>
                     </div>
 
@@ -8730,6 +9252,10 @@
             if (!SCHEDE.includes(window.activeTab)) window.activeTab = 'dashboard';
             const disegna = DISEGNO_SCHEDE[window.activeTab] || DISEGNO_SCHEDE.dashboard;
             main.innerHTML = disegna();
+            // Le foto arrivano dopo: nel disegno c'e' solo il riquadro vuoto,
+            // altrimenti la schermata resterebbe ferma ad aspettare il
+            // magazzino. Vedi riempiFoto.
+            if (window.riempiFoto) window.riempiFoto(main);
         }
 
 
@@ -9974,6 +10500,64 @@
                 profilo: window.profilo || null,
                 date: new Date().toISOString()
             };
+        }
+
+        // Kilobyte o megabyte a seconda di quanto pesa: «2,8 MB» si legge,
+        // «2847 KB» va contato con il dito.
+        function pesoLeggibile(byte) {
+            const kb = (byte || 0) / 1024;
+            return kb < 1024 ? `${Math.round(kb)} KB` : `${numeroIT(Math.round(kb / 102.4) / 10)} MB`;
+        }
+
+        // ============================================================
+        //  LE FOTO VIAGGIANO PER CONTO LORO
+        //  Dentro il backup normale lo farebbero passare da qualche centinaio
+        //  di kilobyte a decine di megabyte - e quel file deve restare
+        //  leggero, perche' e' quello che si scarica spesso. Qui c'e' il file
+        //  delle sole foto: si fa una volta ogni tanto, e si tiene accanto al
+        //  backup. Le note sanno gia' quali foto cercare: nel backup normale
+        //  ogni nota porta la lista degli identificativi.
+        // ============================================================
+        async function exportFoto() {
+            const tutte = await fotoTutte();
+            if (!tutte.length) { showToast('Non ci sono foto da salvare.'); return; }
+            const pacco = { versione: 1, tipo: 'foto', foto: tutte, date: new Date().toISOString() };
+            const blob = new Blob([JSON.stringify(pacco)], { type: 'application/json' });
+            scaricaFile(blob, `TaxiManager_Foto_${new Date().toISOString().split('T')[0]}.json`);
+            showToast(`${tutte.length} foto scaricate.`);
+        }
+
+        function importFoto(e) {
+            const file = e.target.files && e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+            const lettore = new FileReader();
+            lettore.onload = async (ev) => {
+                let pacco;
+                try { pacco = JSON.parse(ev.target.result); }
+                catch (err) { showToast('Il file non si legge: non e\' un file di foto.', 'avviso'); return; }
+                const elenco = (pacco && Array.isArray(pacco.foto)) ? pacco.foto : [];
+                // Si accetta solo quello che e' davvero una foto fatta da qui:
+                // un identificativo e un JPEG. Non «un'immagine qualsiasi» -
+                // proprio JPEG, perche' e' l'unica cosa che questa app scrive.
+                // Tutto il resto si scarta senza guardarlo, come per il backup
+                // dei dati: un file confezionato male non deve avere nessuna
+                // strada per entrare.
+                const buone = elenco.filter(f => f && f.id && typeof f.jpeg === 'string'
+                                                 && f.jpeg.startsWith('data:image/jpeg;base64,'));
+                if (!buone.length) { showToast('Nel file non c\'e\' nessuna foto valida.', 'avviso'); return; }
+                let messe = 0;
+                for (const f of buone) {
+                    const rec = { id: String(f.id), jpeg: f.jpeg, larghezza: f.larghezza || null,
+                                  altezza: f.altezza || null, byte: f.byte || f.jpeg.length,
+                                  creata: f.creata || new Date().toISOString() };
+                    if (await fotoScrivi(rec)) { segnaFoto(rec.id, rec.byte); messe++; }
+                }
+                const scartate = elenco.length - buone.length;
+                showToast(`${messe} foto rimesse al loro posto.${scartate ? ' ' + scartate + ' scartate.' : ''}`);
+                renderContent();
+            };
+            lettore.readAsText(file);
         }
 
         function exportBackup() {

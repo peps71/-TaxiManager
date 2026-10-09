@@ -16,6 +16,13 @@ for i, r in enumerate(righe):
         t = re.sub(r'\$\{[^}]*\}', ' ', m.group(1))
         for c in t.split():
             if c and '$' not in c and '{' not in c: usate.add(c)
+# Le classi non stanno solo negli attributi class="...": alcune vivono in una
+# costante JS (CLASSE_MINIATURA e simili) e di li' finiscono nel disegno. Senza
+# guardarle anche qui, una classe inesistente dentro una costante passerebbe
+# liscia - ed e' successo con w-14 e h-14 alle miniature delle foto.
+for m in re.finditer(r"const CLASSE_[A-Z_]+ = '([^']*)'", testo):
+    for c in m.group(1).split():
+        if c and '$' not in c and '{' not in c: usate.add(c)
 manca = sorted(c for c in usate if not coperta(c))
 if manca:
     print(f'*** {len(manca)} CLASSI USATE MA NON DEFINITE: {", ".join(manca)}')
