@@ -78,7 +78,6 @@ const obbligatorie = {
   start_url: (v) => typeof v === 'string' && v.length > 0,
   scope: (v) => typeof v === 'string' && v.length > 0,
   display: (v) => ['standalone', 'fullscreen', 'minimal-ui'].includes(v),
-  id: (v) => typeof v === 'string' && v.length > 0,
   lang: (v) => v === 'it',
   theme_color: (v) => /^#[0-9a-f]{6}$/i.test(v),
   background_color: (v) => /^#[0-9a-f]{6}$/i.test(v)
@@ -88,6 +87,12 @@ for (const [voce, valida] of Object.entries(obbligatorie)) {
        + (voce === 'short_name' && man.short_name ? `  (${man.short_name.length} caratteri, sotto l'icona ne stanno una dozzina)` : ''));
 }
 // Lo start_url deve stare dentro lo scope, altrimenti l'app si apre nel browser
+// L'id dice al telefono «sono sempre la stessa app». Senza, vale lo start_url,
+// che e' quello che questa app ha sempre avuto: scriverlo esplicitamente e'
+// piu' pulito, ma e' anche una cosa in piu' che puo' andare storta, e qui
+// l'identita' dell'app non deve cambiare mai.
+console.log(`  id: ${man.id === undefined ? 'non scritto, vale lo start_url' : JSON.stringify(man.id)}`);
+
 // L'orientamento lo rispetta Android; l'iPhone lo ignora. Bloccato in
 // verticale va bene sul telefono, ma su un tablet impedisce di girarlo.
 dire(['portrait-primary', 'portrait', 'any', 'natural', undefined].includes(man.orientation),
@@ -179,6 +184,25 @@ for (const i of misure.filter(i => i.scopo === 'any' && i.larghezza === 512)) {
 }
 
 // ------------------------------------------------------------------
+// L'IPHONE VA A PRENDERE L'ICONA UNA VOLTA SOLA
+// Nel momento in cui si tocca «Aggiungi alla schermata Home». Se in quel
+// momento il file non arriva, si disegna da solo un quadrato con la lettera
+// iniziale, e quello resta finche' non si rifa' l'operazione: l'icona di
+// un'app installata non si aggiorna da sola. Quindi non basta che il file
+// esista: deve arrivare, con il tipo giusto, a chi lo chiede.
+console.log('\n4bis. le icone arrivano davvero a chi le chiede');
+const indirizzi = [...man.icons.map(i => i.src), './apple-touch-icon-180.png', './favicon.ico'];
+for (const src of indirizzi) {
+  const risposta = await p.evaluate(async (s) => {
+    try {
+      const r = await fetch(s, { cache: 'no-store' });
+      return { stato: r.status, tipo: r.headers.get('content-type') || '', byte: (await r.blob()).size };
+    } catch (e) { return { stato: 0, tipo: String(e), byte: 0 }; }
+  }, src);
+  dire(risposta.stato === 200 && /^image\//.test(risposta.tipo) && risposta.byte > 0,
+       `${src.replace('./', '')}: ${risposta.stato} ${risposta.tipo} ${risposta.byte} byte`);
+}
+
 console.log('\n5. le righe nell\'intestazione della pagina');
 const testa = await p.evaluate(() => {
   const m = {};
@@ -186,10 +210,14 @@ const testa = await p.evaluate(() => {
   return { metas: m,
            manifest: document.querySelector('link[rel=manifest]')?.getAttribute('href') || null,
            iconaApple: document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href') || null,
+           misuraApple: document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('sizes') || null,
+           quanteApple: document.querySelectorAll('link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]').length,
            titolo: document.title };
 });
 dire(testa.manifest === 'manifest.json', 'link al manifesto: ' + testa.manifest);
 dire(testa.iconaApple !== null, 'apple-touch-icon: ' + testa.iconaApple);
+dire(testa.misuraApple === '180x180', 'con la misura dichiarata: ' + (testa.misuraApple || 'MANCA'));
+dire(testa.quanteApple >= 1, `righe apple-touch-icon nella pagina: ${testa.quanteApple}`);
 dire(/viewport-fit=cover/.test(testa.metas.viewport || ''), 'viewport con viewport-fit=cover (serve per il notch e la barra di casa)');
 dire(testa.metas['theme-color'] === man.theme_color,
      `colore della barra: pagina ${testa.metas['theme-color']} e manifesto ${man.theme_color}` );

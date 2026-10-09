@@ -69,6 +69,50 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## L'icona sulla schermata Home, e un limite di queste prove (versione 144)
+
+Dopo l'aggiornamento alla 142, rimettendo l'app sulla schermata Home dell'iPhone
+al posto dell'icona del taxi è comparso **un quadrato giallo con la lettera T**:
+quello che il telefono si disegna da solo quando, nel momento in cui si tocca
+«Aggiungi alla schermata Home», non riesce a usare nessuna icona. L'icona di
+un'app installata non si aggiorna mai da sola — viene presa una volta sola, in
+quel momento — quindi il quadrato resta finché non si rifà l'operazione.
+
+**La causa non è stata accertata.** Dal contenitore in cui girano queste prove il
+sito pubblicato non si raggiunge (il proxy nega sia `peps71.github.io` sia l'API
+delle Pages), e in locale tutte le icone si scaricano e si decodificano. Quindi
+qui si è tolto di mezzo tutto quello che era cambiato intorno all'icona e si è
+scritta la dichiarazione nel modo più semplice che esista:
+
+| Prima | Adesso | Perché |
+| --- | --- | --- |
+| `"id": "./"` nel manifesto | tolto | Era l'unica cosa aggiunta nella 142 che tocca l'**identità** dell'app. Senza, vale lo `start_url` — che è l'identità che questa app ha sempre avuto |
+| `"src": "./icon-192.png"` | `"src": "icon-192.png"` | Identico una volta risolto, ma una variabile in meno |
+| `<link rel="apple-touch-icon" href="./apple-touch-icon-180.png">` | `href="apple-touch-icon-180.png"`, con `sizes="180x180"`, più la riga `apple-touch-icon-precomposed` per le versioni vecchie di iOS | Stessa ragione, e la misura dichiarata toglie al telefono un passaggio da indovinare |
+
+Le icone non sono state toccate: i file sono quelli, byte per byte.
+
+### Il controllo che mancava
+
+Le prove guardavano che le icone **esistessero** e fossero della misura giusta.
+Non guardavano che **arrivassero**. Adesso `prove/installabile.mjs` le chiede una
+per una come le chiederebbe il telefono e controlla stato, tipo e peso della
+risposta:
+
+```
+4bis. le icone arrivano davvero a chi le chiede
+  icon-192.png: 200 image/png 89354 byte
+  apple-touch-icon-180.png: 200 image/png 79919 byte
+```
+
+### Il limite da tenere a mente
+
+Questo controllo gira **sul computer, su un server locale**. Non dice niente su
+cosa serve GitHub Pages, e non dice niente su cosa fa l'iPhone: Safari sceglie
+l'icona con regole sue, che cambiano da una versione all'altra di iOS, e qui non
+c'è nessun iPhone. Una prova automatica non può chiudere questo cerchio da sola —
+l'ultimo passo resta guardare il telefono.
+
 ## Le foto: lo scontrino, il danno, il documento (versione 143)
 
 Una nota dice «gomme nuove, gommista di via Firenze». Con la foto dello

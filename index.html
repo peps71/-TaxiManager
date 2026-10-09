@@ -65,10 +65,19 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="TaxiManager">
-    <link rel="icon" href="./favicon.ico" sizes="any">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
-    <link rel="apple-touch-icon" href="./apple-touch-icon-180.png">
+    <link rel="icon" href="favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <!-- L'ICONA SULLA SCHERMATA HOME DELL'IPHONE
+         Scritta nel modo piu' semplice che esista: niente «./» davanti e la
+         misura dichiarata. L'iPhone va a prendere questo file nel momento in
+         cui si tocca «Aggiungi alla schermata Home», una volta sola: se in
+         quel momento non lo trova, si disegna da solo un quadrato con la
+         lettera iniziale e quella resta finche' non si rifa' l'operazione.
+         Ce ne sono due, la stessa immagine: la seconda e' il nome che
+         cercano le versioni vecchie di iOS. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-180.png">
     <title>TaxiManager</title>
     <!-- ============================================================
          TAILWIND, DENTRO IL FILE
@@ -1298,7 +1307,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 143;
+        const VERSIONE_APP = 144;
 
         function profiloCompilato() {
             const p = window.profilo || {};
