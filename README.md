@@ -69,6 +69,57 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Due strade per installare, una per telefono (versione 150)
+
+Svuotati i dati del sito, l'icona esce ancora con la lettera. Quindi non era la
+memoria dell'iPhone. Ma nella descrizione del problema c'era la risposta, e
+andava letta prima:
+
+> nella schermata di **condivisione** vedo il taxi, nella schermata **«Aggiungi
+> alla schermata Home»** vedo la T
+
+Sono **due strade diverse**, e una delle due funziona:
+
+| Strada | Da dove prende l'icona | Esito |
+| --- | --- | --- |
+| Condivisione | `apple-touch-icon` | il taxi |
+| Aggiungi alla schermata Home | il **manifesto** | la lettera |
+
+### Sull'iPhone il manifesto non serve a niente
+
+Android installa leggendo il manifesto. L'iPhone no: ha le sue righe `apple-*`,
+che esistono da prima dei manifesti e dicono **la stessa identica cosa** —
+aprimi a tutto schermo (`apple-mobile-web-app-capable`), chiamami così
+(`apple-mobile-web-app-title`), usa quest'icona (`apple-touch-icon`), colora la
+barra così (`theme-color`).
+
+Quando ci sono tutte e due, l'iPhone preferisce il manifesto — e con questa app
+sceglieva male. I file sono tutti a posto, misurati dal telefono stesso: `200`,
+`image/png`, l'immagine si apre. Semplicemente quella strada non arrivava in
+fondo.
+
+Quindi il manifesto adesso **si aggancia solo dove serve davvero**: su Android,
+con due righe di copione. Sull'iPhone resta la strada di Apple, che su quel
+telefono funziona — lo si è visto, nella schermata di condivisione.
+
+`prove/installabile.mjs` (8quinquies) controlla tutte e due le strade: su un
+browser normale il manifesto c'è; fingendosi un iPhone il manifesto **non** c'è,
+e ci sono tutte le righe che fanno il suo lavoro.
+
+### Quanto è costata questa storia, e perché
+
+Otto versioni. Il difetto vero — il service worker che rispondeva con la pagina
+al posto dei file — è stato trovato alla 145. Le altre sono servite a renderlo
+visibile, a chiudere quello che saltava fuori intorno, e **tre erano tentativi
+al buio**, perché da qui il sito pubblicato non si raggiunge e un computer non è
+un iPhone.
+
+La lezione, scritta qui perché non si ripeta: **quando quello che si misura è a
+posto e il risultato no, non si cambia un'altra riga. Si cambia strumento.** Il
+controllo che gira sul telefono (147) è arrivato quattro versioni dopo il
+momento in cui sarebbe servito, e l'indizio decisivo non è venuto da una misura:
+è venuto da una frase.
+
 ## L'icona con la cornice, a tutte le misure (versione 149)
 
 L'icona grande era a pieno campo e solo la versione «ritagliabile» aveva la

@@ -414,6 +414,47 @@ dire(suoEsito.dichiarata === testa.iconaApple,
      `l'app sa quale icona dichiara: ${suoEsito.dichiarata}`);
 
 // ------------------------------------------------------------------
+// DUE STRADE, UNA PER TELEFONO
+// Android installa leggendo il manifesto; l'iPhone ha le sue righe apple-*,
+// che dicono la stessa cosa. Quando ci sono tutte e due l'iPhone sceglie il
+// manifesto, e con questa app sceglieva male: l'icona nella condivisione si
+// vedeva, quella sulla schermata Home no. Qui si controlla che il manifesto
+// venga agganciato dove serve e NON dove fa danno, e che sull'iPhone restino
+// tutte le righe che sostituiscono quello che il manifesto avrebbe detto.
+console.log('\n8quinquies. il manifesto si aggancia solo dove serve');
+dire(testa.manifest === 'manifest.webmanifest', 'su un browser normale il manifesto c\'e\': ' + testa.manifest);
+
+const finto = await b.newContext({
+  viewport: { width: 390, height: 844 }, locale: 'it-IT', isMobile: true, hasTouch: true,
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1'
+});
+const pi = await finto.newPage();
+await pi.goto(SITO + '/index.html');
+await pi.waitForFunction(() => typeof window.switchTab === 'function', { timeout: 20000 });
+const suIphone = await pi.evaluate(() => {
+  const m = {};
+  document.querySelectorAll('meta[name]').forEach(e => { m[e.name] = e.content; });
+  return {
+    manifesto: !!document.querySelector('link[rel="manifest"]'),
+    icona: document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href') || null,
+    misura: document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('sizes') || null,
+    aTuttoSchermo: m['apple-mobile-web-app-capable'],
+    nome: m['apple-mobile-web-app-title'],
+    colore: m['theme-color'],
+    barra: m['apple-mobile-web-app-status-bar-style'],
+    viva: typeof window.switchTab === 'function'
+  };
+});
+dire(suIphone.manifesto === false, 'con l\'iPhone il manifesto NON viene agganciato');
+dire(suIphone.icona !== null && suIphone.misura === '180x180', `e resta l'icona di Apple: ${suIphone.icona} (${suIphone.misura})`);
+dire(suIphone.aTuttoSchermo === 'yes', 'a tutto schermo: apple-mobile-web-app-capable = ' + suIphone.aTuttoSchermo);
+dire(!!suIphone.nome, 'nome sotto l\'icona: ' + suIphone.nome);
+dire(!!suIphone.barra, 'stile della barra di stato: ' + suIphone.barra);
+dire(suIphone.colore === man.theme_color, 'colore della barra: ' + suIphone.colore);
+dire(suIphone.viva, 'e l\'app funziona lo stesso');
+await finto.close();
+
+// ------------------------------------------------------------------
 console.log('\n9. lamentele del browser');
 const serie = lamentele.filter(t => !/favicon|firebase|gstatic|net::ERR/i.test(t));
 dire(serie.length === 0, serie.length === 0 ? 'nessun errore in console' : 'errori: ' + serie.slice(0, 3).join(' | '));

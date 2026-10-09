@@ -55,8 +55,38 @@
         })();
     </script>
 
-    <!-- PWA: installazione su telefono -->
-    <link rel="manifest" href="manifest.webmanifest">
+    <!-- ============================================================
+         INSTALLAZIONE SUL TELEFONO: DUE STRADE, NON UNA
+         Android installa leggendo il manifesto. L'iPhone no: lui ha le sue
+         righe apple-*, che esistono da prima dei manifesti e dicono la stessa
+         identica cosa - aprimi a tutto schermo, chiamami cosi', usa
+         quest'icona.
+         Quando ci sono tutte e due, l'iPhone sceglie il manifesto - e con
+         questa app sceglieva male: nella schermata di condivisione l'icona del
+         taxi compariva (quella la prende da apple-touch-icon), ma nella
+         schermata «Aggiungi alla schermata Home» no, e si disegnava da solo un
+         quadrato giallo con la lettera T. File tutti a posto, misurati dal
+         telefono stesso: 200, image/png, l'immagine si apre. Semplicemente
+         quella strada non arrivava in fondo.
+         Quindi il manifesto si aggancia SOLO dove serve davvero, cioe' dove
+         non c'e' un'alternativa: su Android. Sull'iPhone resta la strada di
+         Apple, che su questo telefono funziona - lo si e' visto.
+         ============================================================ -->
+    <script>
+        (function () {
+            try {
+                var ua = navigator.userAgent || '';
+                var iOS = /iPad|iPhone|iPod/.test(ua)
+                    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                if (iOS) { window.manifestoAgganciato = false; return; }
+                var l = document.createElement('link');
+                l.rel = 'manifest';
+                l.href = 'manifest.webmanifest';
+                document.head.appendChild(l);
+                window.manifestoAgganciato = true;
+            } catch (e) { /* nel dubbio si resta senza: le righe apple- bastano */ }
+        })();
+    </script>
     <meta name="theme-color" content="#facc15">
     <!-- Le due righe che dicono "aggiunta alla Home, aprimi come un'app, senza
          la barra del browser": la prima e' quella che capisce Android, la
@@ -1339,7 +1369,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 149;
+        const VERSIONE_APP = 150;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -5422,6 +5452,7 @@
             } catch (err) { /* il manifesto non si legge: lo dice gia' la riga sopra */ }
             window.esitoInstallazione = {
                 righe,
+                conManifesto: !!document.querySelector('link[rel="manifest"]'),
                 dichiarata: dichiarata ? dichiarata.getAttribute('href') : 'nessuna',
                 quando: new Date().toLocaleTimeString('it-IT')
             };
@@ -5449,6 +5480,7 @@
                         ${tutteBuone ? 'Tutti i file dell\'installazione arrivano' : 'Qualcosa non arriva'} · ${esc(esito.quando)}
                     </p>
                     <p class="text-xs text-gray-500 mt-1">icona dichiarata: ${esc(esito.dichiarata)}</p>
+                    <p class="text-xs text-gray-500">installazione: ${esito.conManifesto ? 'dal manifesto (Android)' : 'alla maniera di Apple (iPhone)'}</p>
                     <div class="mt-2 space-y-1">
                         ${esito.righe.map(r => `
                             <p class="text-xs leading-relaxed">
