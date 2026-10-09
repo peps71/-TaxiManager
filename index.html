@@ -56,7 +56,7 @@
     </script>
 
     <!-- PWA: installazione su telefono -->
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#facc15">
     <!-- Le due righe che dicono "aggiunta alla Home, aprimi come un'app, senza
          la barra del browser": la prima e' quella che capisce Android, la
@@ -735,6 +735,27 @@
                 },
                 (error) => console.error('Errore Sync Profilo:', error)));
 
+            // LE IMPOSTAZIONI FISCALI
+            // Stesso trattamento della scheda: un documento solo. Prima stavano
+            // soltanto su questo telefono, e cambiando dispositivo sparivano
+            // senza dire niente - aliquota INPS, rata, minimale, addizionali,
+            // soglia e accantonamento tornavano ai valori di partenza, e i
+            // conti delle tasse cambiavano sotto il naso. Se sul Cloud non ci
+            // sono ancora ma qui si', si portano su.
+            annullaAscolti.push(onSnapshot(
+                doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali'),
+                (d) => {
+                    if (d.exists()) {
+                        window.fiscalSettings = Object.assign({}, window.fiscalSettings, d.data());
+                        try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings)); }
+                        catch (err) { /* lo dice gia' l'avviso sul disco */ }
+                    } else if (!d.metadata.fromCache && window.saveFiscaliToCloud) {
+                        window.saveFiscaliToCloud(window.fiscalSettings);
+                    }
+                    if (!formConDatiNonSalvati()) window.renderDifferito();
+                },
+                (error) => console.error('Errore Sync Impostazioni fiscali:', error)));
+
             annullaAscolti.push(onSnapshot(recordsCol, (snapshot) => {
                 // Cartella vuota al primo accesso: si carica quello che c'e' qui
                 if (snapshot.empty && !collezioniConDati['records'] && !snapshot.metadata.fromCache) {
@@ -1023,6 +1044,17 @@
         // ogni apertura dell'app. Si caricano quando si scattano, si leggono
         // una per una quando servono - e quando sono scese restano nel
         // magazzino del telefono e non si ripassano piu'.
+        window.saveFiscaliToCloud = async function (impostazioni) {
+            if (isCloudActive && db && auth.currentUser) {
+                try {
+                    await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali'), impostazioni);
+                } catch (err) {
+                    console.error("Errore scrittura Cloud impostazioni fiscali:", err);
+                    if (window.showToast) window.showToast('Impostazioni fiscali salvate solo su questo dispositivo.', 'avviso');
+                }
+            }
+        };
+
         window.saveFotoToCloud = async function(foto) {
             if (isCloudActive && db && auth.currentUser) {
                 try {
@@ -1307,7 +1339,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 147;
+        const VERSIONE_APP = 148;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1658,6 +1690,7 @@
         window.deleteNotaFromCloud = function() {};
         // Senza Cloud le foto restano nel magazzino del telefono: niente da
         // caricare, e da leggere c'e' solo quello (vedi fotoDaId).
+        window.saveFiscaliToCloud = function() {};
         window.saveFotoToCloud = function() {};
         window.deleteFotoFromCloud = function() {};
         window.leggiFotoDalCloud = function() { return Promise.resolve(null); };
@@ -2409,6 +2442,7 @@
                 addizionaliPerc: add, sogliaForfettario: soglia, accantonamentoPerc: accantonamento
             };
             localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings));
+            if (window.saveFiscaliToCloud) window.saveFiscaliToCloud(window.fiscalSettings);
             showToast('Impostazioni fiscali salvate.');
             renderContent();
         }
@@ -5380,10 +5414,10 @@
             renderContent();
             const dichiarata = document.querySelector('link[rel="apple-touch-icon"]');
             const righe = [];
-            righe.push(await provaRisorsa('manifest.json', 'manifesto'));
+            righe.push(await provaRisorsa('manifest.webmanifest', 'manifesto'));
             if (dichiarata) righe.push(await provaRisorsa(dichiarata.getAttribute('href'), 'immagine'));
             try {
-                const m = await (await fetch('manifest.json', { cache: 'reload' })).json();
+                const m = await (await fetch('manifest.webmanifest', { cache: 'reload' })).json();
                 for (const i of (m.icons || [])) righe.push(await provaRisorsa(i.src, 'immagine'));
             } catch (err) { /* il manifesto non si legge: lo dice gia' la riga sopra */ }
             window.esitoInstallazione = {
@@ -11068,6 +11102,10 @@
                     window.fiscalSettings = nuove;
                     try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(nuove)); }
                     catch (err) { /* spazio esaurito: pazienza */ }
+                    // E vanno anche sul Cloud, come tutto il resto del backup:
+                    // ripristinare qui e trovarle vecchie sull'altro
+                    // dispositivo sarebbe mezzo ripristino.
+                    if (window.saveFiscaliToCloud) window.saveFiscaliToCloud(window.fiscalSettings);
                 }
             }
 

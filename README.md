@@ -69,6 +69,57 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le impostazioni fiscali sul Cloud, e il manifesto col tipo giusto (versione 148)
+
+### Il buco: le impostazioni fiscali stavano solo sul telefono
+
+Aliquota INPS, rata, numero di rate, minimale, addizionali, soglia del
+forfettario e accantonamento sono i numeri da cui dipende **ogni stima delle
+tasse** dell'app. Tutto il resto — movimenti, turni, scadenze, vetture, voci di
+budget, note, la scheda del tassista, perfino le foto — va sul Cloud. Quelli no:
+vivevano in `localStorage` e basta.
+
+Conseguenza: cambiando dispositivo tornavano ai valori di fabbrica **senza dire
+niente**, e i conti delle tasse cambiavano sotto il naso. Un buco silenzioso,
+della stessa famiglia di quelli che questa app passa il tempo a stanare.
+
+Adesso hanno lo stesso trattamento della scheda del tassista: un documento solo
+sul Cloud, un ascolto che li riporta giù, e una scrittura ogni volta che si
+salvano — dal modulo **e** da un ripristino di backup. Se sul Cloud non ci sono
+ancora ma sul telefono sì, si portano su da soli. L'unione è per campi, non per
+sostituzione: quello che il Cloud non dice resta com'è.
+
+`prove/testFiscali.mjs` (14 controlli) mette una spia al posto della scrittura e
+guarda che parta davvero, con dentro gli stessi numeri; che un valore sbagliato
+non mandi niente; che il backup li rimetta e li ripubblichi; e che senza Cloud
+non si rompa nulla. Togliendo la chiamata, due controlli falliscono.
+
+### Il manifesto arrivava col tipo sbagliato, e il banco di prova lo nascondeva
+
+Il controllo che gira sul telefono (versione 147) ha dato il primo dato vero di
+tutta questa storia:
+
+```
+OK manifest.json   200 · application/json · 1 KB · si legge
+```
+
+`application/json`. Lo standard del manifesto chiede **`application/manifest+json`**.
+GitHub Pages serve qualunque `.json` come json generico, mentre il server delle
+prove lo serviva già col tipo giusto: **il banco di prova era più generoso del
+sito vero**, e la differenza non si poteva vedere da qui.
+
+Due correzioni, e la seconda vale più della prima:
+
+1. il manifesto si chiama `manifest.webmanifest`, che GitHub Pages serve come
+   `application/manifest+json`;
+2. **i server delle prove adesso si comportano come GitHub Pages**, non meglio —
+   `.json` come `application/json`, `.webmanifest` col tipo giusto — e
+   `prove/installabile.mjs` controlla che il manifesto arrivi col tipo che lo
+   standard chiede.
+
+Una prova che è più indulgente della realtà non è una prova: è un modo elaborato
+di darsi ragione.
+
 ## Nomi nuovi alle icone, e un controllo che gira sul telefono (versione 147)
 
 Con la 146 tutto quello che si poteva misurare da qui era a posto: il file

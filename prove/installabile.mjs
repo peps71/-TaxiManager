@@ -31,7 +31,7 @@ const dire = (buono, t) => (buono ? ok : male)(t);
 
 // Un sito finto: il manifesto e il service worker non funzionano da file://
 let offline = false;
-const tipi = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.json':'application/manifest+json',
+const tipi = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.json':'application/json','.webmanifest':'application/manifest+json',
                '.png':'image/png', '.ico':'image/x-icon', '.jpg':'image/jpeg', '.css':'text/css' };
 const server = http.createServer((req, res) => {
   if (offline) { res.socket.destroy(); return; }
@@ -66,9 +66,9 @@ dire(gravi.length === 0, gravi.length === 0
   ? 'il browser legge il manifesto senza errori gravi'
   : 'il browser segnala: ' + gravi.map(e => e.message).join(' | '));
 if (errori.length && !gravi.length) console.log('     avvisi non gravi: ' + errori.map(e => e.message).join(' | '));
-dire(!!risposta.url && risposta.url.endsWith('manifest.json'), 'il manifesto e\' agganciato alla pagina: ' + (risposta.url || 'MANCA'));
+dire(!!risposta.url && risposta.url.endsWith('manifest.webmanifest'), 'il manifesto e\' agganciato alla pagina: ' + (risposta.url || 'MANCA'));
 
-const man = JSON.parse(fs.readFileSync(join(RADICE, 'manifest.json'), 'utf8'));
+const man = JSON.parse(fs.readFileSync(join(RADICE, 'manifest.webmanifest'), 'utf8'));
 
 // ------------------------------------------------------------------
 console.log('\n2. le voci che decidono il comportamento da app');
@@ -203,6 +203,19 @@ for (const src of indirizzi) {
        `${src.replace('./', '')}: ${risposta.stato} ${risposta.tipo} ${risposta.byte} byte`);
 }
 
+// IL TIPO DEL MANIFESTO
+// Lo standard chiede application/manifest+json. Un file che finisce in .json
+// GitHub Pages lo serve come application/json qualunque, e il mio server di
+// prova lo serviva invece col tipo giusto: la differenza fra il banco di prova
+// e il sito vero non si vedeva. Da qui il nome .webmanifest, che GitHub Pages
+// serve come si deve, e questo controllo, che non lo lascia tornare indietro.
+const tipoManifesto = await p.evaluate(async () => {
+  try { const r = await fetch('manifest.webmanifest', { cache: 'no-store' });
+        return (r.headers.get('content-type') || '').split(';')[0]; }
+  catch (e) { return String(e); }
+});
+dire(tipoManifesto === 'application/manifest+json', 'il manifesto arriva come ' + tipoManifesto);
+
 console.log('\n5. le righe nell\'intestazione della pagina');
 const testa = await p.evaluate(() => {
   const m = {};
@@ -214,7 +227,7 @@ const testa = await p.evaluate(() => {
            quanteApple: document.querySelectorAll('link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]').length,
            titolo: document.title };
 });
-dire(testa.manifest === 'manifest.json', 'link al manifesto: ' + testa.manifest);
+dire(testa.manifest === 'manifest.webmanifest', 'link al manifesto: ' + testa.manifest);
 dire(testa.iconaApple !== null, 'apple-touch-icon: ' + testa.iconaApple);
 dire(testa.misuraApple === '180x180', 'con la misura dichiarata: ' + (testa.misuraApple || 'MANCA'));
 dire(testa.quanteApple >= 1, `righe apple-touch-icon nella pagina: ${testa.quanteApple}`);
@@ -293,7 +306,7 @@ const inCache = await p.evaluate(async (elenco) => {
   const dentro = [];
   for (const f of elenco) dentro.push([f, !!(await c.match(f))]);
   return { cache: nomi, dentro };
-}, ['./index.html', './manifest.json', ...man.icons.map(i => i.src), './icona-iphone-180-2.png']);
+}, ['./index.html', './manifest.webmanifest', ...man.icons.map(i => i.src), './icona-iphone-180-2.png']);
 for (const [f, c] of inCache.dentro) dire(c, `${f.replace('./', '')} ${c ? 'salvato sul telefono' : 'NON salvato: senza campo manca'}`);
 
 offline = true;
@@ -303,7 +316,7 @@ await p2.goto(indirizzoAvvio).catch(() => {});
 const viva = await p2.waitForFunction(() => typeof window.switchTab === 'function', { timeout: 20000 }).then(() => true).catch(() => false);
 dire(viva, viva ? 'senza campo lo start_url apre l\'app, non la pagina di errore' : 'senza campo lo start_url non apre l\'app');
 const manOffline = await p2.evaluate(async () => {
-  try { const r = await fetch('./manifest.json'); return r.ok; } catch (e) { return false; }
+  try { const r = await fetch('./manifest.webmanifest'); return r.ok; } catch (e) { return false; }
 });
 dire(manOffline, manOffline ? 'anche il manifesto si legge senza campo' : 'senza campo il manifesto non si legge');
 offline = false;
@@ -320,7 +333,7 @@ offline = false;
 // l'app funzionava benissimo. Qui si va a quegli indirizzi come ci va il
 // telefono, e si guarda che cosa arriva.
 console.log('\n8bis. andando all\'indirizzo di un file arriva il file, non l\'app');
-for (const dove of [...man.icons.map(i => i.src), './icona-iphone-180-2.png', './manifest.json']) {
+for (const dove of [...man.icons.map(i => i.src), './icona-iphone-180-2.png', './manifest.webmanifest']) {
   const risposta = await p2.goto(new URL(dove, SITO + '/').href);
   const tipo = (risposta && risposta.headers()['content-type']) || '';
   const buono = !/text\/html/.test(tipo);

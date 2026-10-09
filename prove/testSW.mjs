@@ -25,7 +25,7 @@ let lento = 0;            // ms di ritardo finto sulla rete
 let offline = false;
 let serviti = { html: 0 };
 
-const tipi = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.json':'application/json',
+const tipi = { '.html':'text/html; charset=utf-8', '.js':'text/javascript', '.json':'application/json','.webmanifest':'application/manifest+json',
                '.png':'image/png', '.ico':'image/x-icon', '.jpg':'image/jpeg' };
 const server = http.createServer(async (req, res) => {
   const pulito = decodeURIComponent(req.url.split('?')[0]);
