@@ -147,6 +147,37 @@ e il bello è che non è un'opinione: è quello che resta dopo aver tolto tutto 
 resto. Serviva una prova che dividesse il problema in due, e andava fatta sette
 versioni prima.
 
+### La controprova, e la fine della storia
+
+Restava da separare «il sito» da «il telefono», e si è fatto con il gesto più
+semplice che ci fosse: aggiungere alla schermata Home **un sito qualunque**.
+
+**Wikipedia e la Repubblica danno la stessa lettera.**
+
+Fine: non è TaxiManager, non è GitHub Pages, non è il trattino davanti al nome
+del deposito. È quel telefono, e vale per qualsiasi sito. Si risolve nelle
+impostazioni dell'iPhone — Modalità di isolamento, Dati ridotti, un blocco
+contenuti in Safari, o la memoria delle icone da rifare con un riavvio — e si
+verifica con Wikipedia, senza bisogno di toccare questa applicazione.
+
+### Che cosa è servito davvero, dalla 142 alla 151
+
+Dieci versioni per un'icona che non era rotta qui. Tre erano tentativi al buio e
+non hanno sistemato niente. Ma lungo la strada sono venuti fuori quattro difetti
+veri, tutti silenziosi, nessuno dei quali si sarebbe mai fatto notare da solo:
+
+| Versione | Difetto trovato |
+| --- | --- |
+| 145 | il service worker rispondeva con la pagina dell'app a qualunque indirizzo, anche quando gli si chiedeva un file |
+| 147 | le prove giravano su un computer e non c'era modo di sapere che cosa arrivasse al telefono |
+| 148 | le impostazioni fiscali stavano solo sul telefono: cambiando dispositivo tornavano ai valori di fabbrica senza dire niente. E il manifesto arrivava col tipo sbagliato, perché **il banco di prova era più generoso del sito vero** |
+| 151 | l'avviso di scadenza spariva il giorno in cui la scadenza va pagata |
+
+La lezione, scritta qui perché costa meno rileggerla che ritrovarla: **quando
+quello che si misura è a posto e il risultato no, non si cambia un'altra riga.
+Si cambia strumento** — si misura dove sta il problema, e si divide il problema
+in due.
+
 `prove/installabile.mjs` (8sexies) controlla che restino nude davvero anche con
 il service worker installato: se lui ci mettesse le mani sopra non proverebbero
 più niente, visto che il sospetto è proprio lui.
