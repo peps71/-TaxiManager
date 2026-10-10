@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v150';
+const VERSIONE = 'taximanager-v151';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
@@ -114,6 +114,10 @@ self.addEventListener('message', (evento) => {
 // altrimenti la sincronizzazione dei dati si rompe.
 function daNonIntercettare(url) {
   return (
+    // Le due paginette di prova dell'icona devono restare NUDE: se il service
+    // worker ci mettesse le mani sopra non proverebbero piu' niente, perche'
+    // il sospetto e' proprio lui. Vedi prova-icona/.
+    url.includes('/prova-icona/') ||
     url.includes('firestore.googleapis.com') ||
     url.includes('identitytoolkit.googleapis.com') ||
     url.includes('securetoken.googleapis.com') ||

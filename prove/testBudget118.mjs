@@ -86,13 +86,46 @@ prova(`e la giornata passa da ${prima.toFixed(2)} a ${r.dopo.toFixed(2)}`, r.dop
 
 // 6) la scadenza fa maturare dal rinnovo al rinnovo
 await apparecchia([{ slug:'assic', nome:'Assicurazione auto', importo:1460, unita:'anno', tipo:'scadenza', scadenza:'2025-10-10', dataInizio:'', dataFine:'' }]);
-r = await p.evaluate(() => {
-  const v = window.vociFisse[0];
-  return { periodo: periodoDaScadenza(v, '2026-06-15'), avviso: avvisoScadenzaVoce(v) };
-});
+r = await p.evaluate(() => ({ periodo: periodoDaScadenza(window.vociFisse[0], '2026-06-15') }));
 prova(`il periodo in corso parte dal 10/10/2025 (visto ${r.periodo.da})`, r.periodo.da === '2025-10-10', r.periodo.da);
 prova(`e finisce il 09/10/2026 (visto ${r.periodo.ultimoGiorno})`, r.periodo.ultimoGiorno === '2026-10-09', r.periodo.ultimoGiorno);
-prova(`l'avviso dice che scade il 10/10/2026 (visto ${r.avviso && r.avviso.data})`, r.avviso && r.avviso.data === '2026-10-10', JSON.stringify(r.avviso));
+
+// 6b) L'AVVISO, MISURATO RISPETTO A OGGI E NON A UNA DATA SCRITTA A MANO
+// La versione di prima diceva «l'avviso dice 10/10/2026»: vero per qualche
+// settimana all'anno, falso tutti gli altri giorni. Il 10 ottobre 2026 e'
+// andata a sbattere - ed e' stato un bene, perche' sotto c'era un difetto
+// vero: il giorno del rinnovo l'avviso spariva, proprio quando serve. Qui le
+// scadenze si costruiscono a partire da oggi, cosi' la prova dice la stessa
+// cosa in qualunque giorno la si faccia girare.
+// Una scadenza annuale messa un anno fa, spostata di `giorni`: cosi' il
+// rinnovo cade fra `giorni` giorni da oggi, qualunque giorno sia oggi.
+function scadenzaFra(giorni) {
+  const d = new Date();
+  d.setUTCHours(12, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + giorni);
+  d.setUTCFullYear(d.getUTCFullYear() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+for (const [giorni, atteso] of [[10, 10], [1, 1], [0, 0], [-5, -5], [-40, -40]]) {
+  await apparecchia([{ slug:'assic', nome:'Assicurazione auto', importo:1460, unita:'anno',
+                       tipo:'scadenza', scadenza: scadenzaFra(giorni), dataInizio:'', dataFine:'' }]);
+  const a = await p.evaluate(() => avvisoScadenzaVoce(window.vociFisse[0]));
+  const comeDice = giorni > 0 ? `scade fra ${giorni} gg` : giorni === 0 ? 'scade oggi' : `scaduta da ${-giorni} gg`;
+  prova(`rinnovo fra ${giorni} giorni: l'avviso c'e' e dice «${comeDice}» (visto ${a && a.giorni})`,
+        a && a.giorni === atteso, JSON.stringify(a));
+}
+
+// E lontano dal rinnovo l'avviso non deve esserci: se parlasse tutto l'anno
+// non lo guarderebbe piu' nessuno.
+await apparecchia([{ slug:'assic', nome:'Assicurazione auto', importo:1460, unita:'anno',
+                     tipo:'scadenza', scadenza: scadenzaFra(120), dataInizio:'', dataFine:'' }]);
+prova('a 120 giorni dal rinnovo l\'avviso tace',
+      (await p.evaluate(() => avvisoScadenzaVoce(window.vociFisse[0]))) === null);
+await apparecchia([{ slug:'assic', nome:'Assicurazione auto', importo:1460, unita:'anno',
+                     tipo:'scadenza', scadenza: scadenzaFra(-120), dataInizio:'', dataFine:'' }]);
+prova('e anche a 120 giorni DOPO il rinnovo tace',
+      (await p.evaluate(() => avvisoScadenzaVoce(window.vociFisse[0]))) === null);
 
 console.log(`\n  ${t && !errori.length ? 'TUTTO BENE' : 'QUALCOSA NON TORNA'} · errori JS: ${errori.length ? errori.join(' | ') : 'nessuno'}`);
 await b.close();

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- PAGINA NUDA, APPOSTA.
+     Niente app, niente service worker, niente manifesto, niente protezione
+     sugli indirizzi: solo le tre righe che servono all'iPhone per fare
+     un'icona. Serve a dividere il problema in due: se da qui l'icona esce
+     giusta, il guaio sta in quello che c'e' intorno all'app; se esce la
+     lettera anche da qui, il guaio sta nell'immagine o nel sito. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Prova B">
+<meta name="theme-color" content="#facc15">
+<link rel="apple-touch-icon" sizes="180x180" href="icona.jpg">
+<title>Prova B</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background: #faf9f6; color: #181611;
+         margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  div { padding: 2rem; text-align: center; max-width: 24rem; }
+  img { width: 90px; height: 90px; border-radius: 20px; }
+  h1 { font-size: 1.4rem; margin: 1rem 0 .5rem; }
+  p { line-height: 1.5; opacity: .75; margin: .5rem 0; }
+  code { background: #eee; padding: .1rem .35rem; border-radius: .25rem; font-size: .85em; }
+</style>
+</head>
+<body>
+<div>
+  <img src="icona.jpg" alt="L'icona di questa prova">
+  <h1>Prova B</h1>
+  <p>Questa pagina serve solo a provare l'icona: la stessa immagine in JPEG, senza trasparenze.</p>
+  <p><strong>Condividi &rarr; Aggiungi alla schermata Home</strong>, poi guarda che icona esce.</p>
+  <p>Sulla Home si chiamer&agrave; <code>Prova B</code>.</p>
+</div>
+</body>
+</html>

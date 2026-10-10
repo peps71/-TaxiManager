@@ -69,6 +69,67 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Due paginette nude, per dividere il problema in due (versione 151)
+
+### L'avviso di scadenza spariva il giorno in cui serviva
+
+Mentre si lavorava all'icona, il calendario ha fatto un regalo: una prova è
+andata a sbattere perché **oggi era il 10 ottobre 2026**, cioè esattamente la
+data di rinnovo che quella prova usava. Sotto c'era un difetto vero.
+
+L'avviso guardava solo in avanti: «scade fra N giorni», per i 45 giorni prima
+del rinnovo. Poi, **il giorno del rinnovo**, il periodo nuovo cominciava, la
+prossima scadenza diventava quella dell'anno dopo — a 365 giorni, fuori dai 45 —
+e **l'avviso spariva**. Spariva cioè il giorno esatto in cui l'assicurazione va
+pagata, e restava muto per tutto il tempo in cui si è in ritardo.
+
+Adesso guarda anche indietro: se il rinnovo è passato da non più di 45 giorni e
+di quel periodo non c'è un pagamento vero, l'avviso resta — **«scade oggi»** il
+giorno stesso, poi **«scaduta il …»** in rosso.
+
+| Giorni al rinnovo | Prima | Adesso |
+| --- | --- | --- |
+| +10 | scade fra 10 gg | scade fra 10 gg |
+| 0 | *niente* | **scade oggi** |
+| −5 | *niente* | **scaduta da 5 gg** |
+| −40 | *niente* | **scaduta da 40 gg** |
+| ±120 | niente | niente (giusto: se parlasse tutto l'anno non lo guarderebbe più nessuno) |
+
+**E la prova era fragile.** Diceva «l'avviso dice 10/10/2026»: vero per qualche
+settimana all'anno, falso tutti gli altri giorni. Adesso le scadenze se le
+costruisce a partire da oggi, così dice la stessa cosa in qualunque giorno la si
+faccia girare. Rimettendo il difetto, quattro controlli falliscono.
+
+Dopo la 150 l'icona esce ancora con la lettera. A questo punto le ipotesi sono
+finite, e insistere a tirarne fuori un'altra sarebbe la nona versione al buio.
+Quindi si smette di indovinare e si **bisezione**: si mette in linea il caso più
+semplice possibile e si guarda da che parte casca.
+
+`prova-icona/a/` e `prova-icona/b/` sono due pagine HTML di venti righe. Niente
+app, niente service worker (sono escluse esplicitamente in `daNonIntercettare`),
+niente manifesto, niente protezione sugli indirizzi: **solo le tre righe che
+servono all'iPhone per fare un'icona**.
+
+| Pagina | Icona | Cosa prova |
+| --- | --- | --- |
+| `prova-icona/a/` | `icona.png` — il PNG che usa l'app adesso | se il file va bene così com'è |
+| `prova-icona/b/` | `icona.jpg` — la stessa immagine in JPEG, senza canale di trasparenza | se il problema è il formato |
+
+Quello che il risultato dice, senza bisogno di altre ipotesi:
+
+- **A esce giusta** → il file va bene, e il guaio sta in quello che c'è intorno
+  all'app: la pagina, il service worker, qualcos'altro di quel documento.
+- **A sbaglia e B esce giusta** → il guaio è il PNG. L'icona diventa un JPEG e
+  la storia finisce lì.
+- **Sbagliano tutte e due** → non è né il file né l'app: è il sito o quel
+  telefono, e allora l'unica mossa che resta è cambiare indirizzo all'app.
+
+Tre esiti, tre conclusioni diverse, **nessuna delle quali va indovinata**.
+
+`prove/installabile.mjs` (8sexies) controlla che restino nude davvero anche con
+il service worker installato: se lui ci mettesse le mani sopra non proverebbero
+più niente, visto che il sospetto è proprio lui.
+
 ## Due strade per installare, una per telefono (versione 150)
 
 Svuotati i dati del sito, l'icona esce ancora con la lettera. Quindi non era la

@@ -1369,7 +1369,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 150;
+        const VERSIONE_APP = 151;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -12068,6 +12068,18 @@
         // LA SCADENZA CHE SI AVVICINA
         // Serve solo se il periodo in corso non l'hai ancora pagato: dire
         // «scade fra otto giorni» di una cosa gia' pagata sarebbe rumore.
+        // L'AVVISO NON DEVE SPARIRE PROPRIO IL GIORNO IN CUI SERVE
+        // Prima si guardava solo in avanti: «scade fra N giorni», per i 45
+        // giorni che precedono il rinnovo. Poi, il giorno del rinnovo, il
+        // periodo nuovo cominciava e la prossima scadenza diventava quella
+        // dell'anno dopo - a 365 giorni, fuori dai 45 - e l'avviso spariva.
+        // Spariva cioe' esattamente il giorno in cui l'assicurazione va
+        // pagata, e restava muto per tutto il tempo in cui si e' in ritardo.
+        // Adesso si guarda anche indietro: se il rinnovo e' passato da non
+        // piu' di 45 giorni e di quel periodo non c'e' un pagamento vero,
+        // l'avviso resta - «scade oggi» il giorno stesso, poi «scaduta il
+        // ...» in rosso. Lo ha fatto saltare fuori il calendario: una prova
+        // e' andata a sbattere il giorno in cui la data di scadenza era oggi.
         function avvisoScadenzaVoce(v) {
             if (tipoVoce(v) !== 'scadenza') return null;
             const oggi = oggiISO();
@@ -12075,6 +12087,8 @@
             if (!periodo) return null;
             const annata = annataDelGiorno(v, oggi);
             if (annata && oggi >= annata.da && oggi <= annata.ultimoGiorno) return null;   // gia' pagata
+            const dalRinnovo = giorniFraDate(periodo.da, oggi);
+            if (dalRinnovo >= 0 && dalRinnovo <= 45) return { data: periodo.da, giorni: -dalRinnovo };
             const prossima = isoPiuGiorni(periodo.ultimoGiorno, 1);
             const giorni = giorniFraDate(oggi, prossima);
             if (giorni > 45) return null;
