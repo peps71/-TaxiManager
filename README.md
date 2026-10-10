@@ -126,6 +126,27 @@ Quello che il risultato dice, senza bisogno di altre ipotesi:
 
 Tre esiti, tre conclusioni diverse, **nessuna delle quali va indovinata**.
 
+### Il risultato: il terzo
+
+Sulla schermata Home sono comparsi **due quadrati gialli con la lettera P**.
+Tutte e due. Quindi:
+
+- **non è l'app**: le due pagine non ne contengono un pezzo;
+- **non è il service worker**: sono escluse, e il controllo 8sexies lo verifica;
+- **non è il manifesto**: non ce l'hanno;
+- **non è il formato dell'immagine**: una è PNG, l'altra JPEG, stesso esito;
+- **non è il file**: tutti e quattro i file sono in linea, e le icone si aprono.
+
+Resta che l'iPhone **non va proprio a prendere** `apple-touch-icon`, su nessuna
+pagina di questo sito. Il colore del quadrato è `#facc15`, cioè il `theme-color`
+della pagina, e la lettera è l'iniziale del titolo: la pagina la legge, l'icona
+no.
+
+Il codice di questa applicazione è, a questo punto, scagionato per esclusione —
+e il bello è che non è un'opinione: è quello che resta dopo aver tolto tutto il
+resto. Serviva una prova che dividesse il problema in due, e andava fatta sette
+versioni prima.
+
 `prove/installabile.mjs` (8sexies) controlla che restino nude davvero anche con
 il service worker installato: se lui ci mettesse le mani sopra non proverebbero
 più niente, visto che il sospetto è proprio lui.
