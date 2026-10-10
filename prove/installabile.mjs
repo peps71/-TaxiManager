@@ -455,30 +455,6 @@ dire(suIphone.viva, 'e l\'app funziona lo stesso');
 await finto.close();
 
 // ------------------------------------------------------------------
-// LE DUE PAGINETTE DI PROVA DEVONO RESTARE NUDE
-// Servono a dividere il problema in due: niente app, niente service worker,
-// niente manifesto, solo le righe che fanno un'icona. Se il service worker ci
-// mettesse le mani sopra non proverebbero piu' niente, perche' il sospetto e'
-// proprio lui.
-console.log('\n8sexies. le paginette di prova dell\'icona restano nude');
-const pn = await ctx.newPage();
-await pn.goto(SITO + '/index.html');
-await pn.waitForFunction(() => navigator.serviceWorker.controller !== null, { timeout: 20000 });
-for (const [quale, file, atteso] of [['a', 'icona.png', 'image/png'], ['b', 'icona.jpg', 'image/jpeg']]) {
-  const r = await pn.goto(`${SITO}/prova-icona/${quale}/index.html`);
-  const html = await pn.content();
-  const immagine = await pn.evaluate(async (f) => {
-    try { const x = await fetch(f, { cache: 'no-store' });
-          return { stato: x.status, tipo: (x.headers.get('content-type') || '').split(';')[0] }; }
-    catch (e) { return { stato: 0, tipo: String(e) }; }
-  }, file);
-  const nuda = !html.includes('TaxiManager Pro') && html.includes('apple-touch-icon');
-  dire(r.status() === 200 && nuda, `prova ${quale}: ${nuda ? 'pagina nuda, con la riga dell\'icona' : 'NON e\' nuda: ci sono arrivate altre cose sopra'}`);
-  dire(immagine.stato === 200 && immagine.tipo === atteso, `prova ${quale}: l'icona arriva come ${immagine.tipo}`);
-}
-await pn.close();
-
-// ------------------------------------------------------------------
 console.log('\n9. lamentele del browser');
 const serie = lamentele.filter(t => !/favicon|firebase|gstatic|net::ERR/i.test(t));
 dire(serie.length === 0, serie.length === 0 ? 'nessun errore in console' : 'errori: ' + serie.slice(0, 3).join(' | '));

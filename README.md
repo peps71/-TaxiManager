@@ -178,9 +178,15 @@ quello che si misura è a posto e il risultato no, non si cambia un'altra riga.
 Si cambia strumento** — si misura dove sta il problema, e si divide il problema
 in due.
 
-`prove/installabile.mjs` (8sexies) controlla che restino nude davvero anche con
-il service worker installato: se lui ci mettesse le mani sopra non proverebbero
-più niente, visto che il sospetto è proprio lui.
+`prove/installabile.mjs` controllava che restassero nude davvero anche con il
+service worker installato — se lui ci avesse messo le mani sopra non avrebbero
+provato più niente, visto che il sospetto era proprio lui.
+
+**Tolte nella versione 152**, finito il loro lavoro: insieme a loro se ne va
+l'eccezione nel service worker e il controllo che le riguardava. Restano scritte
+qui perché la cosa che hanno insegnato vale più di loro — e perché se un giorno
+servisse di nuovo una prova così, si rifà in dieci minuti guardando questa
+pagina.
 
 ## Due strade per installare, una per telefono (versione 150)
 
