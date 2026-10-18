@@ -15,6 +15,7 @@ titolo "impaginazione";           giro sbordo.mjs
 titolo "testo tagliato";          giro troncati.mjs
 titolo "uso vero dell'app";       giro testUso.mjs
 titolo "casi limite";             giro testLimiti.mjs
+titolo "dati storti";             giro storti.mjs
 titolo "coerenza dei conti";      giro coerenza.mjs
 titolo "coerenza del report";     giro coerenza2.mjs
 titolo "coerenza del motore";     giro coerenza3.mjs

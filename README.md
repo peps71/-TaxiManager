@@ -69,6 +69,66 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Giro generale: un difetto che faceva dire due cose a due schermate (versione 154)
+
+Un giro completo dell'applicazione cercando difetti e cose da semplificare.
+Prima quello che si è trovato, poi quello che **non** si è trovato — che conta
+uguale.
+
+### Il difetto: «NaN €» su una schermata, zero sull'altra
+
+Nei conti si scriveva dappertutto `parseFloat(x.importo || 0)`. Quel `|| 0`
+copre il campo vuoto e il `null`, ma **non una scrittura storta**:
+`parseFloat('abc')` fa `NaN`, e NaN si attacca a tutto quello che tocca.
+
+Bastava **un solo movimento** con l'importo rovinato — un backup scritto a mano,
+un ritorno dal Cloud andato storto, un anno importato da un'altra app — e la
+dashboard mostrava `NaN €` mentre la scheda del commercialista, che quel `|| 0`
+in fondo ce l'aveva, mostrava zero. Due schermate, due risposte, **nessun errore
+da nessuna parte**.
+
+Erano **ventuno punti** scoperti su cinquantatré. Adesso c'è un solo lettore,
+`importoDi()`: quello che non è un numero vale zero, sempre, in tutte le
+schermate. Le ventotto code `|| 0` diventate inutili sono state tolte.
+
+Stessa radice del difetto della 153 (le quattro strade per la base imponibile):
+**una regola applicata in un posto e dimenticata in un altro**.
+
+### Due difetti minori, chiusi
+
+- **Le impostazioni fiscali passavano accanto alla porta del salvataggio.**
+  `saveFiscalSettings` scriveva con `localStorage.setItem` diretto invece che da
+  `scriviLocale`: col disco pieno l'eccezione non la prendeva nessuno, il
+  messaggio non compariva, la striscia rossa nemmeno — e le aliquote nuove
+  restavano a video senza essere mai scritte. Era **l'unico** punto scoperto su
+  trentasei.
+- **Due ordinamenti per importo** usavano `parseFloat` nudo: con un importo
+  storto il confronto dà NaN e l'ordine diventa quello che capita.
+
+### La prova che mancava: `prove/storti.mjs`
+
+Undici casi di roba che in archivio non dovrebbe esserci — importo non numerico,
+importo vuoto, data senza senso, data mancante, tipo sconosciuto, metodo
+mancante, 29 febbraio di un anno non bisestile, importo enorme, identificativi
+doppi — e per ognuno **tre controlli**: nessun numero marcio, nessun «NaN»
+scritto a video su dieci schermate, e le tre strade che contano gli incassi
+devono dire la stessa cifra. **44 controlli.** Rimettendo la falla in un solo
+punto, due falliscono.
+
+### Quello che NON si è trovato, e conta uguale
+
+| Cercato | Esito |
+| --- | --- |
+| Prestazioni | **229 ms** per aprire l'app con 10.080 movimenti; schermate da 3 a 31 ms. Niente da ottimizzare |
+| Codice morto | Nessuno: tutte le funzioni che sembravano orfane sono richiamate |
+| Forma del codice | 491 funzioni, **mediana 14 righe**. Le lunghe sono le schermate, ed è normale |
+| Numeri non protetti | INPS, aliquote e `numeroScritto` erano **già** difesi con `Number.isFinite` |
+| Scritture su disco non protette | 35 su 36 passavano già da `scriviLocale` |
+
+L'applicazione non è un pasticcio da riscrivere. I difetti che restano sono di
+una famiglia sola, e si curano con una medicina sola: **meno posti dove la
+stessa regola viene riscritta a mano.**
+
 ## I versamenti di contanti (versione 153)
 
 Un versamento **non è un incasso**: sono gli stessi soldi delle corse, che

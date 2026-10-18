@@ -1424,7 +1424,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 153;
+        const VERSIONE_APP = 154;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -1882,7 +1882,7 @@
             };
             (voci || []).forEach(v => {
                 const g = m[famigliaMetodo(v.metodo) === 'Contanti' ? 'Contanti' : 'Tracciato'];
-                g.tot += parseFloat(v.importo || 0) || 0;
+                g.tot += importoDi(v.importo);
                 g.n++;
                 if (String(v.data) > String(g.ultima)) g.ultima = v.data;
             });
@@ -1894,7 +1894,7 @@
             (voci || []).forEach(v => {
                 const nome = sottocategoria(v.categoria);
                 if (!m[nome]) m[nome] = { nome, tot: 0, n: 0, ultima: v.data };
-                m[nome].tot += parseFloat(v.importo || 0);
+                m[nome].tot += importoDi(v.importo);
                 m[nome].n++;
                 if (String(v.data) > String(m[nome].ultima)) m[nome].ultima = v.data;
             });
@@ -2303,7 +2303,7 @@
             (window.dailyRecords || []).forEach(r => {
                 if (String(r.data || '').slice(0, 4) !== String(anno)) return;
                 if (!metodoTracciato(r.metodo)) return;
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') tracciati += imp;
                 else if (r.tipo === 'USCITA') deducibili += imp;
             });
@@ -2332,7 +2332,7 @@
                 const d = String(r.data || '');
                 if (d.slice(0, 4) !== String(anno) || d > oggi) return;
                 if (!metodoTracciato(r.metodo)) return;
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') entrate += imp;
                 else if (r.tipo === 'USCITA') deducibili += imp;
             });
@@ -2344,7 +2344,7 @@
             // la giornata. E' il quarto punto che calcola la base imponibile,
             // e l'ha trovato la prova, non l'occhio.
             const versatiFinQui = versamentiDiPrefisso(String(anno))
-                .reduce((tot, x) => tot + (String(x.data || '') <= oggi ? (parseFloat(x.importo || 0) || 0) : 0), 0);
+                .reduce((tot, x) => tot + (String(x.data || '') <= oggi ? (importoDi(x.importo)) : 0), 0);
             const trascorsi = Math.max(1, Math.round((new Date(oggi) - new Date(`${anno}-01-01`)) / 86400000) + 1);
             // Nei primi due mesi annualizzare e' un azzardo: tre giorni moltiplicati
             // per trecentosessantacinque. Finche' l'anno e' cosi' giovane, l'utile
@@ -2479,7 +2479,7 @@
         function getStats() {
             let entrate = 0, entrateTracciate = 0, uscite = 0, deducibili = 0;
             recordsAnno().forEach(r => {
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 const tracciato = metodoTracciato(r.metodo);
                 if (r.tipo === 'ENTRATA') {
                     entrate += imp;
@@ -2560,7 +2560,15 @@
                 inpsPerc: inps, inpsRata: rata, inpsNumeroRate: nRate, inpsMinimale: minimale,
                 addizionaliPerc: add, sogliaForfettario: soglia, accantonamentoPerc: accantonamento
             };
-            localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings));
+            // Passava accanto alla porta del salvataggio: con il disco pieno
+            // l'eccezione non la prendeva nessuno, il toast non compariva, la
+            // striscia rossa nemmeno - e le aliquote nuove restavano a video
+            // senza essere mai scritte. Adesso passa da scriviLocale come
+            // tutto il resto.
+            if (!scriviLocale('taxi_fiscal_settings', window.fiscalSettings)) {
+                showToast('Il telefono non ha accettato le impostazioni fiscali.', 'avviso');
+                return;
+            }
             if (window.saveFiscaliToCloud) window.saveFiscaliToCloud(window.fiscalSettings);
             showToast('Impostazioni fiscali salvate.');
             renderContent();
@@ -2589,7 +2597,7 @@
         function statsForfettarioCalcola() {
             const fs = window.fiscalSettings || {};
             const soglia = fs.sogliaForfettario || 85000;
-            const entrate = recordsAnno().filter(r => r.tipo === 'ENTRATA').reduce((a, r) => a + parseFloat(r.importo || 0), 0);
+            const entrate = recordsAnno().filter(r => r.tipo === 'ENTRATA').reduce((a, r) => a + importoDi(r.importo), 0);
             const pct = soglia > 0 ? Math.min(100, (entrate / soglia) * 100) : 0;
             return { soglia, entrate, pct, vicino: entrate >= soglia * 0.85 };
         }
@@ -2599,7 +2607,7 @@
             let entrate = 0, uscite = 0, corse = 0, ore = 0, giorni = new Set();
             (window.dailyRecords || []).forEach(r => {
                 if (!r.data || String(r.data).slice(0, 4) !== anno) return;
-                const imp = parseFloat(r.importo || 0);
+                const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') { entrate += imp; corse++; giorni.add(r.data); }
                 else uscite += imp;
             });
@@ -2677,7 +2685,7 @@
         }
 
         function versatoDiPrefisso(pref) {
-            return versamentiDiPrefisso(pref).reduce((t, x) => t + (parseFloat(x.importo || 0) || 0), 0);
+            return versamentiDiPrefisso(pref).reduce((t, x) => t + (importoDi(x.importo)), 0);
         }
 
         // LA SOLA PORTA D'INGRESSO nel conto delle tasse. Il totale versato
@@ -2697,7 +2705,7 @@
                 if (r.tipo !== 'ENTRATA') return t;
                 if (!String(r.data || '').startsWith(p)) return t;
                 if (metodoTracciato(r.metodo)) return t;
-                return t + (parseFloat(r.importo || 0) || 0);
+                return t + (importoDi(r.importo));
             }, 0);
         }
 
@@ -3333,7 +3341,7 @@
                 .filter(v => tipoVoce(v) === 'scadenza'
                           && v.unita === 'anno'
                           && /^\d{4}-\d{2}-\d{2}$/.test(String(v.scadenza || ''))
-                          && (parseFloat(v.importo || 0) || 0) > 0)
+                          && (importoDi(v.importo)) > 0)
                 .map(v => ({
                     id: 'budget:' + v.slug,
                     nome: v.nome,
@@ -3713,6 +3721,24 @@
         // cento, "10.50" e' dieci e cinquanta. Si distinguono dai gruppi di tre
         // cifre, che sono migliaia solo se sono esattamente tre fino in fondo.
         // Senza questo, scrivere 6.500 € di carburante dava sei euro e mezzo.
+        // ============================================================
+        //  UN SOLO MODO DI LEGGERE UN IMPORTO
+        //  Nei conti si scriveva dappertutto importoDi(x.importo). Quel
+        //  «|| 0» copre il campo vuoto e il null, ma NON una scrittura storta:
+        //  parseFloat('abc') fa NaN, e NaN si attacca a tutto quello che tocca.
+        //  Bastava un solo movimento con l'importo rovinato - un backup
+        //  scritto a mano, un ritorno dal Cloud andato storto - e la dashboard
+        //  mostrava «NaN €» mentre la scheda del commercialista, che quel «||
+        //  0» in fondo ce l'aveva, mostrava zero. Due schermate, due risposte,
+        //  nessun errore da nessuna parte.
+        //  Da qui in poi si passa tutti di qua: quello che non e' un numero
+        //  vale zero, sempre, in tutte le schermate.
+        // ============================================================
+        function importoDi(x) {
+            const n = parseFloat(x);
+            return Number.isFinite(n) ? n : 0;
+        }
+
         function numeroScritto(v) {
             let t = String(v === null || v === undefined ? '' : v)
                 .trim()
@@ -3809,7 +3835,7 @@
             let speseTot = 0, incassi = 0;
             (window.dailyRecords || []).forEach(r => {
                 if (!r.data || String(r.data) < da || String(r.data) > a) return;
-                const imp = parseFloat(r.importo || 0);
+                const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') { incassi += imp; return; }
                 if (r.tipo !== 'USCITA') return;
                 const base = categoriaBase(r.categoria);
@@ -4220,7 +4246,7 @@
             const perCat = {};
 
             records.forEach(r => {
-                const imp = parseFloat(r.importo || 0);
+                const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') {
                     incassiTot += imp;
                     switch (famigliaMetodo(r.metodo)) {
@@ -4756,7 +4782,7 @@
 
             (window.dailyRecords || []).forEach(x => {
                 if (!x.data || !String(x.data).startsWith(prefisso)) return;
-                const imp = parseFloat(x.importo || 0);
+                const imp = importoDi(x.importo);
                 if (x.tipo === 'ENTRATA') {
                     r.incassi += imp;
                     r.nCorse++;
@@ -4797,10 +4823,10 @@
             r.saldo = r.incassi - r.uscite;
             r.mediaCorsa = r.nCorse ? r.incassi / r.nCorse : 0;
             r.mediaOra = r.ore ? r.incassi / r.ore : 0;
-            r.listaUscite.sort((a, b) => parseFloat(b.importo) - parseFloat(a.importo));
+            r.listaUscite.sort((a, b) => importoDi(b.importo) - importoDi(a.importo));
             r.speseCategorie = Object.values(r.perCategoria).sort((a, b) => b.tot - a.tot);
             r.speseCategorie.forEach(c => {
-                c.voci.sort((a, b) => parseFloat(b.importo) - parseFloat(a.importo));
+                c.voci.sort((a, b) => importoDi(b.importo) - importoDi(a.importo));
                 c.tipologie = raggruppaPerTipologia(c.voci);
             });
             return r;
@@ -4818,7 +4844,7 @@
             (window.dailyRecords || []).forEach(x => {
                 const d = String(x.data || '');
                 if (!d.startsWith(prefisso)) return;
-                const imp = parseFloat(x.importo || 0) || 0;
+                const imp = importoDi(x.importo);
                 const g = tocca(d.slice(0, lunghezzaChiave));
                 if (x.tipo === 'ENTRATA') { g.incassi += imp; g.nCorse++; }
                 else if (x.tipo === 'USCITA') g.uscite += imp;
@@ -4866,7 +4892,7 @@
                 if (x.tipo !== 'ENTRATA') return;
                 const d = String(x.data || '');
                 if (!d.startsWith(ym + '-')) return;
-                const imp = parseFloat(x.importo || 0) || 0;
+                const imp = importoDi(x.importo);
                 const g = tocca(d);
                 // Un metodo scritto a mano o arrivato da una versione vecchia
                 // non deve sparire dal conto: famigliaMetodo lo riporta a una
@@ -5016,7 +5042,7 @@
         // tracciati, con la stessa regola delle spese. Contanti fuori.
         function incassiTracciati(elenco) {
             return (elenco || []).reduce((t, r) =>
-                t + (metodoTracciato(r.metodo) ? (parseFloat(r.importo || 0) || 0) : 0), 0);
+                t + (metodoTracciato(r.metodo) ? (importoDi(r.importo)) : 0), 0);
         }
 
         // Quanto, di queste spese, va a ridurre l'imponibile: solo quelle
@@ -5025,7 +5051,7 @@
         // delle tasse, l'accantonamento e il foglio da portare in studio.
         function usciteDeducibili(elenco) {
             return (elenco || []).reduce((t, r) =>
-                t + (metodoTracciato(r.metodo) ? (parseFloat(r.importo || 0) || 0) : 0), 0);
+                t + (metodoTracciato(r.metodo) ? (importoDi(r.importo)) : 0), 0);
         }
 
         const COLORE_PAGAMENTO = {
@@ -5044,7 +5070,7 @@
             const per = {};
             let tracciate = 0, nTracciate = 0, contanti = 0, nContanti = 0, conFattura = 0, nFattura = 0;
             (lista || []).forEach(r => {
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 // Il nome com'e' scritto sul movimento: «Carta Carburante» e
                 // «POS» sono due cose diverse in cassa, anche se il fisco le
                 // guarda allo stesso modo.
@@ -5356,7 +5382,7 @@
                 if (d.slice(0, 7) !== String(ym)) return;
                 if (d > limite) return;
                 if (copertaDalBudget(r)) return;
-                altre += parseFloat(r.importo || 0);
+                altre += importoDi(r.importo);
                 voci++;
             });
             const giorni = inCorso ? Math.min(gg, Math.max(1, Number(oggi.slice(8, 10)))) : gg;
@@ -5795,7 +5821,7 @@
         }
 
         function totaleImporti(elenco) {
-            return (elenco || []).reduce((a, x) => a + parseFloat(x.importo || 0), 0);
+            return (elenco || []).reduce((a, x) => a + importoDi(x.importo), 0);
         }
 
         // Riquadro che spiega quanto pesa ogni giorno e quanto serve incassare
@@ -6052,7 +6078,7 @@
             recordsAnno().forEach(r => {
                 if (r.tipo !== 'ENTRATA') return;
                 if (!perData[r.data]) perData[r.data] = { tot: 0, n: 0 };
-                perData[r.data].tot += parseFloat(r.importo || 0);
+                perData[r.data].tot += importoDi(r.importo);
                 perData[r.data].n++;
             });
 
@@ -6255,7 +6281,7 @@
             (window.dailyRecords || []).forEach(r => {
                 const d = String(r.data || '');
                 if (d < da || d > a) return;
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') { incassi += imp; nCorse++; giorni.add(d); }
                 else if (r.tipo === 'USCITA') uscite += imp;
             });
@@ -7132,7 +7158,7 @@
             // vedere: segnare il pieno e non vederlo comparire da nessuna parte
             // sarebbe un salto nel buio.
             const spesePeriodo = (window.dailyRecords || []).filter(r => r.tipo === 'USCITA' && nelPeriodo(r.data));
-            const totSpeseVere = spesePeriodo.reduce((a, r) => a + (parseFloat(r.importo || 0) || 0), 0);
+            const totSpeseVere = spesePeriodo.reduce((a, r) => a + (importoDi(r.importo)), 0);
             // Guardando una giornata sola le spese si mostrano spalmate: la rata
             // dell'assicurazione non deve far sembrare in perdita il giorno in cui
             // esce dal conto. Su un mese o su un anno restano quelle vere, perche'
@@ -7155,11 +7181,11 @@
                 const famiglia = famigliaMetodo(r.metodo);
                 const f = perMetodo[famiglia] ? famiglia : 'App';
                 perMetodo[f].n++;
-                perMetodo[f].tot += parseFloat(r.importo || 0) || 0;
+                perMetodo[f].tot += importoDi(r.importo);
             });
 
             const corseFiltrate = corsePeriodo.filter(r => metodo === 'ALL' || famigliaMetodo(r.metodo) === metodo);
-            const totCorse = corseFiltrate.reduce((a, r) => a + (parseFloat(r.importo || 0) || 0), 0);
+            const totCorse = corseFiltrate.reduce((a, r) => a + (importoDi(r.importo)), 0);
             const mediaCorsa = corseFiltrate.length ? totCorse / corseFiltrate.length : 0;
 
             // Una voce per giornata: il turno di quel giorno e le sue corse
@@ -7178,7 +7204,7 @@
             });
             corseFiltrate.forEach(r => {
                 const g = tocca(String(r.data));
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 g.corse.push(r);
                 g.tot += imp;
                 if (famigliaMetodo(r.metodo) === 'POS') g.pos += imp;
@@ -7187,7 +7213,7 @@
             spesePeriodo.forEach(r => {
                 const g = tocca(String(r.data));
                 g.spese.push(r);
-                g.speso += parseFloat(r.importo || 0) || 0;
+                g.speso += importoDi(r.importo);
             });
 
             let lista = Array.from(giornate.values()).sort((a, b) => b.iso.localeCompare(a.iso));
@@ -7585,7 +7611,7 @@
             // uno sbaglio. Le corse restano dove sono, ma va detto.
             const incassi = (window.dailyRecords || [])
                 .filter(r => r.tipo === 'ENTRATA' && String(r.data) === String(iso))
-                .reduce((tot, r) => tot + (parseFloat(r.importo || 0) || 0), 0);
+                .reduce((tot, r) => tot + (importoDi(r.importo)), 0);
             if (incassi > 0 && !confirm(`Il ${ggMm(iso)} ha ${formatCurrency(incassi)} di corse registrate. Lo segno lo stesso come ${preset.label}?`)) return;
             const gia = (window.shifts || []).find(x => x.data === iso);
             if (gia && !confirm(`Il ${ggMm(iso)} ha già ${gia.turno}. Lo sostituisco con ${preset.label}?`)) return;
@@ -7676,7 +7702,7 @@
                 if (r.tipo !== 'ENTRATA') return;
                 const d = String(r.data || '');
                 if (!d.startsWith(mese)) return;
-                incassiDelMese[d] = (incassiDelMese[d] || 0) + (parseFloat(r.importo || 0) || 0);
+                incassiDelMese[d] = (incassiDelMese[d] || 0) + (importoDi(r.importo));
             });
             const incassoDi = (iso) => incassiDelMese[iso] || 0;
 
@@ -8138,7 +8164,7 @@
                 const t = tipoSpesa(r.categoria);
                 if (!tipiPeriodo[t]) tipiPeriodo[t] = { nome: t, n: 0, tot: 0 };
                 tipiPeriodo[t].n++;
-                tipiPeriodo[t].tot += parseFloat(r.importo || 0);
+                tipiPeriodo[t].tot += importoDi(r.importo);
             });
             const listaTipiPeriodo = Object.keys(tipiPeriodo).map(k => tipiPeriodo[k]).sort((a, b) => b.tot - a.tot);
 
@@ -8776,7 +8802,7 @@
 
                     ${perMese.length ? perMese.map(g => `
                         <div>
-                            <p class="etichetta block mb-1.5">${esc(nomeMese(parseInt(g.ym.slice(5, 7), 10)))} ${esc(g.ym.slice(0, 4))} · ${formatCurrency(g.righe.reduce((t, x) => t + (parseFloat(x.importo || 0) || 0), 0))}</p>
+                            <p class="etichetta block mb-1.5">${esc(nomeMese(parseInt(g.ym.slice(5, 7), 10)))} ${esc(g.ym.slice(0, 4))} · ${formatCurrency(g.righe.reduce((t, x) => t + (importoDi(x.importo)), 0))}</p>
                             <div class="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden bg-white">
                                 ${g.righe.map(rigaVersamento).join('')}
                             </div>
@@ -10578,7 +10604,7 @@
         async function eliminaSerieSpese(serie) {
             const voci = movimentiDellaSerie(serie);
             if (!voci.length) return;
-            const totale = voci.reduce((a, r) => a + parseFloat(r.importo || 0), 0);
+            const totale = voci.reduce((a, r) => a + importoDi(r.importo), 0);
             const date = voci.map(r => r.data).sort();
             if (!confirm(`Elimino tutti i ${voci.length} movimenti di «${voci[0].categoria}», dal ${ggMm(date[0])} al ${ggMm(date[date.length - 1])}, per ${formatCurrency(totale)} in tutto?\nL'operazione non si può annullare.`)) return;
             const ids = voci.map(r => r.id);
@@ -11055,7 +11081,7 @@
                 const t = tipoSpesa(r.categoria);
                 if (!tipi[t]) tipi[t] = { nome: t, n: 0, tot: 0 };
                 tipi[t].n++;
-                tipi[t].tot += parseFloat(r.importo || 0);
+                tipi[t].tot += importoDi(r.importo);
             });
             return Object.keys(tipi).map(k => tipi[k]).sort((a, b) => b.tot - a.tot);
         }
@@ -11387,7 +11413,7 @@
                     (r.categoria || '').replace(/;/g, ','),
                     (r.nota || '').replace(/;/g, ','),
                     r.metodo || '',
-                    (parseFloat(r.importo || 0)).toFixed(2).replace('.', ',')
+                    (importoDi(r.importo)).toFixed(2).replace('.', ',')
                 ]);
             });
             const csv = righe.map(riga => riga.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
@@ -11659,7 +11685,7 @@
             const incasso = (window.dailyRecords || [])
                 .filter(r => r.tipo === 'ENTRATA' && r.data === giorno
                     && (metodo === 'ALL' || famigliaMetodo(r.metodo) === metodo))
-                .reduce((a, r) => a + (parseFloat(r.importo || 0) || 0), 0);
+                .reduce((a, r) => a + (importoDi(r.importo)), 0);
             const oreIntere = turni.reduce((a, t) => a + (parseFloat(t.ore || 0) || 0), 0);
             const eo = euroOraVivo(incasso, oreIntere, turni);
 
@@ -11932,7 +11958,7 @@
             voci.forEach(v => per.set(chiaveNome(v.nome), []));
             (window.dailyRecords || []).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 if (!(imp > 0)) return;
                 const trovata = voceBudgetDiRecord(r);
                 if (!trovata) return;
@@ -12038,7 +12064,7 @@
             if (!da) return null;
             const giorni = giorniCopertiDaUnPagamento(v, da);
             return { da, ultimoGiorno: isoPiuGiorni(da, giorni - 1), giorni,
-                     totale: parseFloat(v.importo || 0) || 0, rate: 0, previsto: true };
+                     totale: importoDi(v.importo), rate: 0, previsto: true };
         }
 
         // LA PREVISIONE: solo quello che hai scritto tu nel budget.
@@ -12076,7 +12102,7 @@
             // giornata dimezzava fino all'arrivo della seconda.
             // Se poi a fine anno il budget risulta piu' alto del dovuto, a
             // dirlo c'e' il conguaglio: e' il suo mestiere.
-            const previstoPeriodo = parseFloat(v.importo || 0) || 0;
+            const previstoPeriodo = importoDi(v.importo);
             return Math.max(previstoPeriodo, annata.totale) / annata.giorni;
         }
 
@@ -12344,7 +12370,7 @@
         // schiacciava fino a sparire e il nome restava troncato.
         // Quanto pesa una voce al giorno, per la riga chiusa
         function pesoGiornalieroVoce(v, anno) {
-            const imp = parseFloat(v.importo || 0);
+            const imp = importoDi(v.importo);
             if (!(imp > 0)) return 0;
             if (v.unita === 'anno') return imp / giorniDellAnno(anno);
             if (v.unita === 'mese') return imp * 12 / 365;
@@ -12506,7 +12532,7 @@
         // voce era una scheda col suo bordo, il suo fondo e due pulsanti
         // scritti a parole: con dieci voci la pagina non finiva piu'.
         function rigaVoceFissaChiusa(v, anno, cong, inCorso) {
-            const imp = parseFloat(v.importo || 0);
+            const imp = importoDi(v.importo);
             const unita = v.unita === 'anno' ? 'anno' : (v.unita === 'mese' ? 'mese' : 'giorno');
             const alGiorno = pesoGiornalieroVoce(v, anno);
             const oggi = comandaOggiVoce(v);
@@ -12624,7 +12650,7 @@
                     </div>
 
                     ${(() => {
-                        const imp = parseFloat(v.importo || 0);
+                        const imp = importoDi(v.importo);
                         if (!(imp > 0)) return '<p class="text-xs text-gray-400">Dal e Al vuoti = la voce vale sempre, anno dopo anno.</p>';
                         const b = budgetVocePeriodo(v, `${anno}-01-01`, `${anno}-12-31`);
                         return `<p class="text-xs text-gray-500">
@@ -12680,7 +12706,7 @@
                 if (r.tipo !== 'USCITA') return;
                 const d = String(r.data || '');
                 if (d < da || d > oggi) return;
-                const imp = parseFloat(r.importo || 0) || 0;
+                const imp = importoDi(r.importo);
                 if (!(imp > 0)) return;
                 if (voceBudgetDiRecord(r)) return;              // gia' coperta
                 if (categoriaBase(r.categoria) === 'Costi fissi') return;
@@ -12807,7 +12833,7 @@
                 const v = simili[0].v;
                 const g = per.get(v.slug) || { voce: v, spese: [], totale: 0 };
                 g.spese.push(r);
-                g.totale += parseFloat(r.importo || 0) || 0;
+                g.totale += importoDi(r.importo);
                 per.set(v.slug, g);
             });
 
@@ -13228,7 +13254,7 @@
                 }
                 const g = gruppi[chiave];
                 g.voci.push(r);
-                g.totale += parseFloat(r.importo || 0);
+                g.totale += importoDi(r.importo);
                 if (String(r.data) < String(g.dal)) g.dal = r.data;
                 if (String(r.data) > String(g.al)) g.al = r.data;
                 g.mesi.add(String(r.data).slice(0, 7));
@@ -13333,13 +13359,13 @@
                 // serie ricorrente creata in anticipo - non e' ancora uscita dal
                 // conto: si conta quando arriva, altrimenti la voce sembrerebbe
                 // gia' pagata per intero a settembre.
-                if (d > aOggi) { futuri++; importoFuturi += parseFloat(r.importo || 0); return; }
+                if (d > aOggi) { futuri++; importoFuturi += importoDi(r.importo); return; }
                 // Stesso abbinamento che usa la quota del giorno: cosi' una spesa
                 // tolta dalla media perche' coperta dal budget finisce per forza
                 // nella riga di quella voce, e non fra le "altre".
                 const voce = voceBudgetDiRecord(r);
                 const riga = (voce && perNome.get(chiaveNome(voce.nome))) || fuori;
-                riga.speso += parseFloat(r.importo || 0);
+                riga.speso += importoDi(r.importo);
                 riga.movimenti++;
                 riga.voci.push(r);
                 if (d > riga.ultima) riga.ultima = d;
