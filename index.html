@@ -1424,7 +1424,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 154;
+        const VERSIONE_APP = 155;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -2298,20 +2298,57 @@
         // guarda solo quello che lascia una traccia. Gli incassi in contanti e
         // le spese in contanti restano soldi veri - entrano ed escono dalla
         // cassa - ma fuori da questo conto.
-        function utileFiscaleAnno(anno) {
+        // ============================================================
+        //  UN SOLO POSTO DOVE SI CALCOLA LA BASE DELLE TASSE
+        //  Questa cifra la chiedono quattro schermate diverse, e per quattro
+        //  versioni l'hanno calcolata in quattro modi: ognuna rifaceva il giro
+        //  dei movimenti per conto suo. Finche' le quattro copie dicono la
+        //  stessa cosa non se ne accorge nessuno - il guaio arriva il giorno
+        //  in cui se ne cambia una sola.
+        //  E' successo davvero, con i versamenti di contanti (versione 153):
+        //  tre copie su quattro li contavano, la quarta no. I totali erano
+        //  giusti, ma la proiezione dell'anno restava indietro e con lei la
+        //  quota di IRPEF del costo giornaliero. Nessun errore, nessun avviso:
+        //  solo due numeri che non si parlavano.
+        //
+        //  LA REGOLA, SCRITTA UNA VOLTA SOLA
+        //  Entra nella base quello che lascia traccia: incassi non in contanti,
+        //  piu' i contanti versati in banca. Esce quello che lascia traccia
+        //  dall'altra parte: le spese pagate in modo tracciato.
+        //
+        //  prefisso: '2026' tutto l'anno, '2026-03' marzo, '2026-03-10' il
+        //            giorno. La stessa chiave di aggrega().
+        //  finoA:    facoltativo, taglia a una data compresa - serve alla
+        //            proiezione, che deve guardare solo quello che e' gia'
+        //            successo.
+        // ============================================================
+        function baseImponibile(prefisso, finoA) {
+            const p = String(prefisso || '');
+            const tetto = finoA ? String(finoA) : null;
             let tracciati = 0, deducibili = 0;
             (window.dailyRecords || []).forEach(r => {
-                if (String(r.data || '').slice(0, 4) !== String(anno)) return;
+                const d = String(r.data || '');
+                if (!d.startsWith(p)) return;
+                if (tetto && d > tetto) return;
                 if (!metodoTracciato(r.metodo)) return;
                 const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') tracciati += imp;
                 else if (r.tipo === 'USCITA') deducibili += imp;
             });
-            // Il secondo dei tre punti che calcolano la base delle tasse: deve
-            // dire la stessa cifra di getStats e getReportStats, altrimenti le
-            // schermate si contraddicono. Da qui passano la stima dell'IRPEF,
-            // la proiezione dell'anno e la quota del costo giornaliero.
-            return tracciati + versatoAnno(anno) - deducibili;
+            let versamenti = 0;
+            versamentiDiPrefisso(p).forEach(v => {
+                if (tetto && String(v.data || '') > tetto) return;
+                versamenti += importoDi(v.importo);
+            });
+            return { tracciati, versamenti, deducibili,
+                     tracciatoTot: tracciati + versamenti,
+                     base: tracciati + versamenti - deducibili };
+        }
+
+        // Da qui passano la stima dell'IRPEF, la proiezione dell'anno e la
+        // quota del costo giornaliero.
+        function utileFiscaleAnno(anno) {
+            return baseImponibile(String(anno)).base;
         }
 
         // A meta' anno l'utile registrato e' meta' di quello che sara': se lo
@@ -2327,24 +2364,8 @@
             const totale = utileFiscaleAnno(anno);
             const oggi = oggiISO();
             if (String(anno) !== oggi.slice(0, 4)) return totale;
-            let entrate = 0, deducibili = 0;
-            (window.dailyRecords || []).forEach(r => {
-                const d = String(r.data || '');
-                if (d.slice(0, 4) !== String(anno) || d > oggi) return;
-                if (!metodoTracciato(r.metodo)) return;
-                const imp = importoDi(r.importo);
-                if (r.tipo === 'ENTRATA') entrate += imp;
-                else if (r.tipo === 'USCITA') deducibili += imp;
-            });
-            // I versamenti fatti fin qui entrano nella proiezione come gli
-            // incassi tracciati: sono la stessa base. Dimenticarli qui non si
-            // vedeva nei totali - quelli erano giusti - ma la proiezione
-            // restava ferma, e con lei la quota di IRPEF del costo
-            // giornaliero: i soldi versati sparivano dal conto di quanto pesa
-            // la giornata. E' il quarto punto che calcola la base imponibile,
-            // e l'ha trovato la prova, non l'occhio.
-            const versatiFinQui = versamentiDiPrefisso(String(anno))
-                .reduce((tot, x) => tot + (String(x.data || '') <= oggi ? (importoDi(x.importo)) : 0), 0);
+            // Solo quello che e' gia' successo: il «finoA» serve a questo.
+            const finQui = baseImponibile(String(anno), oggi).base;
             const trascorsi = Math.max(1, Math.round((new Date(oggi) - new Date(`${anno}-01-01`)) / 86400000) + 1);
             // Nei primi due mesi annualizzare e' un azzardo: tre giorni moltiplicati
             // per trecentosessantacinque. Finche' l'anno e' cosi' giovane, l'utile
@@ -2357,7 +2378,7 @@
             // si moltiplica mai per piu' di dodici: un gennaio fortunato non deve
             // spedire l'accantonamento nello scaglione piu' alto.
             const fattore = Math.min(giorniDellAnno(anno) / trascorsi, giorniDellAnno(anno) / 30);
-            return Math.max(totale, (entrate + versatiFinQui - deducibili) * fattore);
+            return Math.max(totale, finQui * fattore);
         }
 
         function aliquotaAccantonamento(anno) {
@@ -2477,46 +2498,39 @@
         }
 
         function getStats() {
-            let entrate = 0, entrateTracciate = 0, uscite = 0, deducibili = 0;
+            // Qui si contano solo i soldi veri, quelli che entrano e escono di
+            // tasca: il giro dei movimenti serve a questo e a nient'altro.
+            let entrate = 0, uscite = 0;
             recordsAnno().forEach(r => {
                 const imp = importoDi(r.importo);
-                const tracciato = metodoTracciato(r.metodo);
-                if (r.tipo === 'ENTRATA') {
-                    entrate += imp;
-                    if (tracciato) entrateTracciate += imp;
-                }
-                if (r.tipo === 'USCITA') {
-                    uscite += imp;
-                    if (tracciato) deducibili += imp;
-                }
+                if (r.tipo === 'ENTRATA') entrate += imp;
+                else if (r.tipo === 'USCITA') uscite += imp;
             });
+            // La parte che riguarda il fisco non si rifa' qui: si chiede a
+            // baseImponibile, che e' l'unico posto dove quella regola e'
+            // scritta. Prima questo conto stava in quattro punti diversi.
+            const fisco = baseImponibile(annoAttivo());
             // Due utili, e non sono la stessa cosa:
             // - di cassa: tutto quello che entra meno tutto quello che esce,
             //   cioe' quello che ti resta davvero in mano;
             // - fiscale: solo quello che lascia traccia, da una parte e
             //   dall'altra, ed e' la base su cui si stimano le tasse.
             const utileCassa = entrate - uscite;
-            // I contanti versati in banca da qui in poi lasciano traccia, e
-            // quindi entrano nella base delle tasse come un incasso tracciato.
-            // Non si sommano agli incassi - i soldi sono gli stessi - ma
-            // cambiano sponda. Vedi la sezione I VERSAMENTI DI CONTANTI.
-            const versato = versatoAnno(annoAttivo());
-            const tracciatoTot = entrateTracciate + versato;
-            const utileFiscale = tracciatoTot - deducibili;
+            const utileFiscale = fisco.base;
             const fiscale = calcolaTasseOrdinario(utileFiscale);
             const tasse = fiscale.tasseTot;
-            const contantiCorse = entrate - entrateTracciate;
+            const contantiCorse = entrate - fisco.tracciati;
             return {
                 entrate,
                 // «Tracciate» e' la cifra che conta per il fisco, versamenti
                 // compresi; entrateTracciateCorse e' la parte che arriva dalle
                 // corse, e serve dove si vuole il fatto nudo.
-                entrateTracciate: tracciatoTot, entrateTracciateCorse: entrateTracciate,
-                versato,
+                entrateTracciate: fisco.tracciatoTot, entrateTracciateCorse: fisco.tracciati,
+                versato: fisco.versamenti,
                 // I contanti presi dalle corse restano quelli: quello che
                 // cambia e' quanti ne sono rimasti in cassa.
-                entrateContanti: contantiCorse, contantiInCassa: contantiCorse - versato,
-                uscite, deducibili, nonDeducibili: uscite - deducibili,
+                entrateContanti: contantiCorse, contantiInCassa: contantiCorse - fisco.versamenti,
+                uscite, deducibili: fisco.deducibili, nonDeducibili: uscite - fisco.deducibili,
                 utileCassa, utileFiscale,
                 tasse, fiscale, netto: utileCassa - tasse
             };
@@ -4283,16 +4297,18 @@
 
             // Cassa e fisco: le spese in contanti tolgono soldi veri ma non
             // abbassano l'imponibile, quindi i due utili non coincidono.
-            const usciteDed = usciteDeducibili(records.filter(r => r.tipo === 'USCITA'));
-            const incassiTraccCorse = incassiTracciati(records.filter(r => r.tipo === 'ENTRATA'));
-            // Il terzo punto. Il filtro del mese vale anche per i versamenti:
-            // guardando marzo si vede quello che si e' versato a marzo.
+            // Il filtro del mese diventa un prefisso di data, che e' la
+            // chiave con cui baseImponibile ragiona: guardando marzo si vede
+            // quello che si e' incassato, speso e versato a marzo.
             const prefisso = monthFilter === 'ALL' ? annoAttivo()
                 : `${annoAttivo()}-${String(monthFilter).padStart(2, '0')}`;
-            const versato = versatoDiPrefisso(prefisso);
-            const incassiTracc = incassiTraccCorse + versato;
+            const fisco = baseImponibile(prefisso);
+            const usciteDed = fisco.deducibili;
+            const incassiTraccCorse = fisco.tracciati;
+            const versato = fisco.versamenti;
+            const incassiTracc = fisco.tracciatoTot;
             const utileLordo = incassiTot - usciteTot;          // di cassa
-            const utileFiscale = incassiTracc - usciteDed;      // base delle tasse
+            const utileFiscale = fisco.base;                    // base delle tasse
             const fiscale = calcolaTasseOrdinario(utileFiscale);
             const stimaTasse = fiscale.tasseTot;
             const nettoStimato = utileLordo - stimaTasse;
@@ -5038,21 +5054,12 @@
             return famigliaMetodo(m) !== 'Contanti';
         }
 
-        // Quanto, di questi incassi, entra nella base delle tasse: solo quelli
-        // tracciati, con la stessa regola delle spese. Contanti fuori.
-        function incassiTracciati(elenco) {
-            return (elenco || []).reduce((t, r) =>
-                t + (metodoTracciato(r.metodo) ? (importoDi(r.importo)) : 0), 0);
-        }
-
-        // Quanto, di queste spese, va a ridurre l'imponibile: solo quelle
-        // tracciate. E' la regola scritta dal tassista con il suo
-        // commercialista, e da qui in avanti la usa tutta l'app - la stima
-        // delle tasse, l'accantonamento e il foglio da portare in studio.
-        function usciteDeducibili(elenco) {
-            return (elenco || []).reduce((t, r) =>
-                t + (metodoTracciato(r.metodo) ? (importoDi(r.importo)) : 0), 0);
-        }
+        // Qui stavano incassiTracciati() e usciteDeducibili(): due funzioni che
+        // riscrivevano, ognuna per conto suo, la stessa regola di
+        // metodoTracciato. Da quando il conto si fa in un posto solo
+        // (baseImponibile) non le chiamava piu' nessuno, e due posti in meno
+        // dove quella regola e' scritta sono due posti in meno dove puo'
+        // restare indietro.
 
         const COLORE_PAGAMENTO = {
             'Contanti': 'bg-green-500',

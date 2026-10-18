@@ -69,6 +69,65 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una sola base imponibile (versione 155)
+
+La prima delle proposte del giro generale, e la più importante: **togliere di
+mezzo la famiglia di difetti che ha morso due volte in una settimana.**
+
+### Il problema: la stessa regola scritta in quattro posti
+
+La cifra su cui si stimano le tasse la chiedono quattro schermate diverse, e
+ognuna rifaceva il giro dei movimenti per conto suo:
+
+| Dove | Serviva a |
+| --- | --- |
+| `getStats()` | i totali dell'anno, l'andamento |
+| `getReportStats()` | la scheda del commercialista, anche filtrata per mese |
+| `utileFiscaleAnno()` | la base registrata dell'anno |
+| `utileProiettatoCalcola()` | la proiezione, da cui esce la quota di IRPEF della giornata |
+
+Finché le quattro copie dicono la stessa cosa non se ne accorge nessuno. Il
+guaio arriva il giorno in cui se ne cambia una sola — ed è successo davvero con
+i versamenti di contanti (versione 153): tre copie su quattro li contavano, la
+quarta no.
+
+### Adesso il conto si fa in un posto solo
+
+`baseImponibile(prefisso, finoA)` è l'unico punto dove quella regola è scritta.
+Prende un prefisso di data (`'2026'` l'anno, `'2026-03'` marzo, `'2026-03-10'`
+il giorno — la stessa chiave di `aggrega()`) e, se serve, un taglio a una data
+per la proiezione. Le quattro schermate adesso le chiedono tutte a lei.
+
+Sono sparite anche `incassiTracciati()` e `usciteDeducibili()`: due funzioni che
+riscrivevano, ognuna per conto suo, la stessa regola di `metodoTracciato`. Da
+quando il conto si fa in un posto solo non le chiamava più nessuno. **Da sei
+posti a uno.**
+
+### La prova che nessun numero si è mosso
+
+Una semplificazione pericolosa è quella che non si vede: il codice è più pulito
+e una cifra è cambiata. Quindi si sono aperte le due versioni — quella di prima
+e quella di adesso — con **gli stessi 600 movimenti a caso, 20 versamenti e un
+importo scritto storto**, e si sono confrontate **85 cifre**: totali, report
+filtrato per cinque mesi diversi, quote giornaliere, IRPEF, costo della
+giornata, conguaglio, budget.
+
+```
+cifre confrontate: 85
+nessuna cifra si e' mossa
+```
+
+### E il guardiano, perché non succeda più
+
+`prove/baseUnica.mjs` costruisce **dieci archivi a caso** e per ognuno controlla
+che `getStats`, il report, l'utile dell'anno e **la somma dei dodici mesi**
+dicano tutti la stessa cifra — più che le parti tornino col totale e che la
+proiezione non stia mai sotto quello già registrato. **62 controlli.**
+
+Rimettendo il difetto della 153 — una sola strada che si dimentica i versamenti
+— la prova lo prende subito. Dati a caso, non numeri tondi: una divergenza si
+nasconde dietro i numeri tondi.
+
 ## Giro generale: un difetto che faceva dire due cose a due schermate (versione 154)
 
 Un giro completo dell'applicazione cercando difetti e cose da semplificare.

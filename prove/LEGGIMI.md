@@ -25,6 +25,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testUso.mjs` | l'app **usata dai suoi pulsanti**: registra turno, corse e spesa dai moduli veri, modifica, cancella, e i totali seguono |
 | `testLimiti.mjs` | nove situazioni scomode (archivio vuoto, zero ore, zero euro, anno bisestile, capodanno, caratteri speciali) e a video non deve comparire `NaN`, `Infinity`, `undefined` |
 | `storti.mjs` | dati storti in archivio - importi non numerici, date senza senso, identificativi doppi: nessun numero marcio, nessun «NaN» a video, e le tre strade che contano gli incassi devono dire la stessa cifra |
+| `baseUnica.mjs` | la base delle tasse si calcola in un posto solo: dieci archivi a caso, e getStats, il report, l'utile dell'anno e la somma dei dodici mesi devono dire tutti la stessa cifra |
 | `coerenza.mjs` | 43 identità: gli incassi dell'anno contati in quattro modi, le ripartizioni che ricompongono il totale, le tasse come somma delle parti, il budget, il conguaglio |
 | `coerenza2.mjs` | 37 identità fra il report del commercialista, `aggrega`, `getStats`, le vetture e le medie |
 | `coerenza3.mjs` | 81 identità sul motore costruito dopo la v121: il costo del giorno con l'IRPEF, il budget fuso col conguaglio, i corrispettivi mese per mese |
