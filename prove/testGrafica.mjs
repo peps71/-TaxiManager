@@ -7,7 +7,7 @@
 // Se non si misurano qui, non le controlla nessuno.
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 const RADICE = dirname(dirname(fileURLToPath(import.meta.url)));
 const APP = 'file://' + join(RADICE, 'index.html');
 const DOVE_PW = process.env.PLAYWRIGHT || [
@@ -174,6 +174,110 @@ for (let i = 2; i < angoli.length; i++) {
 }
 ok(inScala, 'ogni gradino e\' circa una volta e mezza il precedente',
    angoli.slice(1).map((a,i)=> i ? (a/angoli[i]).toFixed(2) : '').filter(Boolean).join(' · '));
+
+// ------------------------------------------------------------------
+console.log('\n4. IL COLORE STA NELLA BARRETTA, NON NEL FONDO');
+// ------------------------------------------------------------------
+// Prima della v159 c'erano 39 riquadri grossi con il fondo colorato, su sette
+// tinte: ognuno diceva «guarda me» e nessuno veniva letto per primo.
+// Ventinove sono diventati bianchi con una barretta. I dieci che restano
+// stanno qui sotto UNO PER UNO, con il motivo: il colore li' sta facendo un
+// lavoro, non decorazione. Se ne compare un undicesimo, questa prova lo dice.
+const sorgente = readFileSync(join(RADICE, 'index.html'), 'utf8');
+const AMMESSI = [
+  ['bg-yellow-100 p-3 rounded-xl',        'riga del prospetto che aspetta un controllo'],
+  ["'bg-gray-50' : 'bg-yellow-100'",      'riga del prospetto che aspetta un controllo'],
+  ['bg-indigo-50/70 rounded-xl p-3',      'le caselle piccole dentro la spiegazione del costo'],
+  ['p-3 bg-green-50 space-y-2',           'una corsa aperta in modifica: il verde dice che e\' un incasso'],
+  ['p-3 bg-red-50 space-y-2',             'una spesa aperta in modifica: il rosso dice che e\' un\'uscita'],
+  ['text-gray-500 bg-yellow-50',          'la fascia in fondo al prospetto'],
+  ['bg-white hover:bg-yellow-50',         'un tasto bianco che si scalda sotto il dito'],
+  ["'border-green-200 bg-green-50'",      'la voce piu\' caro dell\'elenco, in cima'],
+  ['bg-red-50 hover:bg-red-100',          'un tasto che cancella: il rosso e\' il senso del tasto']
+];
+const righe = sorgente.split('\n');
+const tinta = /bg-(yellow|red|indigo|green|purple|blue|orange|stone|pink|amber)-(50|100)(\/\d+)?\b/;
+// Cos'e' «un riquadro» e cosa no: l'imbottitura. p-3 e oltre e' una scheda;
+// px-4 con py-2 e' una casella di totali (ce n'era una cosi', ed era
+// sfuggita al primo giro perche' il setaccio guardava solo py-3). Un tasto
+// «Elimina» sta a px-3 py-2 e resta fuori: li' il rosso e' il senso del
+// tasto, non decorazione.
+const grosso = /\bp-[3-8]\b|\bpy-[3-8]\b|(?=.*\bpx-[4-8]\b).*\bpy-2\b/;
+const intrusi = [];
+righe.forEach((r, i) => {
+  if (r.length > 50000) return;                       // il foglio di stile
+  for (const m of r.matchAll(/class="([^"]*)"/g)) {
+    const c = m[1];
+    if (!tinta.test(c) || !grosso.test(c)) continue;
+    if (AMMESSI.some(([pezzo]) => c.includes(pezzo))) continue;
+    intrusi.push(`riga ${i + 1}: ${c.slice(0, 90)}`);
+  }
+});
+ok(intrusi.length === 0, 'nessun riquadro grosso col fondo colorato fuori elenco',
+   intrusi.length ? intrusi.join(' | ') : `${AMMESSI.length} motivi dichiarati`);
+
+// La barretta c'e' davvero, su ogni riquadro, e non e' il colore di riserva.
+// Senza dati meta' di questi riquadri non si disegna nemmeno - l'avviso delle
+// scadenze, le schede del rendimento - e la guardia girerebbe a vuoto.
+await p.evaluate(() => {
+  const rec = [], tur = [], met = ['Contanti','POS','Satispay','App/Nexi','Conto'];
+  const anno = new Date().getFullYear();
+  for (const a of [anno - 1, anno]) for (let m = 1; m <= 12; m++) for (let g = 1; g <= 26; g += 2) {
+    const d = `${a}-${String(m).padStart(2,'0')}-${String(g).padStart(2,'0')}`;
+    tur.push({ id:`t${a}${m}${g}`, data:d, turno:'Le otto', inizio:'08:00', fine:'20:00',
+               ore:12, lavorato:true, kmTot:170 });
+    for (let c = 0; c < 5; c++)
+      rec.push({ id:`e${a}${m}${g}${c}`, data:d, tipo:'ENTRATA', categoria:'Corsa',
+                 metodo:met[(g+c)%5], importo:14+((g*3+c*7)%40), ora:'10:00' });
+    if (g % 5 === 1) rec.push({ id:`u${a}${m}${g}`, data:d, tipo:'USCITA',
+                                categoria:'Carburante', metodo:'Bonifico', importo:58 });
+  }
+  window.dailyRecords = rec; window.shifts = tur;
+  window.versamenti = [{ id:'v1', data:`${anno}-03-15`, importo:900, dove:'Banca' }];
+  window.scadenze = [{ id:'s1', nome:'Revisione', data:`${anno}-01-10`, fatta:false }];
+  window.veicoli = [{ id:'ve1', targa:'AB123CD', modello:'Octavia',
+                      dataAcquisto:`${anno-1}-01-10`, prezzoAcquisto:28000, kmAcquisto:0, uscita:'in-uso' }];
+  window.vociFisse = [{ slug:'radio', nome:'Radio taxi', importo:3151.08, unita:'anno',
+                        tipo:'scadenza', scadenza:`${anno-1}-10-10`, dataInizio:'', dataFine:'' }];
+  window.annoScelto = String(anno); window.incassoVisibile = true;
+  window.versioneDati = (window.versioneDati || 0) + 1;
+});
+const barrette = await p.evaluate(() => {
+  const fuori = [];
+  let visti = 0;
+  for (const s of ['dashboard','giornata','uscite','categorie','scadenze','auto',
+                   'rendimento','report','versamenti','note','cloud','altro']) {
+    switchTab(s); renderContent();
+    document.querySelectorAll('.riquadro-tinto').forEach(e => {
+      visti++;
+      const st = getComputedStyle(e);
+      const tinta = st.getPropertyValue('--tinta').trim();
+      if (!tinta) fuori.push(`${s}: riquadro senza tinta`);
+      else if (!st.boxShadow.includes('inset')) fuori.push(`${s}: barretta assente (${st.boxShadow})`);
+      // bianco su bianco si deve comunque distinguere: il filo deve esserci
+      else if (st.borderTopWidth === '0px') fuori.push(`${s}: senza filo`);
+    });
+  }
+  return { visti, fuori };
+});
+ok(barrette.visti > 0, 'i riquadri con la barretta si disegnano', `${barrette.visti} visti`);
+ok(barrette.fuori.length === 0, 'ognuno ha la sua tinta, la barretta e il filo',
+   barrette.fuori.length ? barrette.fuori.slice(0, 3).join(' | ') : 'tutti a posto');
+
+// In stampa l'ombra sparisce: la barretta deve rifarsi bordo, o il foglio
+// per il commercialista esce senza colore.
+await p.emulateMedia({ media: 'print' });
+const inStampa = await p.evaluate(() => {
+  switchTab('report'); renderContent();
+  const e = document.querySelector('.riquadro-tinto');
+  if (!e) return null;
+  const st = getComputedStyle(e);
+  return { ombra: st.boxShadow, bordo: st.borderLeftWidth, colore: st.borderLeftColor };
+});
+await p.emulateMedia({ media: 'screen' });
+ok(inStampa && inStampa.ombra === 'none' && parseFloat(inStampa.bordo) >= 3,
+   'sulla carta la barretta diventa un bordo, che si stampa',
+   inStampa ? `bordo ${inStampa.bordo} ${inStampa.colore}` : 'nessun riquadro in stampa');
 
 await b.close();
 console.log(`\n  ${guai === 0 ? 'tutto a posto' : guai + ' controlli falliti'}`);

@@ -59,7 +59,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testCspViva.mjs` | la protezione sugli indirizzi è davvero applicata, e l'interruttore la toglie |
 | `testArchivi.mjs` | i cinque archivi che si sincronizzano passano tutti dallo stesso codice: una cartella vuota sul Cloud non svuota il telefono, e l'elenco delle voci di budget non si cancella in nessun caso |
 | `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei |
-| `testGrafica.mjs` | la grafica misurata invece che guardata: il comando premuto si stringe e si scurisce (e uno spento no), la sotto-scheda aperta si vede tutta a ogni larghezza, corpi e angoli stanno nella scala prevista |
+| `testGrafica.mjs` | la grafica misurata invece che guardata: il comando premuto si stringe e si scurisce (e uno spento no), la sotto-scheda aperta si vede tutta a ogni larghezza, corpi e angoli stanno nella scala prevista, e nessun riquadro grosso torna ad avere il fondo colorato fuori dagli otto motivi dichiarati (la barretta in stampa si rifà bordo, se no il foglio del commercialista esce senza tinte) |
 | `testAggiorna.mjs` | con un server che si comporta come GitHub Pages (`max-age=600`), la versione nuova si porta la pagina nuova e non quella rimasta nella cache HTTP |
 | `installabile.mjs` | si installa come una vera app: manifesto giudicato dal browser, icone misurate davvero, zona sicura dell'icona ritagliabile, colore della barra, schermata di apertura, spazio per la barra di casa dell'iPhone, apertura senza campo |
 | `testSW.mjs` | il service worker su HTTP: apertura dalla copia salvata, versione nuova in attesa |

@@ -69,6 +69,92 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il colore si sposta: dal fondo alla barretta (versione 159)
+
+Nell'app c'erano **270 riquadri con lo sfondo colorato**, su sette tinte. In Rendimento ne
+stavano quattro di fila — uno nero, uno bianco, uno verdino, uno rosa — e ognuno diceva
+«guarda me». Quando tutti dicono guarda me non si guarda niente per primo: è lo stesso errore
+che l'app aveva nei pesi del carattere prima della v89.
+
+Il colore non sparisce, **cambia posto**. Il riquadro torna bianco come tutti gli altri e la
+tinta resta in una barretta sul fianco e nel colore dell'etichetta. Il verde continua a dire
+«bene» e il rosso «male», ma a dirlo per primo adesso è il numero.
+
+### Una classe più una tinta, invece di trentanove combinazioni
+
+Dei riquadri grossi colorati, **30 sono diventati** `riquadro-tinto` più una tinta:
+
+```
+bg-green-50 border border-green-200 rounded-xl p-3 hover:bg-green-100 transition-colors
+    ->  riquadro-tinto tinta-verde rounded-xl p-3
+```
+
+Cinque tinte in tutto (gialla 15 volte, rossa 7, verde 4, indaco 3, arancio 1), definite in un
+posto solo.
+La prossima scheda non va inventata, si sceglie.
+
+Tre cose decise con cura, e tutte e tre sbagliando prima:
+
+- **La barretta è un'ombra dentro, non un bordo.** Un bordo spesso segue l'arrotondamento e
+  sugli angoli larghi diventa una mezzaluna. Un'ombra dentro resta dritta e la curva la
+  taglia — è la stessa tecnica che l'app usa già per la riga da verificare nei corrispettivi.
+- **L'arrotondamento resta una scelta del markup.** Scritto nella classe, avrebbe vinto su
+  `rounded-2xl` (la regola sta dopo Tailwind) e le schede grandi avrebbero perso la loro misura.
+- **Il filo è quello pieno, non quello chiaro.** Misurando dove stanno davvero questi riquadri
+  è venuto fuori che **tutti e dieci quelli visibili a quel momento stavano dentro una scheda
+  bianca**, non sul fondo color carta: lì un filo quasi bianco non si vede proprio.
+
+### I nove motivi per cui un fondo colorato resta
+
+Non è una svista, è un elenco. Sono i posti dove il colore sta facendo un lavoro:
+
+| Dove | Perché resta |
+| --- | --- |
+| riga del prospetto corrispettivi | aspetta un controllo: il giallo è il segnale |
+| caselle dentro la spiegazione del costo | sono tasselli di un blocco, non schede |
+| corsa aperta in modifica | il verde dice che è un incasso |
+| spesa aperta in modifica | il rosso dice che è un'uscita |
+| fascia in fondo al prospetto | chiude la tabella |
+| tasto bianco che si scalda sotto il dito | è un passaggio, non uno stato |
+| voce più cara dell'elenco | il verde la mette in cima |
+
+| tasto che cancella | il rosso è il senso del tasto, non il vestito |
+
+`testGrafica.mjs` **conta** che siano quelli e non uno di più: se un domani rispunta un
+riquadro grosso col fondo colorato fuori da questo elenco, la prova lo nomina con la riga
+esatta.
+
+Il setaccio della prova ha una sua definizione di «riquadro», e ci è voluto un secondo giro
+per azzeccarla: `p-3` e oltre è una scheda, `px-4` con `py-2` è una casella di totali — e ce
+n'era una proprio così, sfuggita al primo passaggio perché guardavo solo `py-3`. Un tasto
+«Elimina» sta a `px-3 py-2` e resta fuori.
+
+### «Giornata non lavorata» ha smesso di gridare
+
+Era scritto grande, nero e blu, su un fondo azzurrino: la cosa più rumorosa della schermata
+pur non dicendo niente. Una giornata senza corse è il caso più tranquillo che ci sia. Scende
+di un gradino, perde il fondo colorato, e lascia parlare la scheda scura sopra di lei.
+
+### Il foglio per il commercialista
+
+Le ombre **non si stampano**. La barretta, che sullo schermo è un'ombra dentro, sulla carta
+sarebbe sparita — e sarebbe sparita proprio nel foglio che va al commercialista, lasciando
+«Incassi lordi» e «Spese operative» senza nessun colore a distinguerli. In stampa la stessa
+barretta si rifà come bordo, che si stampa sempre. C'è un controllo apposta, che mette il
+browser in modalità stampa e misura.
+
+### Quello che non si è toccato
+
+Le pastiglie piccole (i metodi di pagamento, i cartellini «scaduta») e i quadratini colorati
+della legenda: lì la tinta **è** l'informazione, non il vestito. E l'elenco di Gestione con i
+quadratini colorati, che era già la parte più riuscita dell'app.
+
+### Quello che resta
+
+Il modo scuro. Adesso costa molto meno di prima: i fondi colorati da ripensare erano 270, ora
+i riquadri passano quasi tutti da una classe sola e da sei tinte dichiarate in un posto solo.
+È il lavoro che questa versione ha preparato senza dirlo.
+
 ## La grafica: il tocco, le misure, la linguetta che si nascondeva (versione 158)
 
 Tre cose, tutte e tre guardando l'app invece che ricordandosela: le schermate sono state
