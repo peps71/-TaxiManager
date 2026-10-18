@@ -69,6 +69,87 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Uno schema per gli archivi, e due funzioni spezzate (versione 157)
+
+Le ultime due proposte del giro generale.
+
+### Cinque archivi, cinque blocchi identici
+
+Scadenze, versamenti, note, parco auto e voci di budget avevano cinque blocchi di
+sincronizzazione **uguali in tutto tranne il nome**: centotrenta righe per dire
+cinque volte la stessa cosa. Ogni archivio nuovo ne aggiungeva altre ventisei, e
+ogni correzione andava fatta cinque volte — o dimenticata in quattro, che è il
+modo in cui nascono i difetti di questa applicazione.
+
+Adesso passano tutti da `applicaSnapshotArchivio`. **Il prossimo archivio costa
+cinque righe invece di ventisei:**
+
+```js
+annullaAscolti.push(ascoltaArchivio({
+    nome: 'versamenti', chiave: 'taxi_versamenti', etichetta: 'Versamenti',
+    ordina: perDataDecrescente,
+    messaggi: { caricato: 'Versamenti caricati sul Cloud.', soloQui: '...' }
+}));
+```
+
+**Movimenti e turni non passano di qui, ed è voluto**: hanno un meccanismo loro,
+più vecchio e più prudente, costruito per archivi da diecimila righe.
+Riscriverlo per simmetria sarebbe un rischio senza guadagno, sul lavoro di anni.
+
+### La parte che conta: adesso si può provare
+
+Il blocco di Firebase **non parte senza rete**. Quindi tutto quello che ci stava
+dentro non lo provava nessuno — ed è il codice su cui stanno i dati di anni.
+
+Per questo la logica è stata spostata dove gira sempre: arriva un elenco, si
+decide cosa farne, e di Firebase non c'è niente. Il cablaggio a Firestore è
+rimasto di là, ed è una riga.
+
+`prove/testArchivi.mjs` (26 controlli) prova quello che prima era al buio:
+
+- **una cartella vuota sul Cloud non svuota il telefono** — prima si porta su
+  quello che c'è qui, e solo quando il Cloud ha dimostrato di accettare i dati
+  gli si dà ragione;
+- se il Cloud rifiuta la scrittura, i dati restano comunque qui;
+- quando invece svuotare è giusto — se il Cloud ha già consegnato dati, un
+  elenco vuoto vuol dire che li hai cancellati da un altro dispositivo;
+- **l'elenco delle voci di budget non si cancella in nessun caso**, che è la
+  regola di chi usa l'app. Togliendo quella guardia, tre controlli falliscono.
+
+### Un doppione trovato per strada
+
+`formConDatiNonSalvati()` — quella che impedisce a un elenco dal Cloud di
+cancellare la corsa che stai battendo — era scritta **due volte, identica**: una
+nel blocco di Firebase e una nel copione normale, perché da lì il primo non si
+vede. Adesso è scritta una volta sola. Insieme se n'è andata `scadenzeMigrate`,
+una bandiera che veniva messa e non leggeva nessuno.
+
+### Due funzioni spezzate
+
+| | Prima | Adesso |
+| --- | --- | --- |
+| `renderSezioneGiornate` | 353 righe | 211 di preparazione + 145 di disegno, separate |
+| `sezioneStimaTasse` | 269 righe, con due blocchi anonimi da 140 e 85 | tre funzioni con un nome |
+
+La giornata mescolava duecento righe di conti e centocinquanta di disegno: per
+capire da dove usciva un numero bisognava leggerle tutte. Adesso una funzione
+prepara quello che la schermata deve sapere e l'altra lo mette in pagina.
+
+I due blocchi anonimi della stima tasse adesso si chiamano
+`bloccoStimaOrdinario` e `bloccoAccantonamento`. Un pezzo di codice lungo
+centoquaranta righe senza un nome non si cerca e non si cita: per parlarne si
+diceva «quella cosa in mezzo alla scheda del commercialista».
+
+### Lo specchio, di nuovo
+
+Ogni passo è stato verificato confrontando il testo di quindici schermate
+carattere per carattere con la versione di prima: **nessuna differenza**.
+
+E una volta lo specchio ha fatto il suo lavoro nel modo più utile: un taglio
+fatto a occhio invece che per corrispondenza esatta aveva mangiato codice buono.
+`git checkout`, e si ricomincia con sostituzioni precise. **Nessun pezzo di
+quella mezz'ora è arrivato fino a qui.**
+
 ## Un solo modo di leggere i movimenti (versione 156)
 
 La seconda proposta del giro generale. Stessa malattia della 155, stessa

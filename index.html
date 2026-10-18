@@ -644,17 +644,22 @@
         // Se un form di inserimento/modifica e' aperto con dati non ancora salvati,
         // un rendering completo lo cancellerebbe senza preavviso: in quel caso
         // si aggiornano solo i dati in memoria e si avvisa, senza ridisegnare.
-        let ultimoAvvisoSyncBloccato = 0;
-        function formConDatiNonSalvati() {
-            return !!(window.showCorsaForm || window.showUscitaForm || window.showShiftForm
-                || window.editRecordId || window.editKmId || window.veicoloInModifica);
-        }
-        function avvisaSyncInAttesa() {
-            const ora = Date.now();
-            if (ora - ultimoAvvisoSyncBloccato > 8000) {
-                ultimoAvvisoSyncBloccato = ora;
-                if (window.showToast) window.showToast('Nuovi dati dal Cloud: verranno mostrati alla chiusura del modulo aperto.');
-            }
+        // Stanno nel copione normale, scritte una volta sola: da qui si
+        // chiamano come globali.
+        const formConDatiNonSalvati = () => window.formConDatiNonSalvati();
+        const avvisaSyncInAttesa = () => window.avvisaSyncInAttesa();
+
+        // Il cablaggio a Firestore: una riga. La logica sta nel copione
+        // normale (applicaSnapshotArchivio), dove si puo' provare.
+        function ascoltaArchivio(opz) {
+            const campoId = opz.campoId || 'id';
+            const etichetta = opz.etichetta || opz.nome;
+            return onSnapshot(colDati(opz.chiave), (snapshot) => {
+                const dalCloud = [];
+                snapshot.forEach(d => dalCloud.push(Object.assign({ [campoId]: d.id }, d.data())));
+                return window.applicaSnapshotArchivio(opz, dalCloud, snapshot.empty,
+                    (x) => setDoc(docDati(opz.chiave, String(x[campoId])), x));
+            }, (error) => console.error(`Errore Sync ${etichetta}:`, error));
         }
 
         function avvisaErroreAccesso(err) {
@@ -744,11 +749,6 @@
 
             const recordsCol = colDati('taxi_records');
             const shiftsCol = colDati('taxi_shifts');
-            const scadenzeCol = colDati('taxi_scadenze');
-            const veicoliCol = colDati('taxi_veicoli');
-            const vociFisseCol = colDati('taxi_voci_fisse');
-            const noteCol = colDati('taxi_note');
-            const versamentiCol = colDati('taxi_versamenti');
 
             // Il profilo: un documento solo, quindi basta ascoltarlo. Se sul
             // Cloud non c'e' ancora ma qui si', si porta su - e' il caso di chi
@@ -834,34 +834,12 @@
             // Scadenze: a differenza di corse e turni, qui si applica anche uno snapshot vuoto,
             // altrimenti cancellandone una da un dispositivo resterebbe sugli altri.
             // Prima pero' si migrano sul Cloud quelle gia' salvate solo in locale.
-            annullaAscolti.push(onSnapshot(scadenzeCol, async (snapshot) => {
-                const cloudScadenze = [];
-                snapshot.forEach(d => cloudScadenze.push({ id: d.id, ...d.data() }));
-
-                if (!snapshot.empty) scadenzeCloudOk = true;
-
-                if (snapshot.empty && (window.scadenze || []).length && !scadenzeCloudOk) {
-                    // Non svuoto niente finche' non so che il Cloud accetta i dati
-                    try {
-                        for (const sc of window.scadenze) {
-                            await setDoc(docDati('taxi_scadenze', String(sc.id)), sc);
-                        }
-                        scadenzeCloudOk = true;
-                        if (window.showToast) window.showToast('Scadenze caricate sul Cloud.');
-                    } catch (err) {
-                        console.error("Errore migrazione scadenze:", err);
-                        if (window.showToast) window.showToast('Scadenze salvate solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
-                    }
-                    return;
-                }
-
-                scadenzeMigrate = true;
-                cloudScadenze.sort((a, b) => String(a.data).localeCompare(String(b.data)));
-                window.scadenze = cloudScadenze;
-                window.scriviLocale('taxi_scadenze', cloudScadenze);
-                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
-                window.renderDifferito();
-            }, (error) => console.error("Errore Sync Scadenze:", error)));
+            annullaAscolti.push(ascoltaArchivio({
+                nome: 'scadenze', chiave: 'taxi_scadenze', etichetta: 'Scadenze',
+                ordina: (a, b) => String(a.data).localeCompare(String(b.data)),
+                messaggi: { caricato: 'Scadenze caricate sul Cloud.',
+                            soloQui: 'Scadenze salvate solo qui: il Cloud ha rifiutato la scrittura.' }
+            }));
 
             // Le note: stesso trattamento delle scadenze. Uno snapshot vuoto si
             // applica solo dopo aver visto che il Cloud accetta i dati.
@@ -869,127 +847,38 @@
             // si applica solo dopo aver visto che il Cloud accetta i dati,
             // altrimenti il primo accesso da un telefono nuovo cancellerebbe
             // quello che c'e' qui - e qui ci sono cifre che pesano sulle tasse.
-            annullaAscolti.push(onSnapshot(versamentiCol, async (snapshot) => {
-                const cloudVers = [];
-                snapshot.forEach(d => cloudVers.push({ id: d.id, ...d.data() }));
+            annullaAscolti.push(ascoltaArchivio({
+                nome: 'versamenti', chiave: 'taxi_versamenti', etichetta: 'Versamenti',
+                ordina: perDataDecrescente,
+                messaggi: { caricato: 'Versamenti caricati sul Cloud.',
+                            soloQui: 'Versamenti salvati solo qui: il Cloud ha rifiutato la scrittura.' }
+            }));
 
-                if (!snapshot.empty) versamentiCloudOk = true;
-
-                if (snapshot.empty && (window.versamenti || []).length && !versamentiCloudOk) {
-                    try {
-                        for (const x of window.versamenti) {
-                            await setDoc(docDati('taxi_versamenti', String(x.id)), x);
-                        }
-                        versamentiCloudOk = true;
-                        if (window.showToast) window.showToast('Versamenti caricati sul Cloud.');
-                    } catch (err) {
-                        console.error("Errore migrazione versamenti:", err);
-                        if (window.showToast) window.showToast('Versamenti salvati solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
-                    }
-                    return;
-                }
-
-                cloudVers.sort(perDataDecrescente);
-                window.versamenti = cloudVers;
-                window.scriviLocale('taxi_versamenti', cloudVers);
-                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
-                window.renderDifferito();
-            }, (error) => console.error("Errore Sync Versamenti:", error)));
-
-            annullaAscolti.push(onSnapshot(noteCol, async (snapshot) => {
-                const cloudNote = [];
-                snapshot.forEach(d => cloudNote.push({ id: d.id, ...d.data() }));
-
-                if (!snapshot.empty) noteCloudOk = true;
-
-                if (snapshot.empty && (window.note || []).length && !noteCloudOk) {
-                    try {
-                        for (const n of window.note) {
-                            await setDoc(docDati('taxi_note', String(n.id)), n);
-                        }
-                        noteCloudOk = true;
-                        if (window.showToast) window.showToast('Note caricate sul Cloud.');
-                    } catch (err) {
-                        console.error("Errore migrazione note:", err);
-                        if (window.showToast) window.showToast('Note salvate solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
-                    }
-                    return;
-                }
-
-                cloudNote.sort(perDataDecrescente);
-                window.note = cloudNote;
-                window.scriviLocale('taxi_note', cloudNote);
-                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
-                window.renderDifferito();
-            }, (error) => console.error("Errore Sync Note:", error)));
+            annullaAscolti.push(ascoltaArchivio({
+                nome: 'note', chiave: 'taxi_note', etichetta: 'Note',
+                ordina: perDataDecrescente,
+                messaggi: { caricato: 'Note caricate sul Cloud.',
+                            soloQui: 'Note salvate solo qui: il Cloud ha rifiutato la scrittura.' }
+            }));
 
             // Parco auto: stesso trattamento delle scadenze. Uno snapshot vuoto si
             // applica solo dopo aver visto che il Cloud accetta i dati, altrimenti
             // al primo avvio cancellerebbe le vetture salvate solo qui.
-            annullaAscolti.push(onSnapshot(veicoliCol, async (snapshot) => {
-                const cloudVeicoli = [];
-                snapshot.forEach(d => cloudVeicoli.push({ id: d.id, ...d.data() }));
-
-                if (!snapshot.empty) veicoliCloudOk = true;
-
-                if (snapshot.empty && (window.veicoli || []).length && !veicoliCloudOk) {
-                    try {
-                        for (const v of window.veicoli) {
-                            await setDoc(docDati('taxi_veicoli', String(v.id)), v);
-                        }
-                        veicoliCloudOk = true;
-                        if (window.showToast) window.showToast('Parco auto caricato sul Cloud.');
-                    } catch (err) {
-                        console.error("Errore migrazione veicoli:", err);
-                        if (window.showToast) window.showToast('Parco auto salvato solo qui: il Cloud ha rifiutato la scrittura.', 'avviso');
-                    }
-                    return;
-                }
-
-                window.veicoli = cloudVeicoli;
-                window.scriviLocale('taxi_veicoli', cloudVeicoli);
-                if (formConDatiNonSalvati()) { window.renderNav(); avvisaSyncInAttesa(); return; }
-                window.renderDifferito();
-            }, (error) => console.error("Errore Sync Parco Auto:", error)));
+            annullaAscolti.push(ascoltaArchivio({
+                nome: 'veicoli', chiave: 'taxi_veicoli', etichetta: 'Parco Auto',
+                messaggi: { caricato: 'Parco auto caricato sul Cloud.',
+                            soloQui: 'Parco auto salvato solo qui: il Cloud ha rifiutato la scrittura.' }
+            }));
 
             // Voci di costo fisso: stesso trattamento del parco auto
-            annullaAscolti.push(onSnapshot(vociFisseCol, async (snapshot) => {
-                const cloudVoci = [];
-                snapshot.forEach(d => cloudVoci.push({ slug: d.id, ...d.data() }));
-
-                if (!snapshot.empty) vociFisseCloudOk = true;
-
-                if (snapshot.empty && (window.vociFisse || []).length && !vociFisseCloudOk) {
-                    try {
-                        for (const v of window.vociFisse) {
-                            await setDoc(docDati('taxi_voci_fisse', String(v.slug)), v);
-                        }
-                        vociFisseCloudOk = true;
-                    } catch (err) {
-                        console.error("Errore migrazione voci fisse:", err);
-                    }
-                    return;
-                }
-
-                if (!cloudVoci.length && (window.vociFisse || []).length) {
-                    console.warn('Elenco voci fisse vuoto dal Cloud: tengo quello locale.');
-                    return;
-                }
-                window.vociFisse = cloudVoci;
-                window.scriviLocale('taxi_voci_fisse', cloudVoci);
-                if (formConDatiNonSalvati()) { avvisaSyncInAttesa(); return; }
-                window.renderDifferito();
-            }, (error) => console.error("Errore Sync Voci Fisse:", error)));
+            annullaAscolti.push(ascoltaArchivio({
+                nome: 'vociFisse', chiave: 'taxi_voci_fisse', etichetta: 'Voci Fisse',
+                campoId: 'slug', maiVuoto: true, conNav: false
+            }));
         }
 
         // Diventa true quando il Cloud ha dimostrato di funzionare per le scadenze:
         // o perche' conteneva gia' dei dati, o perche' ha accettato una scrittura.
-        let scadenzeMigrate = false;
-        let scadenzeCloudOk = false;
-        let noteCloudOk = false;
-        let versamentiCloudOk = false;
-        let veicoliCloudOk = false;
-        let vociFisseCloudOk = false;
 
         // ============================================================
         //  ISTANTANEE NEL CLOUD
@@ -1424,7 +1313,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 156;
+        const VERSIONE_APP = 157;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -7180,7 +7069,16 @@
                 </div>`;
         }
 
-        function renderSezioneGiornate() {
+        // ============================================================
+        //  LA GIORNATA: PRIMA QUELLO CHE SERVE SAPERE, POI IL DISEGNO
+        //  Erano trecentocinquanta righe in una funzione sola: duecento di
+        //  conti e centocinquanta di disegno, mescolate. Per capire da dove
+        //  usciva un numero bisognava leggerle tutte.
+        //  Adesso sono due: questa prepara quello che la schermata deve
+        //  sapere, quella sotto lo mette in pagina. Nessun numero e'
+        //  cambiato - il disegno riceve esattamente le stesse cose di prima.
+        // ============================================================
+        function datiSezioneGiornate() {
             const giorno = giornoGiornate();
             const mese = window.filterMeseGiornate;
             const metodo = window.filterMetodoGiornate;
@@ -7388,6 +7286,11 @@
                     </div>
                 </details>`;
 
+            return { corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo };
+        }
+
+        function renderSezioneGiornate() {
+            const { corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo } = datiSezioneGiornate();
             return `
                 <div class="fade-in space-y-5 max-w-7xl mx-auto">
                     ${avvisoProfilo()}
@@ -9222,154 +9125,251 @@
         //  lo ospita, e l'unica variabile che prendeva da fuori - la soglia
         //  del forfettario - adesso se la calcola da se'.
         // ============================================================
+        // ============================================================
+        //  LA STIMA DELLE TASSE, IN DUE PEZZI CON UN NOME
+        //  Erano due funzioni senza nome dentro il disegno, lunghe
+        //  centoquaranta e ottantacinque righe. Un pezzo di codice lungo
+        //  cosi' senza un nome non si cerca e non si cita: per parlarne si
+        //  diceva «quella cosa in mezzo alla scheda del commercialista».
+        //  Adesso hanno un nome, e il disegno torna a leggersi.
+        // ============================================================
+        function bloccoStimaOrdinario() {
+                    const st = getStats();
+                    const fs = window.fiscalSettings || { inpsPerc: 24, addizionaliPerc: 2 };
+                    // Le tasse si contano sull'utile fiscale (incassi meno le sole
+                    // spese deducibili); quello che ti resta in tasca si conta
+                    // sull'utile di cassa, dove le spese in contanti pesano eccome.
+                    const utile = st.utileFiscale;
+                    const f = st.fiscale;
+                    const pct = (v) => utile > 0 ? Math.max(0, (v / utile) * 100) : 0;
+                    const nettoStimato = st.utileCassa - st.tasse;
+                    const alMese = st.tasse > 0 ? st.tasse / 12 : 0;
+                    // Quanto pesa il fisco su cento euro. Numeratore e
+                    // denominatore devono parlare della stessa cosa: le tasse
+                    // si contano sui soli incassi tracciati, quindi anche il
+                    // rapporto sta su quelli. Dividendo per tutti gli incassi
+                    // veniva un numero piu' basso della meta' del vero.
+                    const su100 = st.entrateTracciate > 0 ? (st.tasse / st.entrateTracciate) * 100 : 0;
+                    const a2 = aliquotaSecondoScaglione(annoAttivo()) * 100;
+
+                    // Proiezione a fine anno: ha senso solo sull'anno in corso
+                    const oggiD = new Date();
+                    const annoInCorso = String(oggiD.getFullYear()) === String(annoAttivo());
+                    let proiezione = null;
+                    if (annoInCorso && utile > 0) {
+                        const giorniPassati = Math.max(1, Math.round((oggiD - new Date(oggiD.getFullYear(), 0, 1)) / 86400000) + 1);
+                        const fattore = 365 / giorniPassati;
+                        const utileFineAnno = utile * fattore;
+                        proiezione = {
+                            giorniPassati,
+                            incassi: st.entrate * fattore,
+                            utile: utileFineAnno,
+                            tasse: calcolaTasseOrdinario(utileFineAnno, annoAttivo()).tasseTot
+                        };
+                    }
+
+                    return `
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="text-lg font-black text-gray-900">Stima tasse ${annoAttivo()} · Regime Ordinario</h3>
+                                    <p class="text-xs text-gray-500">Sui soli movimenti tracciati, da una parte e dall\'altra: incassi con POS, app o bonifico meno le spese pagate allo stesso modo.</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="etichetta block">Da accantonare</p>
+                                    <p class="text-3xl font-black ${st.tasse > 0 ? 'text-red-600' : 'text-gray-300'} leading-tight">${formatCurrency(st.tasse)}</p>
+                                </div>
+                            </div>
+
+                            <div class="p-5 space-y-5">
+                                ${utile > 0 ? `
+                                    <div>
+                                        <div class="flex h-3 rounded-full overflow-hidden bg-gray-100">
+                                            <div class="bg-purple-500" style="width:${pct(f.contributiInps)}%"></div>
+                                            <div class="bg-red-500" style="width:${pct(f.irpef)}%"></div>
+                                            <div class="bg-orange-400" style="width:${pct(f.addizionali)}%"></div>
+                                            <div class="bg-green-500" style="width:${pct(nettoStimato)}%"></div>
+                                        </div>
+                                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-bold text-gray-500">
+                                            <span><span class="inline-block w-2 h-2 rounded-sm bg-purple-500 align-middle"></span> INPS</span>
+                                            <span><span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> IRPEF</span>
+                                            <span><span class="inline-block w-2 h-2 rounded-sm bg-orange-400 align-middle"></span> Addizionali</span>
+                                            <span><span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Netto</span>
+                                        </div>
+                                    </div>
+                                ` : ''}
+
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
+                                    <div>
+                                        ${rigaFiscale('Incassi tracciati ' + annoAttivo() + ' <span class="font-normal text-gray-400">POS, app, bonifico</span>', formatCurrency(st.entrateTracciateCorse), { classe: 'text-green-600' })}
+                                        <!-- I contanti versati in banca stanno su una riga loro: sommati
+                                             dentro gli incassi tracciati nessuno capirebbe piu' da dove
+                                             viene la cifra, e questa e' la pagina che si porta in studio. -->
+                                        ${st.versato > 0 ? rigaFiscale(
+                                            'Contanti versati in banca <span class="font-normal text-gray-400">da qui in poi lasciano traccia</span>',
+                                            formatCurrency(st.versato), { classe: 'text-green-600' }) : ''}
+                                        ${rigaFiscale('Spese deducibili <span class="font-normal text-gray-400">tracciate</span>', '-' + formatCurrency(st.deducibili), { classe: 'text-red-600' })}
+                                        ${rigaFiscale('Utile fiscale', formatCurrency(utile), { forte: true })}
+                                        ${st.contantiInCassa > 0 || st.nonDeducibili > 0 ? `
+                                            <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-3 pt-2 border-t border-gray-100">Fuori da questo conto</p>
+                                        ` : ''}
+                                        ${st.contantiInCassa > 0 ? rigaFiscale(
+                                            'Contanti non versati' + (st.versato > 0 ? ' <span class="font-normal text-gray-400">su ' + formatCurrency(st.entrateContanti) + ' incassati</span>' : ''),
+                                            formatCurrency(st.contantiInCassa), { classe: 'text-gray-500' }) : ''}
+                                        ${st.nonDeducibili > 0 ? rigaFiscale(
+                                            'Spese non deducibili <span class="font-normal text-gray-400">contanti o senza metodo</span>',
+                                            '-' + formatCurrency(st.nonDeducibili), { classe: 'text-gray-500' }) : ''}
+                                        ${st.contantiInCassa > 0 || st.nonDeducibili > 0 ? `
+                                            <p class="text-[11px] text-gray-400 leading-relaxed pb-2">
+                                                Entrano e escono dalla cassa davvero — il «ti resta» qui sotto ne tiene conto —
+                                                ma restano fuori dal conto delle tasse.
+                                            </p>
+                                        ` : ''}
+                                        ${f.inps && f.inps.fissa > 0 ? `
+                                            ${rigaFiscale(
+                                                'INPS \u00b7 rate fisse <span class="font-normal text-gray-400">' + f.inps.rate + ' \u00d7 ' + formatCurrency(f.inps.rata) + '</span>',
+                                                '-' + formatCurrency(f.inps.fissa), { classe: 'text-purple-600' })}
+                                            ${rigaFiscale(
+                                                'INPS \u00b7 ' + fs.inpsPerc + '% oltre ' + formatCurrency(fs.inpsMinimale ?? 18415),
+                                                f.inps.eccedenza > 0 ? '-' + formatCurrency(f.inps.eccedenza) : formatCurrency(0),
+                                                { classe: f.inps.eccedenza > 0 ? 'text-purple-600' : 'text-gray-400' })}
+                                        ` : rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
+                                        ${rigaFiscale('Imponibile IRPEF', formatCurrency(f.imponibileIrpef), { forte: true })}
+                                    </div>
+                                    <div>
+                                        ${rigaFiscale('IRPEF a scaglioni', '-' + formatCurrency(f.irpef), { classe: 'text-red-600' })}
+                                        ${rigaFiscale('Addizionali (' + fs.addizionaliPerc + '%)', '-' + formatCurrency(f.addizionali), { classe: 'text-orange-600' })}
+                                        ${rigaFiscale('Totale tasse e contributi', formatCurrency(st.tasse), { forte: true, classe: 'text-red-600' })}
+                                        ${rigaFiscale('Netto stimato', formatCurrency(nettoStimato), { forte: true, classe: 'text-green-700', bordo: true })}
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                                    ${boxDato('Da mettere via ogni mese', formatCurrency(alMese))}
+                                    ${boxDato('Su ogni 100 € tracciati', formatCurrency(su100))}
+                                    ${boxDato('Scaglioni ' + annoAttivo(), `23% · ${a2}% · 43%`)}
+                                </div>
+
+                                ${proiezione ? `
+                                    <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                                        <p class="text-xs font-black uppercase tracking-wider text-yellow-800 mb-1">Proiezione a fine anno</p>
+                                        <p class="text-sm font-bold text-gray-700">
+                                            Con questo ritmo (${proiezione.giorniPassati} giorni di ${annoAttivo()} registrati) chiuderesti a
+                                            <span class="font-black text-gray-900">${formatCurrency(proiezione.incassi)}</span> di incassi,
+                                            <span class="font-black text-gray-900">${formatCurrency(proiezione.utile)}</span> di utile fiscale e circa
+                                            <span class="font-black text-red-600">${formatCurrency(proiezione.tasse)}</span> tra tasse e contributi.
+                                        </p>
+                                    </div>
+                                ` : ''}
+
+                                <p class="text-xs text-gray-600 leading-relaxed bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+                                    <strong>La stima considera solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
+                                    Per il fisco, in regime ordinario, concorrono al reddito <em>tutti</em> i corrispettivi, contanti compresi,
+                                    quindi il conto vero e' piu' alto. Quanto piu' alto lo vedi qui sotto, negli approfondimenti, nel confronto
+                                    fra le due basi di calcolo.
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Stima indicativa, non una dichiarazione. Non tiene conto di detrazioni e deduzioni personali, dei minimali INPS artigiani,
+                                    di acconti gia' versati o di redditi diversi da questa attivita'. Le percentuali INPS e addizionali si cambiano in
+                                    "Cloud & Sync" → Impostazioni Fiscali. Verifica sempre con il commercialista.
+                                </p>
+                            </div>
+                        </div>
+                    `;
+        }
+
+        function bloccoAccantonamento() {
+                    // Gli stessi totali del riepilogo annuale, senza rifare i conti.
+                    // Bonifici e voucher finiscono entrambi in "app", quindi il totale
+                    // degli incassi tracciati non cambia.
+                    const inc = aggrega(annoAttivo());
+                    inc.totale = inc.incassi;
+                    // Tracciato vuol dire tracciato: Satispay lo e' quanto il POS.
+                    // Prima restava fuori da questo confronto, e la colonna B
+                    // risultava piu' bassa del vero.
+                    inc.elettronici = inc.pos + inc.app + inc.conto + inc.satispay;
+                    const st2 = getStats();
+                    // Anche qui si toglie solo quello che il fisco lascia togliere.
+                    const uscite = st2.deducibili;
+                    const anno = annoAttivo();
+                    const A = scenarioTasse(inc.totale, uscite, anno);
+                    const B = scenarioTasse(inc.elettronici, uscite, anno);
+
+                    // Proiezione a fine anno, solo se l'anno e' quello in corso
+                    const oggiD2 = new Date();
+                    const inCorso = String(oggiD2.getFullYear()) === String(anno);
+                    const gg = Math.max(1, Math.round((oggiD2 - new Date(oggiD2.getFullYear(), 0, 1)) / 86400000) + 1);
+                    const k = 365 / gg;
+                    const Ap = inCorso ? scenarioTasse(inc.totale * k, uscite * k, anno) : null;
+                    const Bp = inCorso ? scenarioTasse(inc.elettronici * k, uscite * k, anno) : null;
+
+                    const colonna = (titolo, sottotitolo, sc, proj, accento) => `
+                        <div class="border ${accento} rounded-xl overflow-hidden">
+                            <div class="px-4 py-3 border-b border-gray-100 bg-gray-50/70">
+                                <p class="font-black text-gray-900 text-sm">${titolo}</p>
+                                <p class="text-xs text-gray-500">${sottotitolo}</p>
+                            </div>
+                            <div class="p-4">
+                                ${rigaFiscale('Incassi considerati', formatCurrency(sc.incassi), { classe: 'text-green-600' })}
+                                ${rigaFiscale('Spese dedotte', '-' + formatCurrency(sc.uscite), { classe: 'text-red-600' })}
+                                ${rigaFiscale('Utile lordo', formatCurrency(sc.utile), { forte: true })}
+                                ${rigaFiscale('Contributi INPS', '-' + formatCurrency(sc.contributiInps), { classe: 'text-purple-600' })}
+                                ${rigaFiscale('IRPEF', '-' + formatCurrency(sc.irpef), { classe: 'text-red-600' })}
+                                ${rigaFiscale('Addizionali', '-' + formatCurrency(sc.addizionali), { classe: 'text-orange-600' })}
+                                ${rigaFiscale('Tasse e contributi', formatCurrency(sc.tasse), { forte: true, classe: 'text-red-600', bordo: true })}
+                                ${rigaFiscale('Netto stimato', formatCurrency(sc.netto), { forte: true, classe: 'text-green-700' })}
+                                <div class="mt-3 grid grid-cols-2 gap-2 text-center">
+                                    <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
+                                        <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Al mese</p>
+                                        <p class="text-sm font-black text-gray-900">${formatCurrency(sc.tasse / 12)}</p>
+                                    </div>
+                                    <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
+                                        <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Su 100 € incassati</p>
+                                        <p class="text-sm font-black text-gray-900">${sc.incassi > 0 ? formatCurrency((sc.tasse / sc.incassi) * 100) : '—'}</p>
+                                    </div>
+                                </div>
+                                ${proj ? `
+                                    <p class="text-xs text-gray-500 mt-3">
+                                        Proiezione a fine ${anno}: <span class="font-black text-gray-700">${formatCurrency(proj.tasse)}</span>
+                                        su ${formatCurrency(proj.incassi)} di incassi.
+                                    </p>
+                                ` : ''}
+                            </div>
+                        </div>`;
+
+                    return `
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="px-5 py-4 border-b border-gray-100">
+                                <h3 class="text-lg font-black text-gray-900">Confronto fra due basi di calcolo</h3>
+                                <p class="text-xs text-gray-500">Stesse spese in entrambi i casi, cambia solo la parte di incassi considerata.</p>
+                            </div>
+                            <div class="p-5 space-y-4">
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    ${colonna('A · Tutti gli incassi', 'Contanti compresi: e\' la base che conta per il fisco in regime ordinario.', A, Ap, 'border-gray-200')}
+                                    ${colonna('B · Solo POS, app e fatture', 'Esclude contanti (' + formatCurrency(inc.contanti) + ') e Satispay (' + formatCurrency(inc.satispay) + ').', B, Bp, 'border-gray-200')}
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    ${boxDato('Incassi esclusi in B', formatCurrency(inc.totale - inc.elettronici))}
+                                    ${boxDato('Differenza di tasse', formatCurrency(A.tasse - B.tasse), 'text-red-600')}
+                                    ${boxDato('Quota elettronica sul totale', (inc.totale > 0 ? ((inc.elettronici / inc.totale) * 100).toFixed(0) : 0) + '%')}
+                                </div>
+
+                                <p class="text-xs text-gray-500">
+                                    La colonna A e' quella che conta per il fisco: in regime ordinario concorrono al reddito tutti i corrispettivi,
+                                    compresi quelli in contanti. La colonna B serve solo come confronto, per vedere quanto pesa la parte tracciata
+                                    del lavoro. Come sempre, stima indicativa: la dichiarazione la fa il commercialista.
+                                </p>
+                            </div>
+                        </div>
+                    `;
+        }
+
         function sezioneStimaTasse() {
             const sf = statsForfettario();
             return `
                     <!-- Stima tasse Regime Ordinario -->
-                    ${(() => {
-                        const st = getStats();
-                        const fs = window.fiscalSettings || { inpsPerc: 24, addizionaliPerc: 2 };
-                        // Le tasse si contano sull'utile fiscale (incassi meno le sole
-                        // spese deducibili); quello che ti resta in tasca si conta
-                        // sull'utile di cassa, dove le spese in contanti pesano eccome.
-                        const utile = st.utileFiscale;
-                        const f = st.fiscale;
-                        const pct = (v) => utile > 0 ? Math.max(0, (v / utile) * 100) : 0;
-                        const nettoStimato = st.utileCassa - st.tasse;
-                        const alMese = st.tasse > 0 ? st.tasse / 12 : 0;
-                        // Quanto pesa il fisco su cento euro. Numeratore e
-                        // denominatore devono parlare della stessa cosa: le tasse
-                        // si contano sui soli incassi tracciati, quindi anche il
-                        // rapporto sta su quelli. Dividendo per tutti gli incassi
-                        // veniva un numero piu' basso della meta' del vero.
-                        const su100 = st.entrateTracciate > 0 ? (st.tasse / st.entrateTracciate) * 100 : 0;
-                        const a2 = aliquotaSecondoScaglione(annoAttivo()) * 100;
-
-                        // Proiezione a fine anno: ha senso solo sull'anno in corso
-                        const oggiD = new Date();
-                        const annoInCorso = String(oggiD.getFullYear()) === String(annoAttivo());
-                        let proiezione = null;
-                        if (annoInCorso && utile > 0) {
-                            const giorniPassati = Math.max(1, Math.round((oggiD - new Date(oggiD.getFullYear(), 0, 1)) / 86400000) + 1);
-                            const fattore = 365 / giorniPassati;
-                            const utileFineAnno = utile * fattore;
-                            proiezione = {
-                                giorniPassati,
-                                incassi: st.entrate * fattore,
-                                utile: utileFineAnno,
-                                tasse: calcolaTasseOrdinario(utileFineAnno, annoAttivo()).tasseTot
-                            };
-                        }
-
-                        return `
-                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                <div class="px-5 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-                                    <div>
-                                        <h3 class="text-lg font-black text-gray-900">Stima tasse ${annoAttivo()} · Regime Ordinario</h3>
-                                        <p class="text-xs text-gray-500">Sui soli movimenti tracciati, da una parte e dall\'altra: incassi con POS, app o bonifico meno le spese pagate allo stesso modo.</p>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="etichetta block">Da accantonare</p>
-                                        <p class="text-3xl font-black ${st.tasse > 0 ? 'text-red-600' : 'text-gray-300'} leading-tight">${formatCurrency(st.tasse)}</p>
-                                    </div>
-                                </div>
-
-                                <div class="p-5 space-y-5">
-                                    ${utile > 0 ? `
-                                        <div>
-                                            <div class="flex h-3 rounded-full overflow-hidden bg-gray-100">
-                                                <div class="bg-purple-500" style="width:${pct(f.contributiInps)}%"></div>
-                                                <div class="bg-red-500" style="width:${pct(f.irpef)}%"></div>
-                                                <div class="bg-orange-400" style="width:${pct(f.addizionali)}%"></div>
-                                                <div class="bg-green-500" style="width:${pct(nettoStimato)}%"></div>
-                                            </div>
-                                            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs font-bold text-gray-500">
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-purple-500 align-middle"></span> INPS</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> IRPEF</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-orange-400 align-middle"></span> Addizionali</span>
-                                                <span><span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Netto</span>
-                                            </div>
-                                        </div>
-                                    ` : ''}
-
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
-                                        <div>
-                                            ${rigaFiscale('Incassi tracciati ' + annoAttivo() + ' <span class="font-normal text-gray-400">POS, app, bonifico</span>', formatCurrency(st.entrateTracciateCorse), { classe: 'text-green-600' })}
-                                            <!-- I contanti versati in banca stanno su una riga loro: sommati
-                                                 dentro gli incassi tracciati nessuno capirebbe piu' da dove
-                                                 viene la cifra, e questa e' la pagina che si porta in studio. -->
-                                            ${st.versato > 0 ? rigaFiscale(
-                                                'Contanti versati in banca <span class="font-normal text-gray-400">da qui in poi lasciano traccia</span>',
-                                                formatCurrency(st.versato), { classe: 'text-green-600' }) : ''}
-                                            ${rigaFiscale('Spese deducibili <span class="font-normal text-gray-400">tracciate</span>', '-' + formatCurrency(st.deducibili), { classe: 'text-red-600' })}
-                                            ${rigaFiscale('Utile fiscale', formatCurrency(utile), { forte: true })}
-                                            ${st.contantiInCassa > 0 || st.nonDeducibili > 0 ? `
-                                                <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 mt-3 pt-2 border-t border-gray-100">Fuori da questo conto</p>
-                                            ` : ''}
-                                            ${st.contantiInCassa > 0 ? rigaFiscale(
-                                                'Contanti non versati' + (st.versato > 0 ? ' <span class="font-normal text-gray-400">su ' + formatCurrency(st.entrateContanti) + ' incassati</span>' : ''),
-                                                formatCurrency(st.contantiInCassa), { classe: 'text-gray-500' }) : ''}
-                                            ${st.nonDeducibili > 0 ? rigaFiscale(
-                                                'Spese non deducibili <span class="font-normal text-gray-400">contanti o senza metodo</span>',
-                                                '-' + formatCurrency(st.nonDeducibili), { classe: 'text-gray-500' }) : ''}
-                                            ${st.contantiInCassa > 0 || st.nonDeducibili > 0 ? `
-                                                <p class="text-[11px] text-gray-400 leading-relaxed pb-2">
-                                                    Entrano e escono dalla cassa davvero — il «ti resta» qui sotto ne tiene conto —
-                                                    ma restano fuori dal conto delle tasse.
-                                                </p>
-                                            ` : ''}
-                                            ${f.inps && f.inps.fissa > 0 ? `
-                                                ${rigaFiscale(
-                                                    'INPS \u00b7 rate fisse <span class="font-normal text-gray-400">' + f.inps.rate + ' \u00d7 ' + formatCurrency(f.inps.rata) + '</span>',
-                                                    '-' + formatCurrency(f.inps.fissa), { classe: 'text-purple-600' })}
-                                                ${rigaFiscale(
-                                                    'INPS \u00b7 ' + fs.inpsPerc + '% oltre ' + formatCurrency(fs.inpsMinimale ?? 18415),
-                                                    f.inps.eccedenza > 0 ? '-' + formatCurrency(f.inps.eccedenza) : formatCurrency(0),
-                                                    { classe: f.inps.eccedenza > 0 ? 'text-purple-600' : 'text-gray-400' })}
-                                            ` : rigaFiscale('Contributi INPS (' + fs.inpsPerc + '%)', '-' + formatCurrency(f.contributiInps), { classe: 'text-purple-600' })}
-                                            ${rigaFiscale('Imponibile IRPEF', formatCurrency(f.imponibileIrpef), { forte: true })}
-                                        </div>
-                                        <div>
-                                            ${rigaFiscale('IRPEF a scaglioni', '-' + formatCurrency(f.irpef), { classe: 'text-red-600' })}
-                                            ${rigaFiscale('Addizionali (' + fs.addizionaliPerc + '%)', '-' + formatCurrency(f.addizionali), { classe: 'text-orange-600' })}
-                                            ${rigaFiscale('Totale tasse e contributi', formatCurrency(st.tasse), { forte: true, classe: 'text-red-600' })}
-                                            ${rigaFiscale('Netto stimato', formatCurrency(nettoStimato), { forte: true, classe: 'text-green-700', bordo: true })}
-                                        </div>
-                                    </div>
-
-                                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                        ${boxDato('Da mettere via ogni mese', formatCurrency(alMese))}
-                                        ${boxDato('Su ogni 100 € tracciati', formatCurrency(su100))}
-                                        ${boxDato('Scaglioni ' + annoAttivo(), `23% · ${a2}% · 43%`)}
-                                    </div>
-
-                                    ${proiezione ? `
-                                        <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                                            <p class="text-xs font-black uppercase tracking-wider text-yellow-800 mb-1">Proiezione a fine anno</p>
-                                            <p class="text-sm font-bold text-gray-700">
-                                                Con questo ritmo (${proiezione.giorniPassati} giorni di ${annoAttivo()} registrati) chiuderesti a
-                                                <span class="font-black text-gray-900">${formatCurrency(proiezione.incassi)}</span> di incassi,
-                                                <span class="font-black text-gray-900">${formatCurrency(proiezione.utile)}</span> di utile fiscale e circa
-                                                <span class="font-black text-red-600">${formatCurrency(proiezione.tasse)}</span> tra tasse e contributi.
-                                            </p>
-                                        </div>
-                                    ` : ''}
-
-                                    <p class="text-xs text-gray-600 leading-relaxed bg-yellow-50 border border-yellow-200 rounded-xl p-3">
-                                        <strong>La stima considera solo i movimenti tracciati</strong>: gli incassi in contanti restano fuori.
-                                        Per il fisco, in regime ordinario, concorrono al reddito <em>tutti</em> i corrispettivi, contanti compresi,
-                                        quindi il conto vero e' piu' alto. Quanto piu' alto lo vedi qui sotto, negli approfondimenti, nel confronto
-                                        fra le due basi di calcolo.
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        Stima indicativa, non una dichiarazione. Non tiene conto di detrazioni e deduzioni personali, dei minimali INPS artigiani,
-                                        di acconti gia' versati o di redditi diversi da questa attivita'. Le percentuali INPS e addizionali si cambiano in
-                                        "Cloud & Sync" → Impostazioni Fiscali. Verifica sempre con il commercialista.
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                    })()}
+                    ${bloccoStimaOrdinario()}
 
                     <!-- Approfondimenti fiscali: si aprono quando servono -->
                     <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-3">
@@ -9388,92 +9388,7 @@
                     <div class="space-y-6 ${window.dettagliFiscali ? '' : 'hidden'}">
 
                     <!-- Confronto fra due basi di calcolo -->
-                    ${(() => {
-                        // Gli stessi totali del riepilogo annuale, senza rifare i conti.
-                        // Bonifici e voucher finiscono entrambi in "app", quindi il totale
-                        // degli incassi tracciati non cambia.
-                        const inc = aggrega(annoAttivo());
-                        inc.totale = inc.incassi;
-                        // Tracciato vuol dire tracciato: Satispay lo e' quanto il POS.
-                        // Prima restava fuori da questo confronto, e la colonna B
-                        // risultava piu' bassa del vero.
-                        inc.elettronici = inc.pos + inc.app + inc.conto + inc.satispay;
-                        const st2 = getStats();
-                        // Anche qui si toglie solo quello che il fisco lascia togliere.
-                        const uscite = st2.deducibili;
-                        const anno = annoAttivo();
-                        const A = scenarioTasse(inc.totale, uscite, anno);
-                        const B = scenarioTasse(inc.elettronici, uscite, anno);
-
-                        // Proiezione a fine anno, solo se l'anno e' quello in corso
-                        const oggiD2 = new Date();
-                        const inCorso = String(oggiD2.getFullYear()) === String(anno);
-                        const gg = Math.max(1, Math.round((oggiD2 - new Date(oggiD2.getFullYear(), 0, 1)) / 86400000) + 1);
-                        const k = 365 / gg;
-                        const Ap = inCorso ? scenarioTasse(inc.totale * k, uscite * k, anno) : null;
-                        const Bp = inCorso ? scenarioTasse(inc.elettronici * k, uscite * k, anno) : null;
-
-                        const colonna = (titolo, sottotitolo, sc, proj, accento) => `
-                            <div class="border ${accento} rounded-xl overflow-hidden">
-                                <div class="px-4 py-3 border-b border-gray-100 bg-gray-50/70">
-                                    <p class="font-black text-gray-900 text-sm">${titolo}</p>
-                                    <p class="text-xs text-gray-500">${sottotitolo}</p>
-                                </div>
-                                <div class="p-4">
-                                    ${rigaFiscale('Incassi considerati', formatCurrency(sc.incassi), { classe: 'text-green-600' })}
-                                    ${rigaFiscale('Spese dedotte', '-' + formatCurrency(sc.uscite), { classe: 'text-red-600' })}
-                                    ${rigaFiscale('Utile lordo', formatCurrency(sc.utile), { forte: true })}
-                                    ${rigaFiscale('Contributi INPS', '-' + formatCurrency(sc.contributiInps), { classe: 'text-purple-600' })}
-                                    ${rigaFiscale('IRPEF', '-' + formatCurrency(sc.irpef), { classe: 'text-red-600' })}
-                                    ${rigaFiscale('Addizionali', '-' + formatCurrency(sc.addizionali), { classe: 'text-orange-600' })}
-                                    ${rigaFiscale('Tasse e contributi', formatCurrency(sc.tasse), { forte: true, classe: 'text-red-600', bordo: true })}
-                                    ${rigaFiscale('Netto stimato', formatCurrency(sc.netto), { forte: true, classe: 'text-green-700' })}
-                                    <div class="mt-3 grid grid-cols-2 gap-2 text-center">
-                                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Al mese</p>
-                                            <p class="text-sm font-black text-gray-900">${formatCurrency(sc.tasse / 12)}</p>
-                                        </div>
-                                        <div class="bg-gray-50 rounded-lg p-2 border border-gray-100">
-                                            <p class="text-[9px] font-black uppercase tracking-wider text-gray-400">Su 100 € incassati</p>
-                                            <p class="text-sm font-black text-gray-900">${sc.incassi > 0 ? formatCurrency((sc.tasse / sc.incassi) * 100) : '—'}</p>
-                                        </div>
-                                    </div>
-                                    ${proj ? `
-                                        <p class="text-xs text-gray-500 mt-3">
-                                            Proiezione a fine ${anno}: <span class="font-black text-gray-700">${formatCurrency(proj.tasse)}</span>
-                                            su ${formatCurrency(proj.incassi)} di incassi.
-                                        </p>
-                                    ` : ''}
-                                </div>
-                            </div>`;
-
-                        return `
-                            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                <div class="px-5 py-4 border-b border-gray-100">
-                                    <h3 class="text-lg font-black text-gray-900">Confronto fra due basi di calcolo</h3>
-                                    <p class="text-xs text-gray-500">Stesse spese in entrambi i casi, cambia solo la parte di incassi considerata.</p>
-                                </div>
-                                <div class="p-5 space-y-4">
-                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        ${colonna('A · Tutti gli incassi', 'Contanti compresi: e\' la base che conta per il fisco in regime ordinario.', A, Ap, 'border-gray-200')}
-                                        ${colonna('B · Solo POS, app e fatture', 'Esclude contanti (' + formatCurrency(inc.contanti) + ') e Satispay (' + formatCurrency(inc.satispay) + ').', B, Bp, 'border-gray-200')}
-                                    </div>
-
-                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        ${boxDato('Incassi esclusi in B', formatCurrency(inc.totale - inc.elettronici))}
-                                        ${boxDato('Differenza di tasse', formatCurrency(A.tasse - B.tasse), 'text-red-600')}
-                                        ${boxDato('Quota elettronica sul totale', (inc.totale > 0 ? ((inc.elettronici / inc.totale) * 100).toFixed(0) : 0) + '%')}
-                                    </div>
-
-                                    <p class="text-xs text-gray-500">
-                                        La colonna A e' quella che conta per il fisco: in regime ordinario concorrono al reddito tutti i corrispettivi,
-                                        compresi quelli in contanti. La colonna B serve solo come confronto, per vedere quanto pesa la parte tracciata
-                                        del lavoro. Come sempre, stima indicativa: la dichiarazione la fa il commercialista.
-                                    </p>
-                                </div>
-                            </div>
-                        `;
-                    })()}
+                    ${bloccoAccantonamento()}
 
                     <!-- Soglia Regime Forfettario -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
@@ -11734,19 +11649,118 @@
             // Turno finito mentre l'app era aperta: il riquadro deve tornare al
             // consuntivo sulle ore intere, e quello e' un ridisegno vero.
             if (!eo.vivo) {
-                if (!formConDatiNonSalvatiLocale()) renderContent();
+                if (!formConDatiNonSalvati()) renderContent();
                 return;
             }
             el.innerHTML = `<span class="block cifra-casella text-yellow-400">${eo.troppoPresto ? '—' : soldi(eo.valore)}</span>`
                 + `<span class="block text-[10.5px] font-medium text-white/35 whitespace-nowrap">${oreScritte(eo.ore)} h finora</span>`;
         }
 
-        // formConDatiNonSalvati() sta nel modulo e da qui non si vede: qui
-        // bastano le stesse spie, lette dalle variabili globali.
-        function formConDatiNonSalvatiLocale() {
+        // UN MODULO APERTO NON SI CHIUDE DA SOLO
+        // Mentre stai scrivendo una corsa puo' arrivare un elenco dal Cloud, e
+        // un ridisegno completo cancellerebbe quello che stai battendo: in quel
+        // caso si aggiornano i dati e si avvisa, senza ridisegnare.
+        // Questa funzione stava scritta DUE VOLTE, identica: una qui e una nel
+        // blocco di Firebase, perche' da li' questo non si vedeva. Adesso sta
+        // scritta una volta sola, dalla parte che gira sempre - anche senza
+        // rete, anche senza Firebase - e il blocco di Firebase la chiama da qui.
+        function formConDatiNonSalvati() {
             return !!(window.showCorsaForm || window.showUscitaForm || window.showShiftForm
                 || window.editRecordId || window.editKmId || window.veicoloInModifica);
         }
+        window.formConDatiNonSalvati = formConDatiNonSalvati;
+
+        let ultimoAvvisoSyncBloccato = 0;
+        function avvisaSyncInAttesa() {
+            const ora = Date.now();
+            if (ora - ultimoAvvisoSyncBloccato > 8000) {
+                ultimoAvvisoSyncBloccato = ora;
+                if (window.showToast) window.showToast('Nuovi dati dal Cloud: verranno mostrati alla chiusura del modulo aperto.');
+            }
+        }
+        window.avvisaSyncInAttesa = avvisaSyncInAttesa;
+
+        // ============================================================
+        //  UN SOLO SCHEMA PER GLI ARCHIVI CHE SI SINCRONIZZANO
+        //  Cinque archivi - scadenze, versamenti, note, parco auto, voci di
+        //  budget - avevano cinque blocchi di ascolto uguali in tutto tranne
+        //  il nome: centotrenta righe per dire cinque volte la stessa cosa.
+        //  Ogni archivio nuovo ne aggiungeva altre ventisei, e ogni
+        //  correzione andava fatta cinque volte - o dimenticata in quattro,
+        //  che e' il modo in cui nascono i difetti di questa applicazione.
+        //
+        //  MOVIMENTI E TURNI NON PASSANO DI QUI, ed e' voluto: hanno un
+        //  meccanismo loro, piu' vecchio e piu' prudente (migraSulCloud,
+        //  vuotoDaApplicare, collezioniConDati), costruito per archivi da
+        //  diecimila righe. Riscriverlo per simmetria sarebbe un rischio
+        //  senza guadagno, sul lavoro di anni.
+        //
+        //  PERCHE' LA LOGICA STA QUI E NON NEL BLOCCO DI FIREBASE
+        //  Perche' cosi' si puo' provare. Il blocco di Firebase non parte
+        //  senza rete, quindi quello che ci sta dentro non lo prova nessuno -
+        //  ed e' il codice su cui stanno i dati di anni di lavoro. Qui dentro
+        //  di Firebase non c'e' niente: arriva un elenco, si decide cosa
+        //  farne. Il cablaggio a Firestore e' una riga, e sta di la'.
+        //  Vedi prove/testArchivi.mjs.
+        //
+        //  LA PRUDENZA CHE SI PORTA DIETRO
+        //  Una cartella vuota sul Cloud non svuota mai quello che c'e' sul
+        //  telefono: prima si prova a portare su quello che c'e' qui, e solo
+        //  quando il Cloud ha dimostrato di accettare i dati gli si da'
+        //  ragione. Per le voci di budget c'e' una guardia in piu'
+        //  (maiVuoto): quell'elenco non si svuota in nessun caso.
+        // ============================================================
+
+        // Le spie «il Cloud ha accettato almeno un elenco»: una per archivio.
+        // Non si azzerano mai: valgono per tutta la vita della pagina, come le
+        // variabili separate che c'erano prima.
+        const cloudOk = {};
+
+        window.applicaSnapshotArchivio = async function (opz, dalCloud, vuoto, salvaUno) {
+            const nome = opz.nome;                       // window.<nome>
+            const chiave = opz.chiave;                   // taxi_<...>, sul disco e sul Cloud
+            const ordina = opz.ordina || null;
+            const messaggi = opz.messaggi || null;       // null = nessun avviso a video
+            const etichetta = opz.etichetta || nome;     // come si chiama negli errori
+            const campoId = opz.campoId || 'id';         // 'id', oppure 'slug' per le voci
+            const maiVuoto = !!opz.maiVuoto;
+            const conNav = opz.conNav !== false;
+
+            if (!vuoto) cloudOk[nome] = true;
+
+            // Cartella vuota sul Cloud ma roba qui: si porta su, e non si
+            // tocca niente finche' non si sa che il Cloud accetta i dati.
+            if (vuoto && (window[nome] || []).length && !cloudOk[nome]) {
+                try {
+                    for (const x of window[nome]) await salvaUno(x);
+                    cloudOk[nome] = true;
+                    if (messaggi && window.showToast) window.showToast(messaggi.caricato);
+                } catch (err) {
+                    console.error(`Errore migrazione ${etichetta}:`, err);
+                    if (messaggi && window.showToast) window.showToast(messaggi.soloQui, 'avviso');
+                }
+                return 'migrato';
+            }
+
+            // L'elenco che non si svuota mai: le voci di budget sono il lavoro
+            // di chi le ha scritte, e un elenco vuoto arrivato dal Cloud e'
+            // quasi sempre un inciampo, non una decisione.
+            if (maiVuoto && !dalCloud.length && (window[nome] || []).length) {
+                console.warn(`Elenco ${etichetta} vuoto dal Cloud: tengo quello locale.`);
+                return 'tenuto';
+            }
+
+            if (ordina) dalCloud.sort(ordina);
+            window[nome] = dalCloud;
+            window.scriviLocale(chiave, dalCloud);
+            if (formConDatiNonSalvati()) {
+                if (conNav) window.renderNav();
+                avvisaSyncInAttesa();
+                return 'inAttesa';
+            }
+            window.renderDifferito();
+            return 'applicato';
+        };
 
         setInterval(aggiornaEuroOraVivo, 60000);
         document.addEventListener('visibilitychange', function () {

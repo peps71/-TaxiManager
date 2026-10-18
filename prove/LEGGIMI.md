@@ -57,6 +57,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `mediaAltre.mjs` | somma e divisore della media guardano la stessa finestra |
 | `testIniezione.mjs` | un backup confezionato male non esegue niente |
 | `testCspViva.mjs` | la protezione sugli indirizzi è davvero applicata, e l'interruttore la toglie |
+| `testArchivi.mjs` | i cinque archivi che si sincronizzano passano tutti dallo stesso codice: una cartella vuota sul Cloud non svuota il telefono, e l'elenco delle voci di budget non si cancella in nessun caso |
 | `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei |
 | `testAggiorna.mjs` | con un server che si comporta come GitHub Pages (`max-age=600`), la versione nuova si porta la pagina nuova e non quella rimasta nella cache HTTP |
 | `installabile.mjs` | si installa come una vera app: manifesto giudicato dal browser, icone misurate davvero, zona sicura dell'icona ritagliabile, colore della barra, schermata di apertura, spazio per la barra di casa dell'iPhone, apertura senza campo |
