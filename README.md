@@ -69,6 +69,70 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## I versamenti di contanti (versione 153)
+
+Un versamento **non è un incasso**: sono gli stessi soldi delle corse, che
+smettono di stare in tasca e cominciano a lasciare una traccia. Quello che
+cambia è dove stanno — e, per il fisco, che da quel momento si vedono.
+
+Questa app conta nella base imponibile **solo quello che lascia traccia** (vedi
+`metodoTracciato`): POS, app, bonifici. I contanti restano fuori finché restano
+contanti. Versati in banca diventano tracciati, ed entrano nel conto delle
+tasse.
+
+In **Gestione → Versamenti** si registra data, cifra, dove e una nota, e in cima
+ci sono le tre cifre che contano:
+
+```
+Incassato in contanti 8.000   ·   Versato 5.000   ·   Resta in cassa 3.000
+```
+
+Nella scheda del commercialista i versamenti stanno **su una riga loro**, sotto
+gli incassi tracciati: sommati dentro, nessuno capirebbe più da dove viene la
+cifra — e quella è la pagina che si porta in studio.
+
+### Cosa si muove, e cosa non si deve muovere
+
+Esattamente due cifre si muovono, ed è giusto: **l'utile fiscale sale** e **i
+contanti in cassa scendono**. Tutto il resto resta fermo al centesimo: incasso
+totale, incasso in contanti delle corse, numero delle corse, spese, budget,
+conguaglio. Un versamento non è un movimento nuovo, e se comparisse fra gli
+incassi li raddoppierebbe.
+
+`prove/testVersamenti.mjs` (29 controlli) misura tutte e due le cose: che le due
+cifre si muovano **dell'importo esatto**, e che le altre tredici non si muovano
+affatto.
+
+### Quattro strade per la stessa base imponibile
+
+Il lavoro vero non è stato la schermata: è stato trovare **tutti** i punti che
+calcolano la base delle tasse. Sono quattro, e ognuno rifà il conto per conto
+suo:
+
+| Dove | Serve a |
+| --- | --- |
+| `getStats()` | i totali dell'anno, l'andamento |
+| `getReportStats()` | la scheda del commercialista, anche filtrata per mese |
+| `utileFiscaleAnno()` | la base registrata dell'anno |
+| `utileProiettatoCalcola()` | la proiezione annualizzata, da cui esce la quota di IRPEF del costo giornaliero |
+
+**Il quarto era sfuggito.** I totali erano giusti, ma la proiezione restava
+ferma: i soldi versati sparivano dal conto di quanto pesa la giornata. Non si
+vedeva da nessuna parte, se non confrontando due numeri che nessuno confronta a
+mano. L'ha trovato la prova, controllando che la quota del costo giornaliero si
+muovesse insieme alle tasse.
+
+### E un difetto che ha trovato il calendario, di nuovo
+
+A 320 punti, nella testata della giornata, «domenica 18» usciva tagliato di
+sedici pixel — e «mercoledì 28» sarebbe stato peggio. Fra le due frecce e la
+data c'era anche il tasto che toglie il filtro: cinquanta punti presi alla parte
+che si deve leggere. Adesso quel tasto sta dall'altra parte della riga, dove va a
+capo da solo quando non ci sta, invece di stringere la data.
+
+Due volte di fila che la data di oggi fa cadere una prova. Non è sfortuna: è una
+prova che gira ogni giorno con un dato diverso, e prima o poi passa da tutti.
+
 ## Due paginette nude, per dividere il problema in due (versione 151)
 
 ### L'avviso di scadenza spariva il giorno in cui serviva

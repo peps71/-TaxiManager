@@ -34,6 +34,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testIndiceVivo.mjs` | l'indice dei pagamenti si rifà quando registri o cancelli **dai tasti veri** |
 | `testBudget118.mjs` | una spesa «Famiglia - Dettaglio» si aggancia alla voce giusta; le proposte dal registro |
 | `testNote.mjs` | le note con data e tipo: si scrivono, si filtrano, si modificano, compaiono sotto la giornata, viaggiano nel backup e non toccano nessun conto |
+| `testVersamenti.mjs` | i versamenti di contanti: spostano la cifra dai contanti alla base delle tasse e non toccano nient'altro; le quattro strade che calcolano l'imponibile devono dire la stessa cifra |
 | `testFoto.mjs` | le foto allegate alle note: la foto grande del telefono viene rimpicciolita prima di salvarla, finisce nel magazzino grande e non fra i dati dei conti, compare sotto la nota e sotto la giornata, il backup resta leggero, e quando la nota se ne va se ne va anche lei |
 | `testFiscali.mjs` | le impostazioni fiscali vanno sul Cloud: salvandole dal modulo, rimettendole da un backup, e senza Cloud non si rompe niente |
 | `testOrfane.mjs` | il controllo che trova le spese rimaste senza voce dopo un rinomino, e il tasto che le riaggancia |
