@@ -69,6 +69,77 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Un solo modo di leggere i movimenti (versione 156)
+
+La seconda proposta del giro generale. Stessa malattia della 155, stessa
+medicina, applicata un piano più sotto.
+
+### Sette modi di dire la stessa cosa
+
+Quarantotto punti dell'applicazione si andavano a prendere l'archivio dei
+movimenti da soli, e ognuno riscriveva il filtro della data a modo suo: chi con
+`startsWith`, chi con `slice(0, 4)`, chi confrontando l'anno, chi controllando
+prima che la data ci fosse e chi no.
+
+Non è una questione di eleganza. È il terreno dove nascono i difetti che non si
+vedono: **due volte in una settimana** una regola era stata aggiornata in un
+punto e dimenticata in un altro — i versamenti nella base delle tasse (153),
+l'importo scritto storto (154).
+
+### Tre letture, e basta
+
+| | |
+| --- | --- |
+| `movimenti(prefisso)` | un pezzo di data: `''` tutto, `'2026'` l'anno, `'2026-03'` il mese, `'2026-03-10'` il giorno |
+| `movimentiFra(da, a)` | un periodo che non comincia il primo del mese — i due anni delle spese fuori budget, il tempo in cui hai avuto una vettura |
+| `movimentoPerId(id)` | uno solo, per identificativo |
+
+Diciotto punti convertiti, **da 48 a 31**. Quelli rimasti sono scritture (che
+l'archivio lo cambiano, non lo leggono) e filtri su un solo giorno, dove di
+regole da sbagliare non ce ne sono.
+
+**Una regola sola, scritta nel codice:** la lista che esce dai lettori non si
+tocca. Dentro un disegno è condivisa fra tutti, e un `.sort()` su quella lista
+arriverebbe addosso a chiunque la chieda dopo.
+
+### Più veloce, non più lenta
+
+Il timore era che una lista condivisa costasse. È successo il contrario: dentro
+un disegno la stessa lista la chiedono in tanti, e adesso si prepara una volta
+sola.
+
+| Schermata | Prima | Adesso |
+| --- | --- | --- |
+| Spese | 31 ms | **24 ms** |
+| Commercialista | 17 ms | **12 ms** |
+| Andamento | 13 ms | **10 ms** |
+| Rendimento | 6 ms | **4 ms** |
+| Parco auto | 7 ms | **4 ms** |
+
+Avvio: 206 ms con 10.080 movimenti (prima 229).
+
+### Lo specchio, e due volte che ha salvato la faccia
+
+Per una semplificazione che non deve cambiare niente serve una rete che guardi
+**quello che si vede**. Lo specchio apre le due versioni — prima e dopo — con
+gli stessi 1.000 movimenti, 240 turni, 24 versamenti e un importo storto, e
+confronta il testo di **quindici schermate carattere per carattere**: 24.339
+caratteri.
+
+Ha anche una storia da raccontare. Alla prima passata ha segnalato una
+differenza **prima che io cambiassi qualcosa**: il contatore «all'ora» che corre
+dal vivo mentre sei in turno, letto a qualche secondo di distanza dalle due
+versioni. Una rete che suona a vuoto si smette di guardarla, quindi il seme
+adesso non mette mai un turno di oggi.
+
+**E due volte ha mancato il bersaglio, il che conta di più.** Convertendo due
+funzioni avevo tolto la riga che dichiarava la variabile della data, e lì sotto
+serviva ancora: `totaliPerChiave` e `corrispettiviMeseCalcola` erano rotte, e lo
+specchio non se ne era accorto perché quelle due non passano da nessuna delle
+schermate che confronta. Le ha prese la rilettura a mano, funzione per funzione,
+e poi la suite completa. **Nessuna rete le prende tutte**: è per questo che se
+ne tengono tre — lo specchio, la lettura, e quarantaquattro prove.
+
 ## Una sola base imponibile (versione 155)
 
 La prima delle proposte del giro generale, e la più importante: **togliere di

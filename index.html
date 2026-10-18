@@ -1424,7 +1424,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 155;
+        const VERSIONE_APP = 156;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -2326,10 +2326,8 @@
             const p = String(prefisso || '');
             const tetto = finoA ? String(finoA) : null;
             let tracciati = 0, deducibili = 0;
-            (window.dailyRecords || []).forEach(r => {
-                const d = String(r.data || '');
-                if (!d.startsWith(p)) return;
-                if (tetto && d > tetto) return;
+            movimenti(p).forEach(r => {
+                if (tetto && String(r.data || '') > tetto) return;
                 if (!metodoTracciato(r.metodo)) return;
                 const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') tracciati += imp;
@@ -2489,8 +2487,54 @@
             return x && x.data && String(x.data).slice(0, 4) === annoAttivo();
         }
 
+        // ============================================================
+        //  UN SOLO MODO DI LEGGERE I MOVIMENTI
+        //  Trentasei funzioni si andavano a prendere window.dailyRecords da
+        //  sole, e ognuna riscriveva il filtro della data a modo suo: chi con
+        //  startsWith, chi con slice(0,4), chi confrontando l'anno, chi
+        //  controllando prima che la data ci fosse e chi no. Sette modi di
+        //  dire la stessa cosa.
+        //  Non e' una questione di eleganza: e' il terreno dove nascono i
+        //  difetti che non si vedono. Due volte in una settimana una regola
+        //  era stata aggiornata in un punto e dimenticata in un altro - i
+        //  versamenti nella base delle tasse, l'importo scritto storto.
+        //  Da qui in poi si chiede a movimenti(). Il prefisso e' un pezzo di
+        //  data: '' tutto, '2026' l'anno, '2026-03' il mese, '2026-03-10' il
+        //  giorno. La stessa chiave di aggrega() e di baseImponibile().
+        // ============================================================
+        //  ATTENZIONE, UNA REGOLA SOLA: la lista che esce di qui NON si
+        //  tocca. Senza prefisso e' l'archivio vero, e dentro un disegno con
+        //  prefisso e' una lista condivisa: un .sort() o un .push() su quella
+        //  lista arriverebbe addosso a chiunque la chieda dopo. Chi deve
+        //  ordinare o cambiare, prima se ne fa una copia con slice().
+        function movimenti(prefisso) {
+            const p = String(prefisso || '');
+            const tutti = window.dailyRecords || [];
+            if (!p) return tutti;
+            // Dentro un disegno la stessa lista la chiedono in tanti: si
+            // prepara una volta sola. Fuori da un disegno memo() non tiene
+            // niente, quindi non si rischia di leggere una lista vecchia.
+            return memo('movimenti:' + p, () => tutti.filter(r => String(r.data || '').startsWith(p)));
+        }
+
+        // L'altra forma che serviva davvero: da una data a un'altra, estremi
+        // compresi. Un periodo che non comincia il primo del mese - i due anni
+        // delle spese fuori budget, il tempo in cui hai avuto una vettura - non
+        // si puo' dire con un prefisso.
+        function movimentiFra(da, a) {
+            const d1 = String(da || ''), d2 = String(a || '');
+            return memo('movimentiFra:' + d1 + ':' + d2, () => (window.dailyRecords || []).filter(r => {
+                const d = String(r.data || '');
+                return d && d >= d1 && d <= d2;
+            }));
+        }
+
+        function movimentoPerId(id) {
+            return (window.dailyRecords || []).find(r => String(r.id) === String(id)) || null;
+        }
+
         function recordsAnno() {
-            return (window.dailyRecords || []).filter(nellAnno);
+            return movimenti(annoAttivo());
         }
 
         function turniAnno() {
@@ -2619,8 +2663,7 @@
         // Totali essenziali di un anno, per il confronto anno su anno
         function totaliAnno(anno) {
             let entrate = 0, uscite = 0, corse = 0, ore = 0, giorni = new Set();
-            (window.dailyRecords || []).forEach(r => {
-                if (!r.data || String(r.data).slice(0, 4) !== anno) return;
+            movimenti(anno).forEach(r => {
                 const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') { entrate += imp; corse++; giorni.add(r.data); }
                 else uscite += imp;
@@ -2715,11 +2758,10 @@
         // da questo lavoro (vedi avvisoVersamentiEccessivi).
         function incassiContantiDiPrefisso(pref) {
             const p = String(pref || '');
-            return (window.dailyRecords || []).reduce((t, r) => {
+            return movimenti(p).reduce((t, r) => {
                 if (r.tipo !== 'ENTRATA') return t;
-                if (!String(r.data || '').startsWith(p)) return t;
                 if (metodoTracciato(r.metodo)) return t;
-                return t + (importoDi(r.importo));
+                return t + importoDi(r.importo);
             }, 0);
         }
 
@@ -3847,8 +3889,7 @@
             // Spese del periodo di possesso, prese dai movimenti gia' registrati
             const perCategoria = {};
             let speseTot = 0, incassi = 0;
-            (window.dailyRecords || []).forEach(r => {
-                if (!r.data || String(r.data) < da || String(r.data) > a) return;
+            movimentiFra(da, a).forEach(r => {
                 const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') { incassi += imp; return; }
                 if (r.tipo !== 'USCITA') return;
@@ -4796,8 +4837,7 @@
                 listaUscite: [], ore: 0, nTurni: 0, turni: []
             };
 
-            (window.dailyRecords || []).forEach(x => {
-                if (!x.data || !String(x.data).startsWith(prefisso)) return;
+            movimenti(prefisso).forEach(x => {
                 const imp = importoDi(x.importo);
                 if (x.tipo === 'ENTRATA') {
                     r.incassi += imp;
@@ -4857,11 +4897,9 @@
         function totaliPerChiave(prefisso, lunghezzaChiave) {
             const per = {};
             const tocca = (k) => per[k] || (per[k] = { incassi: 0, uscite: 0, nCorse: 0, ore: 0 });
-            (window.dailyRecords || []).forEach(x => {
-                const d = String(x.data || '');
-                if (!d.startsWith(prefisso)) return;
+            movimenti(prefisso).forEach(x => {
                 const imp = importoDi(x.importo);
-                const g = tocca(d.slice(0, lunghezzaChiave));
+                const g = tocca(String(x.data || '').slice(0, lunghezzaChiave));
                 if (x.tipo === 'ENTRATA') { g.incassi += imp; g.nCorse++; }
                 else if (x.tipo === 'USCITA') g.uscite += imp;
             });
@@ -4904,10 +4942,9 @@
                 return per[iso];
             };
 
-            (window.dailyRecords || []).forEach(x => {
+            movimenti(ym + '-').forEach(x => {
                 if (x.tipo !== 'ENTRATA') return;
                 const d = String(x.data || '');
-                if (!d.startsWith(ym + '-')) return;
                 const imp = importoDi(x.importo);
                 const g = tocca(d);
                 // Un metodo scritto a mano o arrivato da una versione vecchia
@@ -5383,10 +5420,9 @@
             // si conta quando arriva.
             const limite = inCorso ? oggi : `${ym}-${String(gg).padStart(2, '0')}`;
             let altre = 0, voci = 0;
-            (window.dailyRecords || []).forEach(r => {
+            movimenti(String(ym)).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 const d = String(r.data || '');
-                if (d.slice(0, 7) !== String(ym)) return;
                 if (d > limite) return;
                 if (copertaDalBudget(r)) return;
                 altre += importoDi(r.importo);
@@ -6285,9 +6321,8 @@
         function totaliPeriodo(da, a) {
             let incassi = 0, uscite = 0, nCorse = 0, ore = 0;
             const giorni = new Set();
-            (window.dailyRecords || []).forEach(r => {
+            movimentiFra(da, a).forEach(r => {
                 const d = String(r.data || '');
-                if (d < da || d > a) return;
                 const imp = importoDi(r.importo);
                 if (r.tipo === 'ENTRATA') { incassi += imp; nCorse++; giorni.add(d); }
                 else if (r.tipo === 'USCITA') uscite += imp;
@@ -10636,7 +10671,7 @@
         }
 
         async function salvaModificaRecord(id) {
-            const rec = (window.dailyRecords || []).find(x => String(x.id) === String(id));
+            const rec = movimentoPerId(id);
             if (!rec) return;
 
             const leggi = (p) => { const el = document.getElementById(p + id); return el ? el.value : ''; };
@@ -10681,7 +10716,7 @@
         }
 
         function deleteRecord(id) {
-            const rec = (window.dailyRecords || []).find(x => String(x.id) === String(id));
+            const rec = movimentoPerId(id);
             if (!rec) return;
             const descrizione = `${rec.categoria || 'movimento'} del ${rec.data} · ${formatCurrency(rec.importo)}`;
             if (!confirm(`Elimino definitivamente ${descrizione}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
@@ -12709,10 +12744,9 @@
             const oggi = oggiISO();
             const da = isoPiuGiorni(oggi, -730);
             const per = new Map();
-            (window.dailyRecords || []).forEach(r => {
+            movimentiFra(da, oggi).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 const d = String(r.data || '');
-                if (d < da || d > oggi) return;
                 const imp = importoDi(r.importo);
                 if (!(imp > 0)) return;
                 if (voceBudgetDiRecord(r)) return;              // gia' coperta
@@ -12823,9 +12857,8 @@
             if (!chiaviVoci.length) return [];
             const per = new Map();
 
-            (window.dailyRecords || []).forEach(r => {
+            movimenti(anno).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
-                if (String(r.data || '').slice(0, 4) !== anno) return;
                 // Se si aggancia a una voce, o e' gia' nel mucchio dei costi
                 // fissi fuori budget, non e' un orfano: di quelle parla gia'
                 // il conguaglio.
@@ -13238,7 +13271,7 @@
         // Gli anni in cui ci sono costi fissi scritti come movimenti
         function anniCostiFissi() {
             const anni = new Set();
-            (window.dailyRecords || []).forEach(r => {
+            movimenti().forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 if (categoriaBase(r.categoria) !== 'Costi fissi') return;
                 anni.add(String(r.data || '').slice(0, 4));
@@ -13249,10 +13282,9 @@
         function gruppiCostiFissi() {
             const gruppi = {};
             const anno = annoPulizia();
-            (window.dailyRecords || []).forEach(r => {
+            movimenti(anno).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 if (categoriaBase(r.categoria) !== 'Costi fissi') return;
-                if (anno && String(r.data || '').slice(0, 4) !== anno) return;
                 const nome = nomeSpesaDiRecord(r) || sottocategoria(r.categoria);
                 const daApp = generataDallApp(r);
                 const chiave = (daApp ? 'app|' : 'altra|') + nome;
@@ -13357,10 +13389,9 @@
                             maturato: 0, speso: 0, movimenti: 0, ultima: '', voci: [], extra: true };
 
             let futuri = 0, importoFuturi = 0;
-            (window.dailyRecords || []).forEach(r => {
+            movimentiFra(da, fine).forEach(r => {
                 if (r.tipo !== 'USCITA') return;
                 const d = String(r.data || '');
-                if (d < da || d > fine) return;
                 if (!copertaDalBudget(r)) return;
                 // Una spesa gia' registrata ma con data futura - tipico di una
                 // serie ricorrente creata in anticipo - non e' ancora uscita dal
@@ -13412,7 +13443,7 @@
         // ============================================================
         async function assegnaSpesaAVoce(idMovimento, slugVoce) {
             if (!slugVoce) return;
-            const r = (window.dailyRecords || []).find(x => String(x.id) === String(idMovimento));
+            const r = movimentoPerId(idMovimento);
             const v = elencoVociFisse().find(x => String(x.slug) === String(slugVoce));
             if (!r || !v) return;
             const nomeVoce = String(v.nome || '').trim();
@@ -13447,7 +13478,7 @@
         }
 
         async function alternaVerificaCorsa(id) {
-            const r = (window.dailyRecords || []).find(x => String(x.id) === String(id));
+            const r = movimentoPerId(id);
             if (!r) return;
             const segnare = !daVerificare(r);
             const aggiornato = Object.assign({}, r);
