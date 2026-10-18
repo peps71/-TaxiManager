@@ -69,6 +69,117 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La grafica: il tocco, le misure, la linguetta che si nascondeva (versione 158)
+
+Tre cose, tutte e tre guardando l'app invece che ricordandosela: le schermate sono state
+fotografate come si vedono su un telefono, e quello che segue è quello che si vedeva.
+
+### Il comando premuto si muove
+
+Nell'app non c'era **un solo punto** che reagisse al tocco. Premevi «Registra corsa» e per
+un attimo non succedeva niente, poi la schermata si rifaceva da sola. Quel vuoto si sente, e
+su un telefono è quello che distingue un'app di oggi da una di dieci anni fa più dei colori.
+
+Adesso il comando premuto si stringe al 96% e si scurisce, per novanta millesimi di secondo.
+Non è un'animazione da guardare: è la conferma che il dito ha preso, e arriva prima che la
+schermata si rifaccia. Un comando **spento** non reagisce — dire «preso» quando non si è
+preso niente è peggio del silenzio.
+
+Insieme sono spariti due fastidi che c'erano da sempre:
+
+- il mezzo secondo che l'iPhone si tiene per capire se stai per toccare due volte
+  (`touch-action: manipulation`): ora il comando parte quando lo tocchi;
+- il doppio riquadro grigio, quello del telefono sopra il nostro
+  (`-webkit-tap-highlight-color`).
+
+Chi ha chiesto al telefono di muovere meno le cose (`prefers-reduced-motion`) non vede
+stringersi niente: resta il colore, e la conferma arriva lo stesso.
+
+C'è una riga che sembra non fare niente, un ascoltatore vuoto del tocco sulla pagina. Serve:
+su iPhone lo stato «premuto» si accende da solo sui `<button>`, che Safari sa già essere
+comandi, ma **non** sui sette `<summary>` e sui cinque elementi che fanno da tasto pur non
+essendolo. Safari li accende soltanto se sulla pagina qualcuno sta ascoltando il tocco.
+
+### Le misure, messe in scala
+
+**I corpi.** Nell'app ci sono 387 scritte a dodici pixel e 160 a quattordici: il grosso di
+quello che si legge sta lì. Dodici pixel sono pochi sempre, e sono ancora meno con il
+telefono nel supporto, mezzo guanto e gli occhiali da presbite. Salgono di uno — 13 e 15 —
+e l'interlinea sale insieme, perché alzare il carattere lasciando le righe dov'erano le fa
+toccare, e un testo fitto si legge peggio di uno piccolo.
+
+**Le etichettine maiuscole vanno nel verso opposto.** «COSTO GIORNO», «TURNO PIÙ
+REDDITIZIO»: non sono testo da leggere, sono il cartellino di quello che viene sotto. Nel
+file stavano in due grafie diverse — 33 con la classe `.etichetta`, 58 scritte a mano con
+`text-xs uppercase` — ed erano la stessa identica cosa. Ora prendono tutte la misura
+dell'etichetta, undici pixel: **il cartellino si fa più discreto proprio mentre il numero
+si fa più grande**, che è il verso giusto.
+
+Serviva anche per un motivo pratico, e l'ha trovato una prova: a 320px «CARBURANTE», tutto
+maiuscolo e spaziato, a tredici pixel non ci stava più e veniva tagliato.
+
+**Gli angoli.** Erano sei misure prese una alla volta, e tre di quelle stavano a due pixel
+l'una dall'altra: 6, 8 e 12. Due pixel non si vedono su una scheda sola, ma su una schermata
+intera l'occhio sente che le cose non sono parenti fra loro. Adesso sono una progressione —
+**8, 10, 14, 20**, ogni gradino circa una volta e mezza il precedente — più il quasi-niente
+dei quadratini colorati della legenda, che sono larghi otto pixel e tondi non devono essere.
+
+Corpi e angoli si riscrivono **in un posto solo**, come già fatto nella v89 per le ombre e
+per i pesi: nel markup non si è toccata una riga.
+
+### La sotto-scheda aperta si nascondeva
+
+Difetto vero, non questione di gusto. La fila in cima a Gestione — Spese, Scadenze, Parco
+auto, Rendimento, Commercialista… — è più larga del telefono e scorre di lato. Ma nessuno le
+diceva di portarsi dove si trova quella aperta: entravi in Rendimento e la linguetta nera
+stava mezza fuori dallo schermo, in Commercialista fuori del tutto. Si vedeva la fila delle
+altre e non si capiva dove si era.
+
+Adesso la fila si porta la linguetta aperta **in mezzo**, così si vedono anche quella prima e
+quella dopo: dicono dove si è nell'elenco. Si sposta solo la fila, scrivendole lo
+scorrimento: `scrollIntoView` avrebbe tirato anche la pagina in verticale, e due righe più su
+c'è chi il punto in verticale lo sta rimettendo com'era.
+
+Dove la fila ci sta tutta non si sposta di un pixel: centrare qualcosa che è già in vista è
+solo un sobbalzo.
+
+### Come si controllano cose che non si leggono
+
+Lo specchio confronta il **testo** di ogni schermata, e qui il testo non cambia: avrebbe
+detto «tutto identico» qualunque cosa fosse successa. Quindi `prove/testGrafica.mjs`, 21
+controlli, misura invece di guardare:
+
+- il tasto si preme **col mouse** e si legge quanto si è stretto e scurito, e che tornando su
+  torni com'era;
+- la linguetta attiva si misura su **otto** sotto-schede e a tre larghezze, confrontando il
+  suo rettangolo con quello della fila: o è tutta dentro, o è un errore;
+- corpi, interlinee e angoli si leggono dal browser e si controlla che siano la scala
+  prevista, non dei numeri qualsiasi.
+
+Restano di guardia anche le due prove di geometria che c'erano già, e sono servite: è
+`troncati.mjs` che ha trovato «CARBURANTE» tagliato, e per via sua il corpo più grande è
+arrivato insieme alle etichettine più piccole invece che da solo.
+
+Un controllo è fallito e **la colpa era della prova, non dell'app**: dava per scontato che a
+1280px la fila delle sotto-schede ci stesse tutta. Misurata, la fila intera chiede 1004px e a
+1280 lo spazio per il contenuto è 960: scorre ancora per davvero, ed è giusto che si sposti.
+La prova ora controlla tutti e due i casi, a 1280 e a 1600.
+
+### Quello che non si è toccato
+
+- **Il carattere.** L'app usa quello di sistema: su iPhone è il carattere di Apple. È già
+  quello giusto, e uno scaricato aggiungerebbe peso e un pezzo che può non arrivare.
+- **Il giallo**, che è l'app.
+- **I 44px dei tasti**: non sono grafica, sono il motivo per cui con mezzo guanto non si
+  cancella una corsa per sbaglio.
+
+### Quello che resta da fare
+
+I 270 riquadri con lo sfondo colorato, su sette tinte, restano come stavano: il colore andrebbe
+spostato dal fondo della scheda a una barretta o all'etichetta, così il numero si legge per
+primo. Ed è ancora da fare il modo scuro, che per chi lavora di notte è la cosa che conta di
+più — ma tocca quei 270 fondi uno per uno ed è una versione sua.
+
 ## Uno schema per gli archivi, e due funzioni spezzate (versione 157)
 
 Le ultime due proposte del giro generale.

@@ -171,6 +171,46 @@
            apposta, non per sbaglio. */
         .tasto-minuto { min-height: 0; }
 
+        /* ============================================================
+           QUANDO IL DITO PREME, QUALCOSA SI MUOVE
+           Fino alla v157 nell'app non c'era un solo punto che reagisse al
+           tocco: premevi «Registra corsa» e per un attimo non succedeva
+           niente, poi la schermata si rifaceva da sola. Quel vuoto si sente,
+           e su un telefono e' quello che distingue un'app di oggi da una di
+           dieci anni fa piu' dei colori.
+           Il comando premuto si stringe appena e si scurisce, per novanta
+           millesimi di secondo. Non e' un'animazione da guardare: e' la
+           conferma che il dito ha preso, e arriva prima che la schermata si
+           rifaccia.
+           Un comando spento non reagisce: dire «preso» quando non si e' preso
+           niente e' peggio del silenzio.
+           ============================================================ */
+        button, summary, [role="button"] {
+            /* Il mezzo secondo che l'iPhone si tiene per capire se stai per
+               toccare due volte di fila: qui non serve a niente e si sente
+               tutto. Il comando parte quando lo tocchi. */
+            touch-action: manipulation;
+            /* Il riquadro grigio che il telefono disegna da solo sopra quello
+               che si tocca: ne basta uno, e sotto c'e' il nostro. */
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 90ms ease-out, filter 90ms ease-out;
+        }
+        button:active:not(:disabled),
+        summary:active,
+        [role="button"]:active {
+            transform: scale(0.96);
+            filter: brightness(0.93);
+        }
+        /* Chi ha chiesto al telefono di muovere meno le cose non vede
+           stringersi niente: resta il colore, e la conferma arriva lo
+           stesso. */
+        @media (prefers-reduced-motion: reduce) {
+            button, summary, [role="button"] { transition: filter 90ms ease-out; }
+            button:active:not(:disabled),
+            summary:active,
+            [role="button"]:active { transform: none; }
+        }
+
         /* I tasti «come ha pagato»: stessa misura per tutti, su qualunque
            telefono. Con il corpo normale «Satispay» e «App / Voucher» andavano
            a capo gia' a 375px e quei due tasti crescevano piu' degli altri. */
@@ -257,6 +297,47 @@
         .shadow-sm { --tw-shadow: 0 1px 2px rgba(24,22,17,.04), 0 4px 12px -4px rgba(24,22,17,.07); --tw-shadow-colored: var(--tw-shadow); }
         .shadow-md { --tw-shadow: 0 2px 6px rgba(24,22,17,.08), 0 12px 24px -10px rgba(24,22,17,.16); --tw-shadow-colored: var(--tw-shadow); }
         .shadow-lg { --tw-shadow: 0 2px 6px rgba(24,22,17,.10), 0 18px 34px -14px rgba(24,22,17,.22); --tw-shadow-colored: var(--tw-shadow); }
+
+        /* GLI ANGOLI, MESSI IN SCALA
+           Erano sei misure prese una alla volta, e tre di quelle stavano a due
+           pixel l'una dall'altra: 6, 8 e 12. Due pixel non si vedono su una
+           scheda sola, ma su una schermata intera l'occhio sente che le cose
+           non sono parenti fra loro.
+           Qui diventano una progressione - 8, 10, 14, 20 - dove ogni gradino
+           e' una volta e mezza il precedente, piu' il quasi-niente dei
+           quadratini colorati della legenda, che sono larghi otto pixel e
+           tondi non devono essere.
+           Si riscrivono le classi in un posto solo, come gia' fatto per le
+           ombre e per i pesi: nel markup non si tocca niente. */
+        .rounded-sm  { border-radius: 0.1875rem; }
+        .rounded-md  { border-radius: 0.5rem; }
+        .rounded-lg  { border-radius: 0.625rem; }
+        .rounded-xl  { border-radius: 0.875rem; }
+        .rounded-2xl { border-radius: 1.25rem; }
+
+        /* I CORPI PICCOLI, ALZATI DI UN PIXEL
+           Nell'app ci sono 387 scritte a dodici pixel e 160 a quattordici: il
+           grosso di quello che si legge sta li'. Dodici pixel sono pochi
+           sempre, e sono ancora meno con il telefono nel supporto, mezzo
+           guanto e gli occhiali da presbite. Salgono di uno.
+           L'interlinea sale insieme: alzare il carattere lasciando le righe
+           dov'erano le fa toccare, e un testo fitto si legge peggio di uno
+           piccolo.
+
+           LE ETICHETTINE MAIUSCOLE RESTANO INDIETRO, ANZI SCENDONO
+           «COSTO GIORNO», «TURNO PIU' REDDITIZIO»: non sono testo da leggere,
+           sono il cartellino di quello che viene sotto. Nell'app stanno in due
+           grafie - 33 con la classe .etichetta, 58 scritte a mano con
+           text-xs uppercase - e sono la stessa identica cosa. Qui prendono
+           tutte la misura dell'etichetta, undici pixel: il cartellino si fa
+           piu' discreto proprio mentre il numero si fa piu' grande, che e'
+           il verso giusto.
+           (Serviva anche per un motivo pratico: a 320px «CARBURANTE», tutto
+           maiuscolo e spaziato, a tredici pixel non ci stava piu' e veniva
+           tagliato.) */
+        .text-xs { font-size: 0.8125rem; line-height: 1.125rem; }
+        .text-xs.uppercase { font-size: 0.6875rem; line-height: 1rem; }
+        .text-sm { font-size: 0.9375rem; line-height: 1.375rem; }
 
         /* I FILI E I GRIGI, rifatti caldi: sul fondo color carta il grigio
            freddo di prima faceva un alone azzurrino attorno a ogni scheda. */
@@ -1313,7 +1394,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 157;
+        const VERSIONE_APP = 158;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -7905,11 +7986,11 @@
                     <button onclick="switchTab('${dove}')" class="flex items-center gap-1 text-sm font-black text-gray-500 hover:text-gray-900 transition-colors">
                         <span class="text-xl leading-none" aria-hidden="true">‹</span> ${esc(padre)}
                     </button>
-                    <div class="-mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto">
+                    <div data-schede-scorrevoli class="-mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto">
                         <div class="flex gap-2 w-max">
                             ${SCHEDE_SECONDARIE.map(t => {
                                 const qui = t.id === idAttivo || t.id === genitore;
-                                return `<button onclick="switchTab('${escJs(t.id)}')" aria-current="${qui ? 'page' : 'false'}"
+                                return `<button onclick="switchTab('${escJs(t.id)}')" aria-current="${qui ? 'page' : 'false'}" ${qui ? 'data-scheda-attiva' : ''}
                                         class="px-4 py-2 rounded-xl text-xs font-black whitespace-nowrap transition-colors ${qui ? 'bg-gray-900 text-yellow-400' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'}">${t.label}</button>`;
                             }).join('')}
                         </div>
@@ -9880,7 +9961,36 @@
             // altrimenti la schermata resterebbe ferma ad aspettare il
             // magazzino. Vedi riempiFoto.
             if (window.riempiFoto) window.riempiFoto(main);
+            portaInVistaSchedaAttiva(main);
         }
+
+        // ============================================================
+        //  LA SOTTO-SCHEDA APERTA DEVE VEDERSI
+        //  La fila in cima a Gestione - Spese, Scadenze, Parco auto,
+        //  Rendimento, Commercialista... - e' piu' larga del telefono e
+        //  scorre di lato. Ma nessuno le diceva di portarsi dove si trova
+        //  quella aperta: entravi in Rendimento e la linguetta nera stava
+        //  mezza fuori dallo schermo, o fuori del tutto. Si vedeva la fila
+        //  delle altre e non si capiva dove si era.
+        //  Si sposta solo la fila, scrivendole lo scorrimento: scrollIntoView
+        //  avrebbe tirato anche la pagina in verticale, e due righe piu' su
+        //  c'e' chi il punto in verticale lo sta rimettendo com'era.
+        // ============================================================
+        function portaInVistaSchedaAttiva(dove) {
+            const attiva = dove.querySelector('[data-scheda-attiva]');
+            if (!attiva) return;
+            const fila = attiva.closest('[data-schede-scorrevoli]');
+            if (!fila) return;
+            // Se la fila ci sta tutta non c'e' niente da spostare: succede sul
+            // tablet e sul computer, dove di spazio ce n'e'.
+            if (fila.scrollWidth <= fila.clientWidth + 1) return;
+            const q = attiva.getBoundingClientRect();
+            const f = fila.getBoundingClientRect();
+            // In mezzo, cosi' si vede anche quella prima e quella dopo: dicono
+            // dove si e' nell'elenco. Il browser taglia da solo se si esagera.
+            fila.scrollLeft += (q.left - f.left) - (f.width - q.width) / 2;
+        }
+        window.portaInVistaSchedaAttiva = portaInVistaSchedaAttiva;
 
 
         // Preset orari turno fissi
@@ -13649,6 +13759,15 @@
             if (barra && !barra.classList.contains('hidden')) return;
             showToast('\u26a0\ufe0f Cloud non raggiungibile: l\'app lavora in locale. Vedi \u00abCloud & Sync\u00bb.');
         }
+
+        // PERCHE' UNA RIGA CHE NON FA NIENTE
+        // Su iPhone lo stato «premuto» si accende da solo sui <button>, che il
+        // telefono sa gia' essere comandi. Sui <summary> e sui cinque elementi
+        // che fanno da tasto pur non essendolo, no: Safari lo accende soltanto
+        // se sulla pagina qualcuno sta ascoltando il tocco. Questo ascoltatore
+        // non fa niente e non costa niente (passive: non trattiene lo
+        // scorrimento): serve solo a dire a Safari che qui il tocco conta.
+        document.addEventListener('touchstart', function () {}, { passive: true });
 
         window.onload = function() {
             renderNav();
