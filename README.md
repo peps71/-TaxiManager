@@ -69,6 +69,105 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il modo scuro (versione 160)
+
+Un tassista lavora anche di notte, con il telefono acceso nel supporto. Un'app bianca a
+mezzanotte è una pila in faccia, e si smette di guardarla proprio quando servirebbe.
+
+Da **Gestione → Backup e impostazioni → Aspetto**: *Automatico* (come ce l'ha il telefono),
+*Chiaro*, *Scuro*. La scelta resta anche riaprendo l'app.
+
+### Il verso non è «invertire»
+
+Di giorno la carta è chiara e la scheda importante è nera: il nero risalta perché intorno è
+chiaro. Invertendo, di notte quella scheda diventerebbe **bianca** — un rettangolo acceso in
+faccia, cioè esattamente quello da cui si scappa.
+
+Quindi di notte la scheda importante non si ribalta: **resta scura e sale**, e a tenerla in
+evidenza ci pensa il giallo, che è già il colore dell'app. Stessa cosa per la striscia in
+cima: di giorno è gialla piena, di notte il giallo passa dal fondo alla scritta. È lo stesso
+scambio della v159 con le schede colorate.
+
+I neri sono **caldi**: non `#000` e non il grigio-blu di Tailwind, ma gli stessi marroni
+molto scuri della carta calda del modo chiaro, visti dall'altra parte.
+
+### Niente lampo bianco all'apertura
+
+La scelta la applica un copione che sta **in testa alla pagina**, prima del foglio di stile e
+prima del corpo. Se la decisione arrivasse dopo che l'app si è disegnata, all'apertura si
+vedrebbe un lampo bianco e poi il buio — di notte, in macchina, quel lampo è il difetto
+peggiore di tutti.
+
+Quello stesso copione tiene aggiornato anche il colore della barra di sistema del telefono, e
+se il telefono passa da chiaro a scuro mentre l'app è aperta (e la scelta è «Automatico»)
+l'app segue, senza doverla riaprire.
+
+### Di giorno non è cambiato niente, e si può dimostrare
+
+Tutto il modo scuro sta in **un blocco solo**, e ogni regola comincia con
+`:root[data-tema="scuro"]`. Vuol dire che di giorno quel blocco **non esiste**.
+
+Non è una promessa, sono due misure:
+
+- si leggono tutti i colori di tutte le schermate in modo chiaro, prima e dopo, e non ne
+  spunta uno nuovo (330 colori su 12 schermate);
+- si contano le parentesi del foglio di stile e si verifica che **tutti e 152 i selettori**
+  del blocco siano prefissati. Togliendone uno a mano, la prova lo nomina.
+
+La seconda resta di guardia per sempre: il confronto col «prima» si fa una volta, questa no.
+
+### Come si trova quello che l'occhio non trova
+
+Guardare tredici schermate al buio non basta: una scritta grigia su fondo grigio si nota solo
+se ci si ferma proprio lì. `prove/testScuro.mjs` **calcola il contrasto** di ogni scritta
+contro il fondo su cui sta davvero — risalendo i genitori e tenendo conto delle trasparenze —
+e confronta con la soglia dello standard: 4,5 per il testo normale, 3 per quello grande.
+
+634 scritte misurate. Al primo giro ne sono cadute parecchie, e **nessuna di quelle si vedeva
+a occhio**:
+
+| Cosa | Era | Perché |
+| --- | --- | --- |
+| «COSTO GIORNO», «MARGINE» dentro la scheda scura | 3,45 | la scheda di notte non è più nera: è salita, e le scritte tenui non reggono più |
+| frecce `›` e puntini di separazione | 2,46 | il grigio che avevo scelto era troppo scuro |
+| «dal budget», «L'importo proposto…» | 3,88 | avevo saltato le tonalità `-400` e `-500` dei testi colorati |
+| «Elimina» | 4,06 | idem, sul rosso |
+| il simbolo `€` accanto alla cifra grande | 2,46 | è apposta tenue, e sul nero di giorno si legge; sul grigio caldo di notte no |
+
+I colori nuovi non li ho scelti a occhio: li ho **calcolati**. `#5e584d` dava 2,46,
+`#8a8275` dà 4,56.
+
+La stessa prova cerca anche i rettangoli **chiari e spenti** rimasti indietro, e ne ha trovati
+quattro: i grigi con la trasparenza (`bg-gray-50/50`) sono classi a sé e hanno il colore
+scritto dentro, quindi cambiare la carta non li toccava. Stavano dentro il foglio del
+commercialista.
+
+### Due famiglie di colori che il primo inventario non aveva visto
+
+Avevo contato le classi dentro gli attributi del markup. Ma i colori delle giornate nel
+calendario e i quadratini di Gestione stanno **dentro due elenchi scritti in codice**: `amber`
+e `stone` non comparivano, e infatti nello scatto si vedevano due riquadri accesi in mezzo al
+buio. Si trovano solo cercando in tutto il file.
+
+### Il foglio per il commercialista resta chiaro
+
+Si stampa su carta bianca. Col telefono in modo scuro, senza rimettere i colori di giorno,
+uscirebbe un foglio con le scritte chiare su bianco — quasi vuoto — e una cartuccia di nero
+spesa per i fondi. C'è un controllo che mette il browser in modalità stampa e misura che le
+schede siano tornate bianche.
+
+### Una cosa trovata e NON sistemata
+
+I sei colori della licenza (Bianco, Giallo, Verde, Rosso, Blu, Nero) non sono scelte grafiche:
+sono il colore stampato sulla licenza, quello che dice quali giorni tocca lavorare. Scritto in
+bianco sul verde fa **3,30** di contrasto, sotto la soglia — e vale uguale di giorno, non è
+una cosa portata dal modo scuro.
+
+Ritingere quel verde vorrebbe dire scrivere sullo schermo un colore diverso da quello che c'è
+sul documento. La stessa scritta in **nero** sullo stesso verde farebbe **6,36**: il rimedio
+c'è, costa cambiare anche il modo chiaro, e quindi non è roba di questa versione. Sta scritto
+nella prova, accanto all'eccezione, così non si perde.
+
 ## Il colore si sposta: dal fondo alla barretta (versione 159)
 
 Nell'app c'erano **270 riquadri con lo sfondo colorato**, su sette tinte. In Rendimento ne

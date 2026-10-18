@@ -87,7 +87,53 @@
             } catch (e) { /* nel dubbio si resta senza: le righe apple- bastano */ }
         })();
     </script>
+    <!-- Il colore della barra di sistema. Sta PRIMA del copione qui sotto:
+         quello lo riscrive, e se non fosse ancora stato letto non lo
+         troverebbe. -->
     <meta name="theme-color" content="#facc15">
+    <!-- ============================================================
+         CHIARO O SCURO, DECISO PRIMA CHE SI VEDA QUALCOSA
+         Questo copione sta in testa e gira prima del foglio di stile e del
+         corpo della pagina. Se la scelta la facesse l'app dopo essersi
+         disegnata, all'apertura si vedrebbe un lampo bianco e poi il buio:
+         di notte, con il telefono nel supporto, quel lampo e' una pila in
+         faccia.
+         «automatico» vuol dire: come ce l'ha il telefono. Chi vuole forzare
+         sceglie da Gestione. La scelta sta qui in un attributo solo, cosi'
+         le regole del modo scuro si scrivono una volta e non due (una per
+         l'interruttore e una per l'impostazione del telefono).
+         ============================================================ -->
+    <script>
+        (function () {
+            var SCURO = '#14120f', CHIARO = '#facc15';
+            function scelto() {
+                try { return localStorage.getItem('taxi_tema') || 'auto'; }
+                catch (e) { return 'auto'; }
+            }
+            function alBuio(t) {
+                if (t === 'scuro') return true;
+                if (t === 'chiaro') return false;
+                try { return window.matchMedia('(prefers-color-scheme: dark)').matches; }
+                catch (e) { return false; }
+            }
+            window.applicaTema = function (t) {
+                var buio = alBuio(t || scelto());
+                document.documentElement.setAttribute('data-tema', buio ? 'scuro' : 'chiaro');
+                var m = document.querySelector('meta[name="theme-color"]');
+                if (m) m.setAttribute('content', buio ? SCURO : CHIARO);
+                return buio;
+            };
+            window.temaScelto = scelto;
+            window.applicaTema();
+            // Se il telefono passa da chiaro a scuro mentre l'app e' aperta e
+            // la scelta e' «automatico», si segue senza dover riaprire.
+            try {
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+                    if (scelto() === 'auto') { window.applicaTema('auto'); if (window.renderContent) window.renderContent(); }
+                });
+            } catch (e) { /* browser vecchio: resta com'e' all'apertura */ }
+        })();
+    </script>
     <!-- Le due righe che dicono "aggiunta alla Home, aprimi come un'app, senza
          la barra del browser": la prima e' quella che capisce Android, la
          seconda quella che capisce l'iPhone. Servono tutte e due. -->
@@ -270,7 +316,13 @@
             --sfondo:        #faf9f6;   /* carta calda, non grigio ufficio */
             --carta:         #ffffff;
             --inchiostro:    #2a2620;
-            --inchiostro-su: #14120d;   /* i titoli e la scheda scura */
+            --inchiostro-su: #14120d;   /* i titoli: l'inchiostro piu' carico */
+            /* Il fondo della scheda scura e dei tasti neri. Di giorno e'
+               lo stesso nero dei titoli; di notte le due cose vanno in
+               direzioni opposte - il testo si schiarisce, il pannello
+               resta scuro ma sale sopra il fondo - e un colore solo non
+               puo' fare tutti e due i mestieri. */
+            --pannello:      #14120d;
             --tenue:         #8a8578;
             --tenuissimo:    #a8a294;
             --filo:          #e9e5da;
@@ -393,7 +445,7 @@
         /* Il nero dell'app era blu di suo (#111827): accanto al fondo color
            carta faceva una macchia fredda. Questo e' lo stesso nero della
            scheda della giornata. */
-        .bg-gray-900 { background-color: var(--inchiostro-su); }
+        .bg-gray-900 { background-color: var(--pannello); }
         .bg-gray-800 { background-color: #242019; }
         .border-gray-800 { border-color: #2e2a20; }
         .text-gray-400 { color: var(--tenuissimo); }
@@ -408,7 +460,7 @@
 
         /* La scheda scura: il posto dove sta il numero che conta. */
         .eroe {
-            background: var(--inchiostro-su);
+            background: var(--pannello);
             border-radius: 1.375rem;
             box-shadow: 0 2px 6px rgba(24,22,17,.10), 0 14px 28px -12px rgba(24,22,17,.35);
         }
@@ -553,6 +605,311 @@
         .bg-yellow-400\/12 { background-color: rgb(250 204 21 / 0.12); }
         .hover\:bg-yellow-300:hover { background-color: rgb(253 224 71); }
         .group:hover .group-hover\:text-gray-900 { color: rgb(17 24 39); }
+        /* Le due dei tre tasti chiaro/scuro/automatico: senza queste,
+           i tasti sarebbero usciti in colonna e la scritta sotto al nome
+           sarebbe stata gialla piena invece che smorzata. Trovate dalla
+           guardia, non a occhio. */
+        .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .text-yellow-400\/70 { color: rgb(250 204 21 / 0.7); }
+
+
+        /* ============================================================
+           IL MODO SCURO
+           Un tassista lavora anche di notte, con il telefono acceso nel
+           supporto. Un'app bianca a mezzanotte e' una pila in faccia, e si
+           smette di guardarla proprio quando servirebbe.
+
+           PERCHE' STA TUTTO QUI DENTRO, PREFISSATO
+           Ogni regola comincia con :root[data-tema="scuro"]. Vuol dire che
+           di giorno questo blocco non esiste: il modo chiaro non e' stato
+           toccato di una virgola, e si puo' dimostrare (vedi testScuro.mjs,
+           che misura ogni colore di ogni schermata prima e dopo). Un modo
+           scuro fatto cambiando i colori di partenza avrebbe rifatto anche
+           il giorno, e sarebbe stato da ricontrollare tutto.
+
+           IL VERSO NON E' «INVERTIRE»
+           Di giorno la carta e' chiara e la scheda importante e' nera: il
+           nero risalta perche' intorno e' chiaro. Di notte, invertendo,
+           quella scheda diventerebbe bianca - un rettangolo acceso in
+           faccia, cioe' esattamente quello da cui si scappa. Quindi di notte
+           la scheda importante non si ribalta: resta scura e SALE, e a
+           tenerla in evidenza ci pensa il giallo, che e' gia' il colore
+           dell'app.
+
+           I NERI SONO CALDI
+           Non #000 e non il grigio-blu di Tailwind: sono gli stessi marroni
+           molto scuri della carta calda del modo chiaro, visti dall'altra
+           parte. Un nero azzurrino accanto al giallo fa un alone freddo.
+           ============================================================ */
+        :root[data-tema="scuro"] {
+            --sfondo:        #14120f;   /* il fondo della pagina */
+            --carta:         #1d1a16;   /* le schede */
+            --pannello:      #35302a;   /* la scheda importante: SALE, non si ribalta */
+            --inchiostro:    #e6e1d6;
+            --inchiostro-su: #f4f0e6;   /* i titoli */
+            --tenue:         #9b9488;
+            /* Misurato: a #7d7669 le scritte di servizio stavano a 3,85 di
+               contrasto sulla scheda, sotto il 4,5 che serve per leggerle.
+               Di giorno quel grigio sta su carta chiara e va benissimo; di
+               notte sta sul buio e deve salire. */
+            --tenuissimo:    #948d7f;
+            --filo:          #37322b;
+            --filo-chiaro:   #2a2620;
+            /* Il giallo resta quello dell'app. Di notte pero' non serve
+               tutto: il fondo attorno e' scuro e il contrasto e' gia' alto. */
+            --giallo:        #f2c20c;
+        }
+
+        /* ---- I NEUTRI ---------------------------------------------
+           Alcune classi passano gia' dai colori qui sopra dalla v89
+           (.bg-gray-50, .bg-gray-900, .border-gray-100, .text-gray-400...):
+           per quelle basta aver cambiato il colore e non serve una riga.
+           Qui ci sono solo quelle rimaste col colore scritto dentro. */
+        :root[data-tema="scuro"] .bg-white { background-color: var(--carta); }
+        /* I grigi con la trasparenza sono classi a se' e hanno il colore
+           scritto dentro: cambiare --sfondo non li tocca. Erano rimasti
+           quattro rettangoli chiari in mezzo al buio, dentro il foglio del
+           commercialista. */
+        :root[data-tema="scuro"] .bg-gray-50\/50 { background-color: rgba(20,18,15,.5); }
+        :root[data-tema="scuro"] .bg-gray-50\/70 { background-color: rgba(20,18,15,.7); }
+
+        /* ---- DENTRO LA SCHEDA SCURA ------------------------------
+           Di giorno quella scheda e' quasi nera, e le scritte di servizio -
+           «COSTO GIORNO», la data sotto il giorno - possono permettersi di
+           essere tenui: sul nero si leggono lo stesso. Di notte la scheda
+           non e' piu' nera, e' SALITA sopra il fondo: le stesse scritte
+           tenui su un grigio caldo scendono sotto la soglia di leggibilita'
+           (misurate: 3,45 contro il 4,5 che serve). Qui dentro salgono. */
+        :root[data-tema="scuro"] .eroe .etichetta,
+        :root[data-tema="scuro"] .bg-gray-900 .etichetta { color: #c9c2b4; }
+        :root[data-tema="scuro"] .eroe .text-gray-400,
+        :root[data-tema="scuro"] .eroe .text-gray-500,
+        :root[data-tema="scuro"] .eroe .text-gray-300,
+        :root[data-tema="scuro"] .bg-gray-900 .text-gray-300,
+        :root[data-tema="scuro"] .bg-gray-900 .text-gray-400,
+        :root[data-tema="scuro"] .bg-gray-900 .text-gray-500 { color: #c9c2b4; }
+        :root[data-tema="scuro"] .text-white\/30 { color: rgba(255,255,255,.62); }
+        :root[data-tema="scuro"] .text-white\/35 { color: rgba(255,255,255,.66); }
+        :root[data-tema="scuro"] .text-white\/40 { color: rgba(255,255,255,.70); }
+        :root[data-tema="scuro"] .text-white\/45 { color: rgba(255,255,255,.74); }
+        :root[data-tema="scuro"] .text-white\/50 { color: rgba(255,255,255,.78); }
+        :root[data-tema="scuro"] .text-white\/55 { color: rgba(255,255,255,.82); }
+        /* Il simbolo dell'euro accanto alla cifra grande e' apposta tenue.
+           Sul nero di giorno si legge; sul grigio caldo di notte no. */
+        :root[data-tema="scuro"] .cifra-euro { opacity: 0.62; }
+        :root[data-tema="scuro"] .bg-gray-100 { background-color: #272320; }
+        :root[data-tema="scuro"] .bg-gray-200 { background-color: #322d27; }
+        :root[data-tema="scuro"] .bg-gray-700 { background-color: #4a443b; }
+        :root[data-tema="scuro"] .bg-gray-800 { background-color: #403a32; }
+        :root[data-tema="scuro"] .hover\:bg-gray-50:hover { background-color: #221f1b; }
+        :root[data-tema="scuro"] .hover\:bg-gray-100:hover { background-color: #322d27; }
+        :root[data-tema="scuro"] .hover\:bg-gray-200:hover { background-color: #3d382f; }
+        :root[data-tema="scuro"] .hover\:bg-gray-600:hover { background-color: #565046; }
+        :root[data-tema="scuro"] .hover\:bg-gray-800:hover { background-color: #453f36; }
+        :root[data-tema="scuro"] .text-gray-900 { color: var(--inchiostro-su); }
+        :root[data-tema="scuro"] .text-gray-700 { color: #cbc4b6; }
+        :root[data-tema="scuro"] .text-gray-600 { color: #aaa397; }
+        /* Calcolato, non scelto a occhio: #5e584d dava 2,46 di contrasto
+           sulla scheda. Questo da' 4,56, appena sopra la soglia - e queste
+           sono le frecce e i puntini di separazione, che devono vedersi
+           senza prendersi la scena. */
+        :root[data-tema="scuro"] .text-gray-300 { color: #8a8275; }
+        :root[data-tema="scuro"] .hover\:text-gray-900:hover,
+        :root[data-tema="scuro"] .hover\:text-gray-800:hover,
+        :root[data-tema="scuro"] .hover\:text-gray-700:hover { color: var(--inchiostro-su); }
+        :root[data-tema="scuro"] .group:hover .group-hover\:text-gray-900 { color: var(--inchiostro-su); }
+        :root[data-tema="scuro"] .border-gray-300 { border-color: #454038; }
+        :root[data-tema="scuro"] .border-gray-800,
+        :root[data-tema="scuro"] .border-gray-900 { border-color: #453f36; }
+        :root[data-tema="scuro"] .ring-gray-900 { --tw-ring-color: #453f36; }
+        /* Il bianco al 10% dentro la scheda scura: di notte quella scheda e'
+           piu' chiara, e un velo bianco sopra sparirebbe. */
+        :root[data-tema="scuro"] .bg-white\/10 { background-color: rgba(255,255,255,.07); }
+        :root[data-tema="scuro"] .border-white\/10 { border-color: rgba(255,255,255,.09); }
+
+        /* ---- LA STRISCIA IN CIMA ----------------------------------
+           Di giorno e' gialla piena: e' l'app. Di notte una fascia gialla
+           alta quaranta pixel accesa in cima allo schermo e' la cosa che si
+           vede di piu' in tutta la macchina. Il giallo resta, ma passa dal
+           fondo alla scritta - lo stesso scambio fatto con le schede. */
+        :root[data-tema="scuro"] header.bg-yellow-400 {
+            background-color: #221f1a;
+            border-bottom: 1px solid var(--filo);
+        }
+        /* La striscia porta su di se' ANCHE text-gray-900, e piu' sotto c'e'
+           la regola che protegge le scritte nere sui tasti gialli: senza
+           questa riga vincerebbe quella, e il nome dell'app resterebbe nero
+           su nero. Ci e' voluto uno scatto per accorgersene. */
+        :root[data-tema="scuro"] header.bg-yellow-400.text-gray-900,
+        :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900 { color: var(--giallo); }
+        :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900\/60 { color: rgba(242,194,12,.55); }
+
+        /* ---- I PEZZI DELL'APP CHE HANNO UN COLORE LORO ------------ */
+        :root[data-tema="scuro"] .barra-fondo {
+            background-color: rgba(29,26,22,.94);
+            box-shadow: 0 -2px 12px rgba(0,0,0,.4);
+            border-top: 1px solid var(--filo);
+        }
+        :root[data-tema="scuro"] .col-ferma-chiara { background-color: var(--carta); }
+        :root[data-tema="scuro"] .col-ferma-grigia { background-color: #272320; }
+        :root[data-tema="scuro"] .col-ferma-scura  { background-color: var(--pannello); }
+        /* La riga che aspetta un controllo: di giorno gialla chiara, di
+           notte un giallo bruciato che si vede senza accendere la schermata. */
+        :root[data-tema="scuro"] .riga-verifica .col-ferma-chiara {
+            background-color: #4a3c10;
+            box-shadow: inset 4px 0 0 var(--giallo);
+        }
+        :root[data-tema="scuro"] .riga-verifica .cella-verifica { background-color: #4a3c10; }
+        :root[data-tema="scuro"] input[type="date"],
+        :root[data-tema="scuro"] input[type="time"],
+        :root[data-tema="scuro"] input[type="month"] {
+            background-color: #272320;
+            color: var(--inchiostro);
+        }
+        /* Il calendarietto dentro il campo data lo disegna il browser in
+           nero: su fondo scuro sparisce. */
+        :root[data-tema="scuro"] input[type="date"]::-webkit-calendar-picker-indicator,
+        :root[data-tema="scuro"] input[type="time"]::-webkit-calendar-picker-indicator,
+        :root[data-tema="scuro"] input[type="month"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) opacity(.7);
+        }
+        :root[data-tema="scuro"] .eroe input[type="date"] { background-color: transparent; }
+        :root[data-tema="scuro"] .campo-scuro option { color: var(--inchiostro); background-color: #272320; }
+        :root[data-tema="scuro"] ::-webkit-scrollbar-track { background: #221f1b; }
+        :root[data-tema="scuro"] ::-webkit-scrollbar-thumb { background: #453f36; }
+        /* Il modulo e i menu di sistema (tendine, calendario, tastiera
+           numerica) li veste il browser: glielo si dice una volta sola. */
+        :root[data-tema="scuro"] { color-scheme: dark; }
+
+        /* ---- LE TINTE ---------------------------------------------
+           Stessa regola per tutte e nove le famiglie: i fondi chiari
+           (-50, -100) diventano una versione molto scura e spenta della
+           tinta; i fili (-200, -300) stanno in mezzo; i testi carichi
+           (-600 e oltre) si schiariscono, perche' ora stanno sul buio.
+           I colori pieni dei tasti e delle barre dei grafici (-400, -500,
+           -600 come FONDO) non si toccano: sono gia' fatti per risaltare. */
+        :root[data-tema="scuro"] .bg-red-50,
+        :root[data-tema="scuro"] .bg-red-100 { background-color: #3a1d1d; }
+        :root[data-tema="scuro"] .hover\:bg-red-100:hover { background-color: #4a2525; }
+        :root[data-tema="scuro"] .hover\:bg-red-50\/50:hover { background-color: rgba(58,29,29,.5); }
+        :root[data-tema="scuro"] .border-red-200 { border-color: #5c2b2b; }
+        /* Anche le tonalita' piu' chiare (-400, -500): le avevo saltate al
+           primo giro, e la prova le ha trovate a 3,88 e 4,06. */
+        :root[data-tema="scuro"] .text-red-400,
+        :root[data-tema="scuro"] .text-red-500,
+        :root[data-tema="scuro"] .text-red-600,
+        :root[data-tema="scuro"] .text-red-700,
+        :root[data-tema="scuro"] .text-red-800,
+        :root[data-tema="scuro"] .text-red-900 { color: #fca5a5; }
+        :root[data-tema="scuro"] .text-red-700\/70 { color: rgba(252,165,165,.7); }
+        :root[data-tema="scuro"] .text-red-700\/80 { color: rgba(252,165,165,.8); }
+        :root[data-tema="scuro"] .hover\:text-red-700:hover { color: #fecaca; }
+
+        :root[data-tema="scuro"] .bg-green-50,
+        :root[data-tema="scuro"] .bg-green-100 { background-color: #16301f; }
+        :root[data-tema="scuro"] .border-green-200,
+        :root[data-tema="scuro"] .border-green-300 { border-color: #255437; }
+        :root[data-tema="scuro"] .text-green-600,
+        :root[data-tema="scuro"] .text-green-700,
+        :root[data-tema="scuro"] .text-green-800 { color: #86efac; }
+        :root[data-tema="scuro"] .text-green-700\/80 { color: rgba(134,239,172,.8); }
+
+        :root[data-tema="scuro"] .bg-indigo-50,
+        :root[data-tema="scuro"] .bg-indigo-100 { background-color: #232450; }
+        :root[data-tema="scuro"] .bg-indigo-50\/70 { background-color: rgba(35,36,80,.7); }
+        :root[data-tema="scuro"] .hover\:bg-indigo-100:hover,
+        :root[data-tema="scuro"] .hover\:bg-indigo-200:hover { background-color: #2e3068; }
+        :root[data-tema="scuro"] .border-indigo-100,
+        :root[data-tema="scuro"] .border-indigo-200,
+        :root[data-tema="scuro"] .border-indigo-300 { border-color: #3b3d7a; }
+        :root[data-tema="scuro"] .text-indigo-400,
+        :root[data-tema="scuro"] .text-indigo-500,
+        :root[data-tema="scuro"] .text-indigo-600,
+        :root[data-tema="scuro"] .text-indigo-700,
+        :root[data-tema="scuro"] .text-indigo-800,
+        :root[data-tema="scuro"] .text-indigo-900 { color: #a5b4fc; }
+        :root[data-tema="scuro"] .hover\:text-indigo-800:hover { color: #c7d2fe; }
+
+        :root[data-tema="scuro"] .bg-yellow-50,
+        :root[data-tema="scuro"] .bg-yellow-100 { background-color: #3a2f12; }
+        :root[data-tema="scuro"] .bg-yellow-200 { background-color: #4a3c10; }
+        :root[data-tema="scuro"] .hover\:bg-yellow-50:hover { background-color: #332a10; }
+        :root[data-tema="scuro"] .border-yellow-200,
+        :root[data-tema="scuro"] .border-yellow-300 { border-color: #5e4c1b; }
+        :root[data-tema="scuro"] .text-yellow-700,
+        :root[data-tema="scuro"] .text-yellow-800,
+        :root[data-tema="scuro"] .text-yellow-900 { color: #fde047; }
+        :root[data-tema="scuro"] .hover\:text-yellow-600:hover { color: #fef08a; }
+
+        :root[data-tema="scuro"] .bg-orange-100,
+        :root[data-tema="scuro"] .bg-orange-50 { background-color: #3a2415; }
+        :root[data-tema="scuro"] .bg-orange-200 { background-color: #4a2e18; }
+        :root[data-tema="scuro"] .border-orange-300,
+        :root[data-tema="scuro"] .border-orange-400 { border-color: #5e3a1f; }
+        :root[data-tema="scuro"] .text-orange-600,
+        :root[data-tema="scuro"] .text-orange-700,
+        :root[data-tema="scuro"] .text-orange-800 { color: #fdba74; }
+        :root[data-tema="scuro"] .text-orange-700\/80 { color: rgba(253,186,116,.8); }
+
+        :root[data-tema="scuro"] .bg-purple-50,
+        :root[data-tema="scuro"] .bg-purple-100 { background-color: #2f1f40; }
+        :root[data-tema="scuro"] .hover\:bg-purple-100:hover { background-color: #3d2a52; }
+        :root[data-tema="scuro"] .text-purple-500,
+        :root[data-tema="scuro"] .text-purple-600,
+        :root[data-tema="scuro"] .text-purple-700,
+        :root[data-tema="scuro"] .text-purple-800 { color: #d8b4fe; }
+        :root[data-tema="scuro"] .hover\:text-purple-900:hover { color: #e9d5ff; }
+
+        :root[data-tema="scuro"] .bg-blue-100,
+        :root[data-tema="scuro"] .bg-blue-200 { background-color: #152b45; }
+        :root[data-tema="scuro"] .border-blue-100 { border-color: #24476f; }
+        :root[data-tema="scuro"] .divide-blue-100 > :not([hidden]) ~ :not([hidden]) { border-color: #24476f; }
+        :root[data-tema="scuro"] .text-blue-800 { color: #93c5fd; }
+
+        :root[data-tema="scuro"] .bg-fuchsia-200 { background-color: #3a1a36; }
+        :root[data-tema="scuro"] .border-fuchsia-500 { border-color: #a21caf; }
+        :root[data-tema="scuro"] .text-fuchsia-900 { color: #f0abfc; }
+
+        /* Le tre famiglie che il primo inventario non aveva visto, perche'
+           non stanno su un elemento ma dentro due elenchi scritti in
+           codice: i colori delle giornate nel calendario e i quadratini di
+           Gestione. Si trovano solo cercando in tutto il file - e si vedevano
+           a occhio, due riquadri accesi in mezzo al buio. */
+        :root[data-tema="scuro"] .bg-pink-100 { background-color: #3d1a2a; }
+        :root[data-tema="scuro"] .border-pink-300 { border-color: #6b2b45; }
+        :root[data-tema="scuro"] .text-pink-900 { color: #f9a8d4; }
+        :root[data-tema="scuro"] .bg-amber-100 { background-color: #3a2f12; }
+        :root[data-tema="scuro"] .text-amber-600,
+        :root[data-tema="scuro"] .text-amber-700 { color: #fcd34d; }
+        :root[data-tema="scuro"] .bg-stone-100 { background-color: #2b2723; }
+        :root[data-tema="scuro"] .text-stone-600 { color: #bdb5a8; }
+        :root[data-tema="scuro"] .text-orange-900 { color: #fdba74; }
+
+        /* Il giallo acceso di un tasto non cambia, e nemmeno la scritta
+           nera che ci sta sopra: li' il contrasto e' gia' giusto e
+           ribaltare il testo lo rovinerebbe. */
+        :root[data-tema="scuro"] .bg-yellow-400.text-gray-900,
+        :root[data-tema="scuro"] .bg-yellow-400 .text-gray-900,
+        :root[data-tema="scuro"] .bg-yellow-500 .text-gray-900 { color: #14120d; }
+
+        /* ---- LA STAMPA RESTA CHIARA -------------------------------
+           Il foglio per il commercialista si stampa su carta bianca. Se il
+           telefono e' in modo scuro e non si rimettessero i colori di
+           giorno, uscirebbe un foglio con le scritte chiare su bianco:
+           cioe' quasi vuoto, e sprecando un cartuccia di nero per i fondi. */
+        @media print {
+            :root[data-tema="scuro"] {
+                --sfondo: #ffffff; --carta: #ffffff; --pannello: #14120d;
+                --inchiostro: #2a2620; --inchiostro-su: #14120d;
+                --tenue: #8a8578; --tenuissimo: #a8a294;
+                --filo: #e9e5da; --filo-chiaro: #f2efe7; --giallo: #facc15;
+                color-scheme: light;
+            }
+            :root[data-tema="scuro"] .bg-white { background-color: #fff; }
+            :root[data-tema="scuro"] .text-gray-900,
+            :root[data-tema="scuro"] .text-gray-700,
+            :root[data-tema="scuro"] .text-gray-600 { color: #000; }
+        }
 
         /* Stili specifici per la Stampa / Esportazione PDF */
         @media print {
@@ -1446,7 +1803,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 159;
+        const VERSIONE_APP = 160;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -9751,6 +10108,54 @@
             `;
         }
 
+        // ============================================================
+        //  CHIARO, SCURO, O COME CE L'HA IL TELEFONO
+        //  «Automatico» e' quello giusto per quasi tutti: il telefono sa
+        //  gia' che ore sono e come lo vuole chi lo usa. Gli altri due
+        //  servono a chi il telefono ce l'ha sempre chiaro ma di notte in
+        //  macchina vuole il buio, o viceversa.
+        //  La scelta la applica il copione in testa alla pagina, lo stesso
+        //  che la legge all'apertura: qui si scrive e si ridisegna.
+        // ============================================================
+        const TEMI = [
+            { id: 'auto',   nome: 'Automatico', desc: 'come il telefono' },
+            { id: 'chiaro', nome: 'Chiaro',     desc: 'sempre su carta' },
+            { id: 'scuro',  nome: 'Scuro',      desc: 'sempre al buio' }
+        ];
+
+        function scegliTema(id) {
+            try { localStorage.setItem('taxi_tema', id); }
+            catch (e) { /* memoria piena: vale per questa sessione e basta */ }
+            window.applicaTema(id);
+            renderNav();
+            renderContent();
+        }
+        window.scegliTema = scegliTema;
+
+        function sezioneTema() {
+            const ora = (window.temaScelto ? window.temaScelto() : 'auto');
+            return `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+                    <h3 class="text-lg font-bold text-gray-900">Aspetto</h3>
+                    <p class="text-xs text-gray-500 leading-relaxed">
+                        Di notte, con il telefono nel supporto, una schermata bianca è una pila in faccia.
+                        Con «Automatico» l'app segue il telefono e si scurisce da sola quando lo fa lui.
+                    </p>
+                    <div class="grid grid-cols-3 gap-2">
+                        ${TEMI.map(t => {
+                            const qui = t.id === ora;
+                            return `<button onclick="scegliTema('${escJs(t.id)}')" aria-pressed="${qui}"
+                                    class="px-2 py-3 rounded-xl text-xs font-black leading-tight transition-colors ${qui
+                                        ? 'bg-gray-900 text-yellow-400'
+                                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}">
+                                    ${esc(t.nome)}
+                                    <span class="block text-[10px] font-bold mt-0.5 ${qui ? 'text-yellow-400/70' : 'text-gray-500'}">${esc(t.desc)}</span>
+                                </button>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
         function renderSchedaBackup() {
             return `
                 <div class="fade-in space-y-6 max-w-7xl mx-auto">
@@ -9760,6 +10165,8 @@
                         <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Backup e impostazioni</h2>
                         <p class="text-gray-500 text-[13px] font-medium mt-0.5">Copie dei dati, accesso al Cloud e aliquote per la stima fiscale.</p>
                     </header>
+
+                    ${sezioneTema()}
 
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                         <div class="flex items-center space-x-3">
