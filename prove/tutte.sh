@@ -49,6 +49,7 @@ titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "archivi sincronizzati";   giro testArchivi.mjs
 titolo "grafica e misure";        giro testGrafica.mjs
 titolo "modo scuro";              giro testScuro.mjs
+titolo "il logo";                 giro testLogo.mjs
 titolo "disegni accodati";        giro testDisegni.mjs
 titolo "si installa come app";    giro installabile.mjs
 titolo "service worker";          giro testSW.mjs

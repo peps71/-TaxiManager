@@ -743,6 +743,18 @@
         :root[data-tema="scuro"] header.bg-yellow-400.text-gray-900,
         :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900 { color: var(--giallo); }
         :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900\/60 { color: rgba(242,194,12,.55); }
+        /* IL LOGO SULLA STRISCIA SCURA
+           Di giorno la striscia e' gialla, cioe' chiara, e un logo con
+           l'inchiostro scuro - che e' come sono fatti quasi tutti - ci si
+           legge sopra benissimo. Di notte la striscia e' scura e lo stesso
+           logo ci sparirebbe dentro. Qui sotto gli si mette una piastrella
+           chiara, come un adesivo: non e' bellissimo, ma un logo che non si
+           vede e' peggio. Di giorno la piastrella non c'e'. */
+        :root[data-tema="scuro"] #logo-in-cima,
+        :root[data-tema="scuro"] #logo-nel-menu {
+            background-color: rgba(255,255,255,.92);
+            padding: 2px 5px;
+        }
 
         /* ---- I PEZZI DELL'APP CHE HANNO UN COLORE LORO ------------ */
         :root[data-tema="scuro"] .barra-fondo {
@@ -865,6 +877,16 @@
         :root[data-tema="scuro"] .border-blue-100 { border-color: #24476f; }
         :root[data-tema="scuro"] .divide-blue-100 > :not([hidden]) ~ :not([hidden]) { border-color: #24476f; }
         :root[data-tema="scuro"] .text-blue-800 { color: #93c5fd; }
+        /* IL BLU DEL METODO «APP» SULLA SCHEDA SCURA
+           I cinque colori dei metodi di pagamento sono scelti per la scheda
+           quasi nera del modo chiaro. Di notte quella scheda e' piu' chiara
+           (e' salita sopra il fondo) e quattro reggono lo stesso: verde 6,26,
+           giallo 7,12, rosso 5,74, celeste 6,54. Il blu no: 4,29, appena
+           sotto il 4,5. Schiarito di un gradino fa 6,05.
+           Non l'ha portato questa versione: era li' dalla v160 e si vede solo
+           quando in giornata c'e' un incasso con quel metodo. L'ha trovato la
+           prova del modo scuro girando su dati di un altro giorno. */
+        :root[data-tema="scuro"] .text-blue-400 { color: #93c5fd; }
 
         :root[data-tema="scuro"] .bg-fuchsia-200 { background-color: #3a1a36; }
         :root[data-tema="scuro"] .border-fuchsia-500 { border-color: #a21caf; }
@@ -941,7 +963,10 @@
          alto che c'era prima.
          ============================================================ -->
     <header class="md:hidden flex items-center gap-2.5 px-4 py-1.5 bg-yellow-400 text-gray-900 no-print flex-shrink-0">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
+        <svg id="taxi-in-cima" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
+        <!-- Al posto del taxi disegnato, se c'e'. Nasce nascosto: lo accende
+             renderNav quando la scheda ha un logo. -->
+        <img id="logo-in-cima" alt="" class="hidden shrink-0 rounded-md" style="height:24px;max-width:120px;object-fit:contain">
         <span id="nome-in-cima" class="font-black text-lg tracking-tight truncate">TaxiManager</span>
         <span id="sigla-in-cima" class="hidden shrink-0 items-center font-black text-xs px-2.5 py-1 rounded-lg border-2 max-w-[9rem] truncate"></span>
         <button onclick="switchTab('cloud')" title="Versione installata: tocca per cercarne una nuova" aria-label="Versione installata: tocca per cercarne una nuova"
@@ -995,7 +1020,8 @@
     <!-- Sidebar / Navigazione -->
     <aside class="hidden md:flex w-52 lg:w-64 bg-yellow-400 text-gray-900 flex flex-col shadow-lg z-10 md:min-h-screen border-r border-yellow-500 flex-shrink-0 no-print">
         <div class="p-4 lg:p-6 flex items-center gap-2.5 bg-yellow-500">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
+            <svg id="taxi-nel-menu" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
+            <img id="logo-nel-menu" alt="" class="hidden shrink-0 rounded-md" style="height:34px;max-width:120px;object-fit:contain">
             <div>
                 <h1 class="text-xl lg:text-2xl font-black tracking-tight">TaxiManager</h1>
                 <p class="text-[11px] font-semibold text-gray-800 opacity-80 leading-tight" id="etichetta-versione">Edizione Cloud</p>
@@ -1803,7 +1829,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 160;
+        const VERSIONE_APP = 161;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -2028,7 +2054,7 @@
         //  Serve soprattutto sulle carte che escono dall'app - il riepilogo per
         //  il commercialista senza nome e partita IVA e' un foglio anonimo.
         // ============================================================
-        const PROFILO_VUOTO = { nome: '', cognome: '', licenza: '', sigla: '', colore: '', piva: '' };
+        const PROFILO_VUOTO = { nome: '', cognome: '', licenza: '', sigla: '', colore: '', piva: '', logo: '' };
 
         // I colori con cui si identifica il turno della licenza. Non e' una
         // decorazione: e' il colore che dice quali giorni tocca lavorare, e sta
@@ -2503,6 +2529,35 @@
                         <p class="text-xs text-gray-400 mt-2">È il colore scritto sulla licenza, quello che dice quali giorni tocca lavorare.</p>
                     </div>
 
+                    <!-- IL LOGO. Prende il posto del taxi disegnato in cima e
+                         nel menu: il nome resta, perche' quello e' il tuo e
+                         serve a sapere con quale scheda stai lavorando. -->
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Logo</label>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span class="shrink-0 flex items-center justify-center rounded-xl border border-gray-200 bg-gray-50"
+                                  style="width:76px;height:52px;overflow:hidden">
+                                ${logoAttuale()
+                                    ? `<img src="${esc(logoAttuale())}" alt="Il tuo logo" style="max-width:68px;max-height:44px;object-fit:contain">`
+                                    : `<span class="text-xs font-bold text-gray-400">nessuno</span>`}
+                            </span>
+                            <label class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm cursor-pointer">
+                                ${logoAttuale() ? 'Cambia immagine' : 'Scegli un\'immagine'}
+                                <input type="file" accept="image/*" onchange="scegliLogo(this)" class="hidden">
+                            </label>
+                            ${logoAttuale() ? `
+                                <button type="button" onclick="togliLogo()"
+                                        class="text-red-600 bg-red-50 hover:bg-red-100 font-bold py-2.5 px-4 rounded-xl text-sm">
+                                    Togli
+                                </button>` : ''}
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2">
+                            Prende il posto del taxi disegnato in cima all'app. Viene rimpicciolito e viaggia nel
+                            backup, nell'esportazione e sul Cloud insieme al resto della scheda.
+                            Se è ritagliato su fondo trasparente, resta trasparente.
+                        </p>
+                    </div>
+
                     <p id="prof-avviso" class="text-xs font-bold text-gray-400"></p>
                     <button onclick="salvaProfiloDalModulo()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-black py-3 px-6 rounded-xl shadow-sm transition-colors">
                         ${esc(etichettaTasto)}
@@ -2534,6 +2589,117 @@
             return b;
         }
 
+        // ============================================================
+        //  IL LOGO
+        //  Al posto del taxi disegnato, in cima e nel menu del computer, ci
+        //  puo' stare il tuo: quello della cooperativa, del radiotaxi, o
+        //  quello che ti sei fatto fare.
+        //
+        //  PERCHE' NON SI RIUSA IL COMPRESSORE DELLE FOTO
+        //  Quello fa JPEG, e il JPEG non sa cosa sia la trasparenza: un logo
+        //  ritagliato finirebbe dentro un rettangolo bianco appiccicato sulla
+        //  striscia gialla, con i bordi sporchi attorno alle scritte. Qui si
+        //  prova prima il WebP, che pesa meno, e si tiene il PNG se il
+        //  telefono il WebP non lo sa scrivere (Safari lo fa dal 2020, ma se
+        //  non lo sa fare toDataURL restituisce un PNG senza dirlo - quindi
+        //  si controlla cosa e' uscito davvero invece di fidarsi).
+        //
+        //  PERCHE' STA DENTRO IL PROFILO E NON NEL MAGAZZINO DELLE FOTO
+        //  Il profilo viaggia gia' nel backup, nell'esportazione e sul Cloud.
+        //  Messo li', il logo si ritrova sul secondo telefono e dopo un
+        //  ripristino senza una riga di codice in piu'. Le foto delle note
+        //  stanno a parte perche' sono tante e pesanti; il logo e' uno solo e
+        //  sta in qualche decina di kilobyte.
+        // ============================================================
+        const LOGO_ALTEZZA_MAX = 128;            // punti: in cima si vede a 24
+        const LOGO_LARGHEZZA_MAX = 512;
+        const LOGO_PESO_MAX = 60 * 1024;         // quanto puo' pesare da salvato
+        const LOGO_QUALITA = [0.92, 0.82, 0.7];
+
+        async function comprimiLogo(file) {
+            try {
+                let sorgente = null;
+                if (window.createImageBitmap) {
+                    try { sorgente = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+                    catch (err) { sorgente = null; }
+                }
+                if (!sorgente) {
+                    const img = new Image();
+                    img.src = URL.createObjectURL(file);
+                    try { await img.decode(); } finally { URL.revokeObjectURL(img.src); }
+                    sorgente = img;
+                }
+                const L = sorgente.width || sorgente.naturalWidth || 0;
+                const A = sorgente.height || sorgente.naturalHeight || 0;
+                if (!L || !A) return null;
+
+                let altezza = LOGO_ALTEZZA_MAX;
+                let ultimo = null;
+                for (let giro = 0; giro < 3; giro++) {
+                    const scala = Math.min(1, altezza / A, LOGO_LARGHEZZA_MAX / L);
+                    const l = Math.max(1, Math.round(L * scala));
+                    const a = Math.max(1, Math.round(A * scala));
+                    const tela = document.createElement('canvas');
+                    tela.width = l; tela.height = a;
+                    const g = tela.getContext('2d');
+                    g.imageSmoothingQuality = 'high';
+                    // Niente riempimento di fondo: quello che era trasparente
+                    // resta trasparente, ed e' tutto il punto.
+                    g.drawImage(sorgente, 0, 0, l, a);
+
+                    const candidati = [];
+                    for (const q of LOGO_QUALITA) {
+                        const webp = tela.toDataURL('image/webp', q);
+                        if (webp.indexOf('data:image/webp') === 0) candidati.push(webp);
+                    }
+                    candidati.push(tela.toDataURL('image/png'));
+                    candidati.sort((x, y) => x.length - y.length);
+                    ultimo = { dati: candidati[0], larghezza: l, altezza: a, byte: candidati[0].length };
+                    if (ultimo.byte <= LOGO_PESO_MAX) return ultimo;
+                    altezza = Math.round(altezza * 0.7);
+                }
+                return ultimo;
+            } catch (err) {
+                console.error('Logo non leggibile:', err);
+                return null;
+            }
+        }
+
+        async function scegliLogo(input) {
+            const file = input && input.files && input.files[0];
+            if (!file) return;
+            input.value = '';                      // cosi' si puo' riscegliere lo stesso file
+            const fatto = await comprimiLogo(file);
+            if (!fatto) { showToast('Non sono riuscito a leggere questa immagine.', 'avviso'); return; }
+            if (fatto.byte > LOGO_PESO_MAX) {
+                showToast('Immagine troppo pesante anche rimpicciolita: provane una piu\' semplice.', 'avviso');
+                return;
+            }
+            const b = raccogliBozzaProfilo();
+            b.logo = fatto.dati;
+            window.bozzaProfilo = b;
+            renderNav();
+            renderContent();
+            showToast('Logo pronto: ora salva la scheda.');
+        }
+        window.scegliLogo = scegliLogo;
+
+        function togliLogo() {
+            const b = raccogliBozzaProfilo();
+            b.logo = '';
+            window.bozzaProfilo = b;
+            renderNav();
+            renderContent();
+        }
+        window.togliLogo = togliLogo;
+
+        // Il logo da mostrare: quello in bozza mentre si sta scegliendo,
+        // altrimenti quello salvato.
+        function logoAttuale() {
+            return valoreProfilo('logo') || '';
+        }
+        window.logoAttuale = logoAttuale;
+
         function scegliColoreTurno(id) {
             const b = raccogliBozzaProfilo();
             b.colore = id;
@@ -2546,6 +2712,10 @@
             const dati = {};
             CAMPI_PROFILO.forEach(c => dati[c.id] = String(leggi(c.id)).trim());
             dati.colore = valoreProfilo('colore');
+            // Il logo non e' un campo di testo: come il colore, sta nella bozza
+            // e va raccolto qui. Senza questa riga, salvando la scheda il
+            // logo scelto sparirebbe.
+            dati.logo = valoreProfilo('logo');
             dati.piva = dati.piva.replace(/\D/g, '');
 
             if (!dati.nome && !dati.cognome) {
@@ -5921,6 +6091,24 @@
             // l'anagrafe: con la sigla basta il nome di battesimo, e il cognome
             // resta nel titolo per chi ci passa sopra. Senza sigla, nome intero.
             const prof = window.profilo || {};
+
+            // IL LOGO AL POSTO DEL TAXI DISEGNATO
+            // Il nome resta: quello dice con quale scheda stai lavorando, e
+            // su un telefono che passa di mano conta piu' del marchio.
+            // Si guarda la bozza, cosi' mentre scegli l'immagine la vedi
+            // subito in cima invece che dopo aver salvato.
+            const logo = (window.logoAttuale ? window.logoAttuale() : '') || '';
+            [['taxi-in-cima', 'logo-in-cima'], ['taxi-nel-menu', 'logo-nel-menu']].forEach(([idTaxi, idLogo]) => {
+                const taxi = document.getElementById(idTaxi);
+                const img = document.getElementById(idLogo);
+                if (!taxi || !img) return;
+                taxi.classList.toggle('hidden', !!logo);
+                img.classList.toggle('hidden', !logo);
+                if (logo && img.getAttribute('src') !== logo) img.setAttribute('src', logo);
+                if (!logo) img.removeAttribute('src');
+                img.alt = logo ? (nomeCompleto() || 'Logo') : '';
+            });
+
             const conSigla = !!String(prof.sigla || '').trim();
             const inCima = document.getElementById('nome-in-cima');
             if (inCima) {
@@ -11993,6 +12181,17 @@
                 Object.keys(PROFILO_VUOTO).forEach(k => {
                     if (typeof prof[k] === 'string') pulito[k] = prof[k].trim();
                 });
+                // IL LOGO ARRIVA DA UN FILE, E UN FILE PUO' SCRIVERLO CHIUNQUE
+                // Gli altri campi sono paroline e finiscono dentro del testo.
+                // Questo invece finisce nell'indirizzo di un'immagine, quindi
+                // si controlla che sia davvero un'immagine incorporata e che
+                // non sia enorme - un backup confezionato male non deve poter
+                // appendere quello che vuole, ne' riempire la memoria.
+                if (pulito.logo && !(/^data:image\/(png|webp|jpeg|gif|svg\+xml);base64,/.test(pulito.logo)
+                                     && pulito.logo.length <= LOGO_PESO_MAX)) {
+                    console.warn('Logo del backup scartato: non e\' un\'immagine incorporata valida.');
+                    pulito.logo = '';
+                }
                 if (Object.values(pulito).some(Boolean)) {
                     salvaProfilo(pulito);
                     schedaTornata = true;

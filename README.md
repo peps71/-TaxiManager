@@ -69,6 +69,82 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il tuo logo al posto del taxi disegnato (versione 161)
+
+Da **Gestione → Backup e impostazioni → Dati del titolare → Logo**: scegli un'immagine e
+quella prende il posto del taxi disegnato, in cima sul telefono e nel menu sul computer.
+
+**Il nome resta.** La striscia in cima mostra già il tuo nome quando la scheda è compilata, e
+quello dice con quale scheda stai lavorando — su un telefono che passa di mano conta più del
+marchio. Il logo sostituisce il simbolo, non te.
+
+### Perché non si è riusato il compressore delle foto
+
+Quello che c'era, fatto per le foto sulle note, produce **JPEG**. Il JPEG non sa cosa sia la
+trasparenza: un logo ritagliato sarebbe finito dentro un rettangolo bianco appiccicato sulla
+striscia gialla, con i bordi sporchi attorno alle scritte.
+
+Il compressore del logo prova prima il **WebP**, che pesa meno, e tiene il **PNG** se il
+telefono il WebP non lo sa scrivere. Safari lo sa fare dal 2020, ma se non lo sapesse fare
+`toDataURL` restituirebbe un PNG **senza dirlo** — quindi si controlla cosa è uscito davvero
+invece di fidarsi del nome che si è chiesto.
+
+L'immagine viene rimpicciolita a 128 punti d'altezza (in cima si vede a 24) e tenuta sotto i
+60 KB.
+
+### Perché sta dentro la scheda e non nel magazzino delle foto
+
+La scheda del titolare viaggia **già** nel backup, nell'esportazione e sul Cloud. Mettendo il
+logo lì, si ritrova sul secondo telefono e dopo un ripristino senza una riga di codice in più.
+Le foto delle note stanno a parte perché sono tante e pesanti; il logo è uno solo e sta in
+qualche decina di kilobyte.
+
+Il logo segue la stessa strada del **colore del turno**: non è un campo di testo, quindi va
+nella bozza mentre lo scegli e viene raccolto quando salvi. Senza quella riga, salvando la
+scheda il logo sparirebbe — e infatti la prova lo verifica apposta.
+
+### Il buco che si nascondeva nel ritorno
+
+Il logo finiva nel file del backup. Ma il **ripristino** filtra i campi della scheda con un
+elenco di nomi, e `logo` in quell'elenco non c'era: rientrando veniva buttato via, in
+silenzio. Il file era giusto, l'app lo scartava.
+
+Non si vede guardando il codice che scrive, né quello che legge: si vede solo **facendo il
+giro intero**, uscire e rientrare. Da qui in poi lo fa la prova a ogni giro.
+
+Già che il logo è l'unico campo della scheda che non è una parolina — finisce nell'indirizzo
+di un'immagine, e un file di backup può scriverlo chiunque — al ritorno si controlla che sia
+davvero un'immagine incorporata e che non sia enorme. Un «logo» che è un copione o una pagina
+viene scartato, e la prova prova anche quello.
+
+### Al buio
+
+Di giorno la striscia è gialla, cioè chiara, e un logo con l'inchiostro scuro — come sono
+fatti quasi tutti — ci si legge sopra benissimo. Di notte la striscia è scura e lo stesso logo
+ci sparirebbe dentro: sotto gli si mette una piastrella chiara, come un adesivo. Non è
+bellissimo, ma un logo che non si vede è peggio. Di giorno la piastrella non c'è.
+
+### Le prove
+
+`prove/testLogo.mjs`, 24 controlli, fa il giro come lo fa chi lo usa: sceglie un file, lo
+vede comparire in cima, controlla che la trasparenza sia sopravvissuta alla compressione,
+salva la scheda, riapre l'app, esporta, ripristina, e infine lo toglie e verifica che torni il
+taxi disegnato **e che il resto della scheda non si sia mosso**.
+
+Tolte a mano, una per una, le due righe che contano — quella che raccoglie il logo al
+salvataggio e quella che lo lascia rientrare dal backup — la prova fallisce e dice quale.
+
+### Una cosa trovata per strada, che col logo non c'entra
+
+La prova del modo scuro semina giornate attorno a **oggi**: girando in un giorno diverso
+tocca dati diversi, e stavolta ha pescato un incasso col metodo «App». Il blu di quel metodo
+sulla scheda scura faceva **4,29** di contrasto, sotto il 4,5 — era lì dalla v160 e si vedeva
+solo in quel caso.
+
+Gli altri quattro colori reggevano (verde 6,26, giallo 7,12, rosso 5,74, celeste 6,54). Il blu
+è stato schiarito di un gradino: 6,05. Vale la pena dirlo perché mostra una cosa della prova:
+non è congelata, continua a cercare su dati nuovi.
+
 ## Il modo scuro (versione 160)
 
 Un tassista lavora anche di notte, con il telefono acceso nel supporto. Un'app bianca a
