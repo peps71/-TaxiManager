@@ -1829,7 +1829,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 162;
+        const VERSIONE_APP = 163;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -6232,10 +6232,36 @@
         // disegno, quindi al primo giro la riga dice «controllo...» e poi si
         // ridisegna da sola.
         window.versioneCopiaSalvata = undefined;
+        let stoChiedendoLaVersione = false;
         async function aggiornaVersioneCopiaSalvata() {
-            if (window.versioneCopiaSalvata !== undefined) return;
-            window.versioneCopiaSalvata = await chiediVersioneAlServiceWorker();
+            // UNA RISPOSTA «NESSUNA» NON SI TIENE PER BUONA
+            // Prima bastava aver chiesto una volta. Ma subito dopo un
+            // aggiornamento, o dopo aver svuotato i dati del sito, la copia
+            // salvata ci mette qualche istante a prendere il comando: se
+            // l'app chiede proprio in quel momento si sente rispondere
+            // «nessuna», se lo segna, e tiene il riquadro giallo acceso per
+            // tutto il tempo che l'app resta aperta - anche dopo che la
+            // copia ha preso il comando un secondo dopo.
+            // Una risposta vera (un numero) si tiene. Un «nessuna» no:
+            // si richiede.
+            if (typeof window.versioneCopiaSalvata === 'string') return;
+            if (stoChiedendoLaVersione) return;
+            stoChiedendoLaVersione = true;
+            try { window.versioneCopiaSalvata = await chiediVersioneAlServiceWorker(); }
+            finally { stoChiedendoLaVersione = false; }
             if (window.activeTab === 'cloud') renderContent();
+        }
+
+        // E quando la copia salvata prende il comando, il riquadro si
+        // raddrizza da solo: senza questa riga bisognerebbe chiudere e
+        // riaprire l'app per vedere sparire un avviso che non vale piu'.
+        if ('serviceWorker' in navigator) {
+            try {
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.versioneCopiaSalvata = undefined;
+                    aggiornaVersioneCopiaSalvata();
+                });
+            } catch (err) { /* browser vecchio: resta com'e' */ }
         }
 
         function bloccoCopiaSalvata() {
@@ -6245,10 +6271,37 @@
             if (salvata === undefined) return `<p class="text-xs text-gray-400">Copia salvata sul telefono: controllo...</p>`;
             const numero = salvata ? String(salvata).replace('taximanager-v', '') : null;
             const pari = numero === String(VERSIONE_APP);
+            // TRE STATI, NON DUE
+            // Prima erano due: «allineate» oppure «NON allineate». Ma
+            // «nessuna copia» e «una copia vecchia» sono cose diverse e
+            // vogliono due risposte diverse:
+            //   - copia VECCHIA: c'e' qualcosa che serve file di ieri, ed e'
+            //     da rifare. Qui il tasto nero ha senso.
+            //   - NESSUNA copia: non c'e' ancora niente, nessuno sta
+            //     servendo niente di vecchio, e non c'e' niente da buttare
+            //     via. Succede appena dopo un aggiornamento o dopo aver
+            //     svuotato i dati del sito, e si sistema da solo.
+            // Offrire «butta via la copia salvata» quando copia non ce n'e'
+            // e' un consiglio che non si puo' nemmeno eseguire.
+            if (!numero) {
+                return `
+                    <div class="bg-gray-50 p-3 rounded-xl">
+                        <p class="text-xs font-bold text-gray-600 leading-relaxed">
+                            Pagina v${VERSIONE_APP} · copia salvata sul telefono: non ancora installata
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1 leading-relaxed">
+                            Normale subito dopo un aggiornamento, o dopo aver svuotato i dati del sito: la copia si
+                            installa da sé in qualche istante e questa riga cambia da sola, senza chiudere niente.
+                            Finché non c'è, l'app funziona ma <strong>non si apre senza campo</strong>: è la copia che
+                            la tiene disponibile in garage o in un sottopasso. Se dopo aver riaperto l'app resta
+                            scritto così, dimmelo.
+                        </p>
+                    </div>`;
+            }
             return `
                 <div class="${pari ? '' : 'bg-yellow-100 p-3 rounded-xl'}">
                     <p class="text-xs font-bold ${pari ? 'text-gray-400' : 'text-yellow-800'} leading-relaxed">
-                        Pagina v${VERSIONE_APP} · copia salvata sul telefono ${numero ? 'v' + esc(numero) : 'nessuna'}
+                        Pagina v${VERSIONE_APP} · copia salvata sul telefono v${esc(numero)}
                         ${pari ? '· tutto allineato' : '· NON allineate'}
                     </p>
                     ${pari ? '' : `

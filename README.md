@@ -69,6 +69,70 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Copia salvata: nessuna» — tre stati invece di due (versione 163)
+
+Il riquadro in «Backup e impostazioni» confronta due cose: la **pagina** (l'app che stai
+guardando) e la **copia salvata** (il service worker, che è quello che serve al telefono i
+file dell'app — la pagina stessa, le icone, il manifesto). Quando le due non coincidono i
+difetti diventano impossibili da capire, ed è per questo che il riquadro esiste.
+
+Diceva però solo due cose: *allineate* oppure *NON allineate*. E «copia vecchia» e «copia che
+non c'è ancora» sono due situazioni diverse che vogliono due risposte diverse.
+
+### Il consiglio che non si poteva eseguire
+
+Con **nessuna** copia installata, il riquadro diceva «NON allineate», spiegava che «a servire
+i file è la copia salvata» — cioè che qualcosa di vecchio stava servendo i file, mentre non
+stava servendo niente nessuno — e offriva il tasto **«Butta via la copia salvata e rifalla»**:
+un'istruzione che non si può eseguire, perché copia non ce n'è.
+
+Adesso sono tre stati:
+
+| Stato | Cosa dice | Tasto |
+| --- | --- | --- |
+| copia = pagina | tutto allineato, in grigio | nessuno |
+| copia più vecchia | NON allineate, in giallo | «Butta via la copia salvata e rifalla» |
+| nessuna copia | non ancora installata, in grigio | nessuno |
+
+Il terzo spiega anche l'unica conseguenza vera: finché la copia non c'è, **l'app non si apre
+senza campo**. È la copia che la tiene disponibile in garage o in un sottopasso.
+
+### L'avviso che restava acceso quando non valeva più
+
+Difetto peggiore del primo. La risposta alla domanda «copia, che versione sei?» veniva chiesta
+**una volta sola** per sessione e poi tenuta. Ma subito dopo un aggiornamento — o dopo aver
+svuotato i dati del sito — la copia ci mette qualche istante a prendere il comando: se l'app
+chiedeva proprio in quel momento si sentiva rispondere «nessuna», se lo segnava, e teneva il
+riquadro acceso **per tutto il tempo che l'app restava aperta**, anche dopo che la copia aveva
+preso il comando un secondo dopo.
+
+Ora una risposta vera (un numero) si tiene, un «nessuna» no: si richiede. E quando la copia
+prende il comando l'app lo sente (`controllerchange`) e **la riga si raddrizza da sola**,
+senza chiudere e riaprire niente.
+
+### La prova che ha quasi rotto l'app
+
+Per provare l'arrivo di una versione nuova, `testSW.mjs` ne deve fabbricare una: scrive
+`v999` dentro `sw.js` e alla fine lo rimette com'era. Quel «alla fine» era un `finally`, e un
+`finally` non gira se il processo muore prima — basta mandare l'uscita della prova in `head`,
+che chiude il tubo e fa morire node a metà.
+
+È successo proprio mentre lavoravo a questa versione: **`sw.js` è rimasto a `v999` nel
+repository**. Un commit distratto avrebbe mandato a chi usa l'app un numero di versione falso,
+rompendo gli aggiornamenti per tutti. Me ne sono accorto perché la prova, al giro dopo,
+falliva su un numero che non c'entrava niente.
+
+Adesso l'originale si mette da parte **su disco** prima di toccare qualunque cosa, e la prima
+cosa che la prova fa al giro successivo è rimetterlo a posto. Anche se un giro muore di colpo,
+il prossimo ripara. Verificato facendo il danno apposta.
+
+### Le prove
+
+Dentro `testSW.mjs`, che è l'unica che gira su HTTP vero e quindi l'unica dove un service
+worker esiste davvero: senza copia la riga deve dire «non ancora installata» e **non** offrire
+di buttarla via; presa il comando, **senza riaprire l'app**, deve dire «tutto allineato».
+Rimettendo il congelamento com'era, la prova fallisce.
+
 ## La via d'uscita da un modulo aperto per sbaglio (versione 162)
 
 Aprendo il modulo completo — corsa, spesa o turno — in fondo c'erano due tasti, e **salvavano

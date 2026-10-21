@@ -51,8 +51,45 @@ p.on('dialog', d => d.accept());
 
 // 1) primo avvio: installa il service worker
 await p.goto(U);
+
+// 1bis) LA RIGA CHE DICE CHI SERVE I FILE, PRIMA CHE CI SIA QUALCUNO
+// Appena aperta l'app su un telefono pulito la copia salvata non ha ancora
+// preso il comando. In quel momento la riga non deve gridare «NON allineate»
+// ne' offrire di buttare via una copia che non esiste: deve dire che non c'e'
+// ancora e che si sistema da sola.
+// E soprattutto deve RADDRIZZARSI DA SOLA quando la copia prende il comando:
+// prima la risposta «nessuna» se la teneva per tutta la sessione, e l'avviso
+// giallo restava acceso anche un'ora dopo che non valeva piu'.
+await p.waitForFunction(() => typeof window.switchTab === 'function', { timeout: 20000 });
+await p.evaluate(() => { switchTab('cloud'); renderContent(); });
+const leggiRiga = () => p.evaluate(() => {
+  const t = document.getElementById('main-container').textContent.replace(/\s+/g, ' ');
+  const m = t.match(/Pagina v\d+ · copia salvata sul telefono[^.]*?(tutto allineato|NON allineate|non ancora installata)/);
+  return {
+    riga: m ? m[0] : '(non trovata)',
+    tastoButtaVia: /Butta via la copia salvata/.test(t)
+  };
+});
+const senzaCopia = await leggiRiga();
+if (/non ancora installata/.test(senzaCopia.riga)) {
+  console.log(`  1a. senza copia dice: «...non ancora installata» ok`);
+  console.log(`      e NON offre di buttarla via: ${senzaCopia.tastoButtaVia ? '*** la offre ***' : 'ok'}`);
+} else if (/tutto allineato/.test(senzaCopia.riga)) {
+  console.log('  1a. la copia aveva gia\' preso il comando: niente da dire (ok)');
+} else {
+  console.log(`  1a. *** dice «${senzaCopia.riga}» ***`);
+}
+
 await p.waitForFunction(() => navigator.serviceWorker.controller !== null, { timeout: 20000 });
 console.log('  1. service worker installato e al comando');
+
+// senza ricaricare niente: la riga deve essersi raddrizzata da sola
+await p.waitForTimeout(1500);
+await p.evaluate(() => renderContent());
+await p.waitForTimeout(400);
+const conCopia = await leggiRiga();
+console.log(`  1b. presa il comando, SENZA riaprire l'app la riga dice: «${conCopia.riga}»`);
+console.log(`      ${/tutto allineato/.test(conCopia.riga) ? 'ok' : '*** doveva dire «tutto allineato» ***'}`);
 
 // 2) riapertura con la rete LENTISSIMA: deve aprirsi comunque subito
 lento = 4000;
@@ -77,7 +114,30 @@ await p.waitForFunction(() => !!window.registrazioneSW, { timeout: 20000 });
 
 // 4) una versione nuova NON deve prendere il comando da sola
 const sw = path.join(RADICE, 'sw.js');
+const copiaDiScorta = sw + '.originale';
+
+// QUESTA PROVA SCRIVE DENTRO sw.js, E QUINDI PUO' ROMPERLO
+// Per provare l'arrivo di una versione nuova bisogna fabbricarne una: si
+// scrive v999 dentro sw.js e alla fine si rimette com'era. Il «alla fine»
+// pero' e' un finally, e un finally non gira se il processo muore prima -
+// basta mandare l'uscita della prova in «head», che chiude il tubo e fa
+// morire node a meta'. E' successo: sw.js e' rimasto a v999 nel repository,
+// e un commit distratto avrebbe mandato in mano a chi usa l'app un numero
+// di versione falso, rompendo gli aggiornamenti per tutti.
+// Adesso l'originale si mette da parte su DISCO prima di toccare niente, e
+// la prima cosa che si fa al giro dopo e' rimetterlo. Cosi' anche se questo
+// giro muore di colpo, il prossimo ripara.
+if (fs.existsSync(copiaDiScorta)) {
+  fs.copyFileSync(copiaDiScorta, sw);
+  fs.unlinkSync(copiaDiScorta);
+  console.log('  (sw.js era rimasto modificato da un giro interrotto: rimesso a posto)');
+}
 const originale = fs.readFileSync(sw, 'utf8');
+if (!/taximanager-v\d+/.test(originale)) {
+  console.error('*** sw.js non ha un numero di versione riconoscibile: non lo tocco ***');
+  process.exit(2);
+}
+fs.writeFileSync(copiaDiScorta, originale);
 const versioneAttuale = (originale.match(/taximanager-v\d+/) || [])[0];
 if (!versioneAttuale) throw new Error('VERSIONE non trovata in sw.js');
 fs.writeFileSync(sw, originale.replace(versioneAttuale, 'taximanager-v999'));
@@ -120,6 +180,7 @@ try {
   console.log(`     la striscia e' sparita: ${dopo.striscia ? '*** NO ***' : 'ok'} · spazio in cima «${dopo.spazio || '0'}»`);
 } finally {
   fs.writeFileSync(sw, originale);
+  if (fs.existsSync(copiaDiScorta)) fs.unlinkSync(copiaDiScorta);
 }
 await b.close();
 server.close();
