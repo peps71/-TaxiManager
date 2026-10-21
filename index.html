@@ -1829,7 +1829,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 161;
+        const VERSIONE_APP = 162;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -7278,7 +7278,10 @@
 
         return `
             <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-yellow-400 slide-in">
-                <h3 class="text-lg font-bold mb-4">Inserisci dettagli turno</h3>
+                <div class="flex items-center gap-2 mb-4">
+                    <h3 class="text-lg font-bold">Inserisci dettagli turno</h3>
+                    ${crocettaAnnulla('turno')}
+                </div>
                 <form onsubmit="addShift(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div>
                         <label for="sh-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
@@ -7337,8 +7340,9 @@
                         <p class="text-xs text-gray-500">Lascia vuoti i km se non li hai ancora: il turno viene salvato lo stesso e resta in elenco con il pulsante <span class="font-bold">Aggiungi km</span>.</p>
                     </div>
                     `}
-                    <div class="lg:col-span-5">
-                        <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-500 font-bold py-3 rounded-xl transition-colors text-gray-900">${tipoNonLavorato ? 'Registra giornata di riposo' : 'Salva il turno'}</button>
+                    <div class="lg:col-span-5 flex flex-col sm:flex-row gap-3">
+                        <button type="submit" class="flex-1 bg-yellow-400 hover:bg-yellow-500 font-bold py-3 rounded-xl transition-colors text-gray-900">${tipoNonLavorato ? 'Registra giornata di riposo' : 'Salva il turno'}</button>
+                        ${tastoAnnulla('turno')}
                     </div>
                 </form>
             </div>`;
@@ -7419,7 +7423,10 @@
         function moduloCorsa(giorno, metodo) {
         return `
             <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-green-500 slide-in">
-                <h3 class="text-lg font-bold mb-4 text-green-800">Registra una corsa</h3>
+                <div class="flex items-center gap-2 mb-4">
+                    <h3 class="text-lg font-bold text-green-800">Registra una corsa</h3>
+                    ${crocettaAnnulla('corsa')}
+                </div>
                 <form onsubmit="addCorsa(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label for="corsa-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
@@ -7453,6 +7460,7 @@
                         <button type="submit" name="azione" value="chiudi" class="sm:px-8 bg-gray-100 hover:bg-gray-200 font-bold py-3 rounded-xl transition-colors text-gray-700">
                             Salva e basta
                         </button>
+                        ${tastoAnnulla('corsa')}
                     </div>
                 </form>
             </div>`;
@@ -10799,6 +10807,68 @@
             }, 0);
         }
 
+        // ============================================================
+        //  LA VIA D'USCITA DA UN MODULO APERTO PER SBAGLIO
+        //  I moduli completi - corsa, spesa, turno - avevano in fondo due
+        //  tasti, e salvavano tutti e due: «Salva e avanti» e «Salva e
+        //  basta». Il secondo sembra un'uscita e non lo e': chiude DOPO aver
+        //  salvato. Chi apriva il modulo sbagliando tasto non aveva nessun
+        //  modo di tornare indietro se non chiudere e riaprire l'app.
+        //  Una via d'uscita c'era, ma scritta sopra il modulo: quando te ne
+        //  accorgi stai guardando i tasti in fondo, e lassu' non ci torni.
+        //
+        //  PERCHE' IL TASTO STA IN DUE POSTI
+        //  In cima, perche' e' li' che sei nell'istante in cui capisci di
+        //  aver sbagliato: il modulo si e' appena aperto. In fondo, perche'
+        //  e' li' che lo si va a cercare dopo aver letto il modulo, insieme
+        //  agli altri tasti. Sono i due punti in cui uno guarda, e costano
+        //  una crocetta e una parola.
+        //
+        //  CHIEDE CONFERMA SOLO SE C'E' QUALCOSA DA PERDERE
+        //  Modulo vuoto: si chiude e basta, che e' il caso del tasto
+        //  sbagliato e non deve costare una domanda. Con qualcosa scritto
+        //  dentro, prima chiede.
+        // ============================================================
+        function annullaModulo(tasto, quale) {
+            // SCRITTO DA TE, NON PROPOSTO DALL'APP
+            // Il primo tentativo guardava se i campi erano pieni, e sul
+            // modulo del turno chiedeva sempre: quello nasce gia' compilato
+            // con i km del turno prima e le ore del tipo scelto. Chiedere
+            // «perdi quello che hai scritto» quando non si e' scritto niente
+            // e' proprio il fastidio da evitare.
+            // Il browser la differenza la sa gia': defaultValue e' il valore
+            // con cui il campo e' nato, value e' quello che c'e' adesso.
+            // Diversi = ci hai messo mano tu.
+            const modulo = tasto && tasto.closest ? tasto.closest('form') : null;
+            let scritto = false;
+            if (modulo) {
+                modulo.querySelectorAll('input[type="text"], input[inputmode="decimal"], textarea')
+                    .forEach(c => { if (String(c.value || '') !== String(c.defaultValue || '')) scritto = true; });
+            }
+            if (scritto && !confirm('Chiudo senza salvare?\n\nQuello che hai scritto in questo modulo si perde.')) return;
+            if (quale === 'uscita') toggleUscitaForm();
+            else if (quale === 'corsa') toggleCorsaForm();
+            else if (quale === 'turno') toggleShiftForm();
+        }
+        window.annullaModulo = annullaModulo;
+
+        // La crocetta in cima al modulo. Stessa cosa del tasto in fondo:
+        // scritta corta perche' sta accanto al titolo.
+        function crocettaAnnulla(quale) {
+            return `<button type="button" onclick="annullaModulo(this, '${escJs(quale)}')"
+                    title="Chiudi senza salvare" aria-label="Chiudi senza salvare"
+                    class="tasto-icona ml-auto shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors">
+                    <span class="text-xl leading-none" aria-hidden="true">&times;</span>
+                </button>`;
+        }
+
+        function tastoAnnulla(quale) {
+            return `<button type="button" onclick="annullaModulo(this, '${escJs(quale)}')"
+                    class="sm:px-8 font-bold py-3 rounded-xl transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100">
+                    Annulla
+                </button>`;
+        }
+
         function toggleCorsaForm() {
             window.showCorsaForm = !window.showCorsaForm;
             renderContent();
@@ -10812,7 +10882,10 @@
         function moduloUscitaHTML(dataProposta) {
             return `
             <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-red-500 slide-in">
-                <h3 class="text-lg font-bold mb-4 text-red-800">Registra una spesa</h3>
+                <div class="flex items-center gap-2 mb-4">
+                    <h3 class="text-lg font-bold text-red-800">Registra una spesa</h3>
+                    ${crocettaAnnulla('uscita')}
+                </div>
                 <form onsubmit="addUscita(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label for="uscita-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
@@ -10884,6 +10957,7 @@
                         <button type="submit" name="azione" value="chiudi" class="sm:px-8 bg-gray-100 hover:bg-gray-200 font-bold py-3 rounded-xl transition-colors text-gray-700">
                             Salva e basta
                         </button>
+                        ${tastoAnnulla('uscita')}
                     </div>
                 </form>
             </div>`;

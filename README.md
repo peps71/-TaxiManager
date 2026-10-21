@@ -69,6 +69,59 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La via d'uscita da un modulo aperto per sbaglio (versione 162)
+
+Aprendo il modulo completo — corsa, spesa o turno — in fondo c'erano due tasti, e **salvavano
+tutti e due**: «Salva e avanti» e «Salva e basta». Il secondo sembra un'uscita e non lo è:
+chiude *dopo* aver salvato. Chi apriva il modulo sbagliando tasto non aveva nessun modo di
+tornare indietro se non chiudere e riaprire l'app.
+
+Una via d'uscita c'era, ma scritta **sopra** il modulo («Chiudi il modulo completo»). Quando
+te ne accorgi stai guardando i tasti in fondo, e lassù non ci torni.
+
+### Perché il tasto sta in due posti
+
+- **In cima**, una crocetta accanto al titolo: è lì che sei nell'istante in cui capisci di
+  aver sbagliato, perché il modulo si è appena aperto.
+- **In fondo**, insieme agli altri tasti: è lì che lo si va a cercare dopo aver letto il
+  modulo.
+
+Sono i due punti in cui uno guarda, e costano una crocetta e una parola.
+
+### Chiede conferma solo se c'è qualcosa da perdere
+
+Modulo intonso: si chiude e basta. È il caso del tasto sbagliato, e non deve costare una
+domanda. Con qualcosa scritto dentro, prima chiede — e dicendo no resta tutto com'era.
+
+Il primo tentativo guardava se i campi erano **pieni**, e sul modulo del turno chiedeva
+sempre: quello nasce già compilato, con i km del turno prima e le ore del tipo scelto.
+Chiedere «perdi quello che hai scritto» a chi non ha scritto niente è proprio il fastidio da
+evitare.
+
+La differenza il browser la sa già: `defaultValue` è il valore con cui il campo è nato,
+`value` è quello che c'è adesso. Diversi vuol dire che ci hai messo mano tu. Niente attributi
+da aggiungere, niente da ricordarsi al prossimo campo.
+
+### Il rischio che non si vede guardando
+
+Un tasto dentro un `<form>`, senza `type="button"`, **è un submit**. Un «Annulla» fatto così
+salverebbe invece di annullare — e la schermata farebbe esattamente la stessa cosa in tutti e
+due i casi: il modulo si chiude. Te ne accorgeresti dopo, trovando una spesa che non hai mai
+voluto registrare.
+
+`prove/testAnnulla.mjs` lo verifica nel modo in cui si vede davvero: scrive 42,50, preme
+Annulla, conferma, e poi **conta i movimenti**. Se sono aumentati, il tasto stava salvando.
+
+### Le prove
+
+38 controlli, gli stessi su tutti e tre i moduli: il tasto c'è in cima e in fondo, nessuno dei
+due è un submit, a modulo intonso non chiede niente e non salva niente, con qualcosa scritto
+chiede una volta sola, dicendo no resta aperto con i dati dentro, dicendo sì si chiude senza
+salvare, e la crocetta in cima fa la stessa cosa.
+
+In fondo c'è anche il controllo opposto, che serve quanto gli altri: **«Salva e basta» deve
+continuare a salvare**. Un tasto messo male dentro un modulo può rompere anche l'invio.
+
 ## Il tuo logo al posto del taxi disegnato (versione 161)
 
 Da **Gestione → Backup e impostazioni → Dati del titolare → Logo**: scegli un'immagine e
