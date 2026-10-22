@@ -612,6 +612,25 @@
         .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .text-yellow-400\/70 { color: rgb(250 204 21 / 0.7); }
 
+        /* ============================================================
+           LA TESTA DEL MENU, QUANDO C'E' UN LOGO
+           Il menu del computer e' largo 208 punti (256 sugli schermi
+           grandi). Con il taxi disegnato, largo 32, accanto ci stava
+           «TaxiManager» e tutto tornava. Con un logo vero - una targhetta
+           con dentro una scritta, che e' come sono fatti i loghi dei
+           radiotaxi - servivano 284 punti in 207: il titolo usciva dal
+           menu di settantasei punti e finiva sotto il contenuto.
+           Il documento non sbordava, perche' a tagliare era il menu
+           stesso: da fuori sembrava tutto a posto.
+           Affiancare non ci sta e basta. Quindi, SOLO quando c'e' un logo,
+           la testa si mette in colonna: il logo prende tutta la larghezza
+           che vuole - che e' quello che un logo chiede - e il titolo con i
+           suoi due righini sta sotto, intero. Senza logo non cambia niente.
+           ============================================================ */
+        #logo-nel-menu { height: 34px; max-width: 120px; object-fit: contain; flex-shrink: 0; }
+        #testa-menu.con-logo { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+        #testa-menu.con-logo #logo-nel-menu { height: 40px; max-width: 100%; }
+
 
         /* ============================================================
            IL MODO SCURO
@@ -1019,11 +1038,11 @@
 
     <!-- Sidebar / Navigazione -->
     <aside class="hidden md:flex w-52 lg:w-64 bg-yellow-400 text-gray-900 flex flex-col shadow-lg z-10 md:min-h-screen border-r border-yellow-500 flex-shrink-0 no-print">
-        <div class="p-4 lg:p-6 flex items-center gap-2.5 bg-yellow-500">
+        <div id="testa-menu" class="p-4 lg:p-6 flex items-center gap-2.5 bg-yellow-500">
             <svg id="taxi-nel-menu" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 16H9m10 0h3v-3.15a1 1 0 0 0-.84-.99L16 11l-2.7-3.6a2 2 0 0 0-1.6-.8H8.3a2 2 0 0 0-1.6.8L4 11l-5.16.86a1 1 0 0 0-.84.99V16h3m10 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0m-6 0a2 2 0 1 1-4 0m4 0a2 2 0 1 0-4 0"/></svg>
-            <img id="logo-nel-menu" alt="" class="hidden shrink-0 rounded-md" style="height:34px;max-width:120px;object-fit:contain">
-            <div>
-                <h1 class="text-xl lg:text-2xl font-black tracking-tight">TaxiManager</h1>
+            <img id="logo-nel-menu" alt="" class="hidden rounded-md">
+            <div class="min-w-0">
+                <h1 class="text-xl lg:text-2xl font-black tracking-tight truncate">TaxiManager</h1>
                 <p class="text-[11px] font-semibold text-gray-800 opacity-80 leading-tight" id="etichetta-versione">Edizione Cloud</p>
                 <p class="text-[11px] font-black text-gray-900 truncate leading-tight" id="nome-nel-menu"></p>
             </div>
@@ -1829,7 +1848,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 163;
+        const VERSIONE_APP = 164;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -6108,6 +6127,10 @@
                 if (!logo) img.removeAttribute('src');
                 img.alt = logo ? (nomeCompleto() || 'Logo') : '';
             });
+            // La testa del menu si mette in colonna solo quando un logo c'e'
+            // davvero: affiancato al titolo non ci starebbe.
+            const testaMenu = document.getElementById('testa-menu');
+            if (testaMenu) testaMenu.classList.toggle('con-logo', !!logo);
 
             const conSigla = !!String(prof.sigla || '').trim();
             const inCima = document.getElementById('nome-in-cima');

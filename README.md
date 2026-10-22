@@ -69,6 +69,51 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il logo spingeva il titolo fuori dal menu (versione 164)
+
+Sul Mac, con un logo caricato, «TaxiManager» nel menu laterale usciva dal menu e finiva sopra
+il contenuto.
+
+Il menu è largo 208 punti (256 sugli schermi grandi). Con il taxi disegnato, largo 32, accanto
+ci stava «TaxiManager» e tutto tornava. Con un **logo vero** — una targhetta con dentro una
+scritta, che è come sono fatti i loghi dei radiotaxi — servivano **284 punti in 207**: il
+titolo usciva di settantasei.
+
+Affiancare non ci sta e basta. Quindi, **solo quando c'è un logo**, la testa del menu si mette
+in colonna: il logo prende tutta la larghezza che vuole, e il titolo con i suoi due righini
+sta sotto, intero. Senza logo non cambia niente.
+
+Misurato prima e dopo: il titolo passa da **76 punti fuori** a **54 dentro**.
+
+### Perché non se n'era accorto nessuno
+
+La prova degli sbordi c'era già e girava a sette larghezze. Non l'ha visto per **tre** motivi,
+tutti e tre sistemati:
+
+1. **Non metteva mai un logo.** È arrivato nella v161 e il semenzaio della prova non è stato
+   aggiornato: senza logo, nel menu ci sta tutto. Adesso ne mette uno largo, come sono quelli
+   veri.
+2. **`h1` non era fra i tag che guardava** (`div, p, span, td, button`). Il titolo del menu è
+   un `h1`. Adesso ci sono anche `h1, h2, h3, label, a`.
+3. **Cercava la cosa sbagliata.** Guardava il testo tagliato *dentro* il suo riquadro, e se la
+   pagina intera sbordava. Ma qui il testo non era tagliato e la pagina non sbordava: a
+   tagliare era il menu stesso. Da fuori sembrava tutto a posto.
+
+Il controllo nuovo è quello che mancava: **chi esce dal proprio contenitore**. Per ogni
+elemento dentro il menu, la striscia in cima e il contenuto, si confronta il suo rettangolo
+con quello della cassa che lo contiene.
+
+Rimettendo il difetto com'era, la prova dice: `h1 «TaxiManager» esce da aside di 63px`.
+
+### Una distinzione che è costata un secondo giro
+
+Al primo tentativo il controllo nuovo segnalava anche le linguette di Gestione. Ma quelle
+stanno in una fila che **scorre di lato**: le prime sono fuori a sinistra, ed è giusto così —
+dalla v158 la fila si sposta apposta per centrare quella aperta.
+
+Quindi si salta quello che ha sopra di sé un contenitore che **scorre** (`auto`, `scroll`). Un
+contenitore che **taglia** (`hidden`) no: quello è proprio il caso da scoprire.
+
 ## «Copia salvata: nessuna» — tre stati invece di due (versione 163)
 
 Il riquadro in «Backup e impostazioni» confronta due cose: la **pagina** (l'app che stai

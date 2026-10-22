@@ -21,7 +21,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `verifica.py` | i blocchi `<script>` di `index.html` sono sintatticamente validi |
 | `classi.py` | **ogni classe CSS usata esiste davvero.** Una classe che non c'è non dà errore: semplicemente non fa niente, in silenzio. È già successo con la striscia in cima (v119) |
 | `smoke.mjs` | le dieci schermate si disegnano e nessuna resta vuota |
-| `sbordo.mjs` | niente esce dallo schermo, da 320 a 1280 px |
+| `sbordo.mjs` | niente esce dallo schermo **e niente esce dal proprio contenitore** (menu, striscia in cima, contenuto), da 320 a 1280 px, con un logo largo caricato. Salta chi sta dentro una fila che scorre, dove uscire dal bordo è il mestiere |
 | `testUso.mjs` | l'app **usata dai suoi pulsanti**: registra turno, corse e spesa dai moduli veri, modifica, cancella, e i totali seguono |
 | `testLimiti.mjs` | nove situazioni scomode (archivio vuoto, zero ore, zero euro, anno bisestile, capodanno, caratteri speciali) e a video non deve comparire `NaN`, `Infinity`, `undefined` |
 | `storti.mjs` | dati storti in archivio - importi non numerici, date senza senso, identificativi doppi: nessun numero marcio, nessun «NaN» a video, e le tre strade che contano gli incassi devono dire la stessa cifra |
