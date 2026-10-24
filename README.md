@@ -69,6 +69,51 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Al buio la barra laterale restava accesa (versione 165)
+
+Su iPad e sul computer, in modo scuro, la barra laterale restava **gialla piena** — una
+colonna accesa alta tutto lo schermo — e dentro le scritte erano diventate **chiare**, perché
+il modo scuro le aveva schiarite tutte.
+
+Crema su giallo. Misurato: **1,17** di contrasto, dove ne servono 4,5.
+
+| | |
+| --- | --- |
+| voci del menu illeggibili | **11 su 14** |
+| contrasto delle voci | 1,17 (serve 4,5) |
+| l'anno nel menu | 1,08 — scuro su scuro |
+
+Il contenitore forzava scuro, i figli forzavano chiaro: la barra ha su di sé `bg-yellow-400` e
+`text-gray-900`, e una regola della v160 protegge le scritte nere sui tasti gialli. Ma ogni
+voce del menu porta il suo `text-gray-800`, che in modo scuro diventa chiaro e vince
+sull'eredità.
+
+Adesso la barra si scurisce come la striscia del telefono — che era già stata scurita nella
+v160 — e il giallo torna dov'è utile: la voce aperta e l'etichetta dell'anno. Da 11 scritte
+rotte a **zero**, la peggiore da 1,17 a 13,29.
+
+### Perché la prova non l'aveva visto: girava solo sul telefono
+
+`testScuro.mjs` misurava il contrasto di ogni scritta — 634 di esse — e diceva che andava
+tutto bene. Però girava **a una sola larghezza, 390 punti**. Da tablet in su compare la barra
+laterale, che sul telefono **non esiste**: era semplicemente fuori dal campo visivo della
+prova.
+
+E c'era un secondo limite: guardava solo dentro `#main-container`. La barra laterale e la
+striscia in cima stanno fuori di lì.
+
+Adesso gira a **tre larghezze** — telefono, tablet, computer — e guarda **tutta** la pagina.
+Da 634 scritte misurate a **2.256**.
+
+### E ne ha trovata subito un'altra
+
+Appena allargato lo sguardo, il numero di versione nella striscia del telefono: **3,90**.
+L'avevo smorzato io al 55% nella v160 per non farlo gridare, e a quel punto non si leggeva
+più. Al 70% fa 5,47 e resta comunque discreto. Calcolato, non aggiustato a occhio.
+
+Era lì da cinque versioni, in cima a ogni schermata del telefono, e la prova non poteva
+vederlo perché stava fuori dal contenitore che guardava.
+
 ## Il logo spingeva il titolo fuori dal menu (versione 164)
 
 Sul Mac, con un logo caricato, «TaxiManager» nel menu laterale usciva dal menu e finiva sopra

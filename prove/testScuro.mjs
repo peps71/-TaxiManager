@@ -88,8 +88,8 @@ window.__fondoDi = function (e) {
 };
 `;
 
-async function apri(b, scuro) {
-  const p = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT',
+async function apri(b, scuro, larghezza) {
+  const p = await b.newPage({ viewport: { width: larghezza || 390, height: 900 }, locale: 'it-IT',
                               colorScheme: scuro ? 'dark' : 'light' });
   p.on('dialog', d => d.accept());
   await p.goto(APP);
@@ -213,82 +213,91 @@ ok(!fuoriDalBlocco.includes('data-tema'),
    fuoriDalBlocco.includes('data-tema') ? 'ce n\'e\' una' : 'nessuna');
 
 // ------------------------------------------------------------------
-console.log('\n2. DI NOTTE OGNI SCRITTA SI LEGGE');
+console.log('\n2. DI NOTTE OGNI SCRITTA SI LEGGE, A OGNI LARGHEZZA');
 // ------------------------------------------------------------------
-const p = await apri(b, true);
-const lettura = await p.evaluate((schermate) => {
-  const deboli = [];
-  let misurate = 0;
-  for (const s of schermate) {
-    switchTab(s); renderContent();
-    document.querySelectorAll('#main-container *').forEach(e => {
-      if (e.children.length) return;                       // solo le foglie
-      const t = (e.textContent || '').trim();
-      if (!t) return;
-      const st = getComputedStyle(e);
-      if (st.visibility === 'hidden' || st.display === 'none' || parseFloat(st.opacity) < 0.2) return;
-      const r = e.getBoundingClientRect();
-      if (r.width < 2 || r.height < 2) return;
-      const testo = window.__rgb(st.color);
-      if (!testo || testo.a < 0.2) return;
-      const fondo = window.__fondoDi(e);
-      const c = window.__contrasto(window.__sopra(testo, fondo), fondo);
-      misurate++;
-      // La soglia e' quella dello standard: 4.5 per il testo normale, 3 per
-      // quello grande o in grassetto, che si legge anche con meno.
-      const px = parseFloat(st.fontSize), grosso = px >= 24 || (px >= 18.66 && parseInt(st.fontWeight) >= 700);
-      const soglia = grosso ? 3 : 4.5;
-      // I SEI COLORI DELLA LICENZA SONO FUORI CONCORSO
-      // «Bianco, Giallo, Verde, Rosso, Blu, Nero» non sono scelte grafiche:
-      // sono il colore stampato sulla licenza, quello che dice quali giorni
-      // tocca lavorare. Scritto in bianco sul verde fa 3,30 - sotto la
-      // soglia - ma ritingere quel verde vorrebbe dire scrivere sullo
-      // schermo un colore diverso da quello che c'e' sul documento.
-      // Vale uguale di giorno: non e' una cosa che ha portato il modo scuro.
-      // (Nota per quando lo si vorra' sistemare davvero: la stessa scritta
-      // in NERO sullo stesso verde fa 6,36. Il rimedio c'e', costa cambiare
-      // anche il modo chiaro, e quindi non e' roba di questa versione.)
-      if (/^(Bianco|Giallo|Verde|Rosso|Blu|Nero)$/.test(t)) return;
-      if (c < soglia) deboli.push({ s, t: t.slice(0, 30), c: c.toFixed(2), soglia, px: Math.round(px), col: st.color,
-                                      fondo: 'rgb(' + Math.round(fondo.r) + ', ' + Math.round(fondo.g) + ', ' + Math.round(fondo.b) + ')' });
-    });
-  }
-  return { misurate, deboli };
-}, SCHERMATE);
-ok(lettura.misurate > 500, 'ci sono scritte da misurare', `${lettura.misurate} misurate`);
-ok(lettura.deboli.length === 0, 'nessuna scritta sotto la soglia di leggibilita\'',
-   lettura.deboli.length
-     ? '\n        ' + lettura.deboli.slice(0, 8).map(x => `${x.s}: «${x.t}» ${x.c}<${x.soglia} — ${x.col} su ${x.fondo}, ${x.px}px`).join('\n        ')
-     : 'tutte sopra');
+// TRE LARGHEZZE, NON UNA
+// Fino alla v164 questa prova girava solo a 390 punti, cioe' sul telefono.
+// Ma da tablet in su compare la BARRA LATERALE, che sul telefono non
+// esiste: e li' il modo scuro aveva schiarito le scritte lasciando il
+// fondo giallo. Undici voci su quattordici a 1,17 di contrasto, e nessuno
+// se n'e' accorto finche' non si e' visto su un iPad.
+// E si guarda tutta la pagina, non solo il contenuto: la barra laterale e
+// la striscia in cima sono fuori da #main-container, ed erano fuori anche
+// dalla prova.
+const LARGHEZZE = [390, 820, 1280];
+let misurateInTutto = 0;
+const deboliInTutto = [];
+const accesiInTutto = [];
+for (const larghezza of LARGHEZZE) {
+  const q = await apri(b, true, larghezza);
+  const r = await q.evaluate((schermate) => {
+    const deboli = [], accesi = [];
+    let misurate = 0;
+    const casse = ['aside', 'header', '#main-container', 'nav'];
+    for (const s of schermate) {
+      switchTab(s); renderNav(); renderContent();
+      const visti = new Set();
+      for (const nome of casse) {
+        const cassa = document.querySelector(nome);
+        if (!cassa) continue;
+        cassa.querySelectorAll('*').forEach(e => visti.add(e));
+      }
+      visti.forEach(e => {
+        const st = getComputedStyle(e);
+        if (st.visibility === 'hidden' || st.display === 'none' || parseFloat(st.opacity) < 0.2) return;
+        const r2 = e.getBoundingClientRect();
+        if (r2.width < 2 || r2.height < 2) return;
+
+        // le scritte
+        if (!e.children.length) {
+          const t = (e.textContent || '').trim();
+          if (t) {
+            const testo = window.__rgb(st.color);
+            if (testo && testo.a >= 0.2) {
+              const fondo = window.__fondoDi(e);
+              const c = window.__contrasto(window.__sopra(testo, fondo), fondo);
+              misurate++;
+              const px = parseFloat(st.fontSize);
+              const grosso = px >= 24 || (px >= 18.66 && parseInt(st.fontWeight) >= 700);
+              const soglia = grosso ? 3 : 4.5;
+              if (!/^(Bianco|Giallo|Verde|Rosso|Blu|Nero)$/.test(t) && c < soglia)
+                deboli.push(`${s}: «${t.slice(0,26)}» ${c.toFixed(2)}<${soglia} — ${st.color} su rgb(${Math.round(fondo.r)}, ${Math.round(fondo.g)}, ${Math.round(fondo.b)})`);
+            }
+          }
+        }
+
+        // le superfici rimaste accese
+        if (r2.width * r2.height >= 4000) {
+          const c = window.__rgb(st.backgroundColor);
+          if (c && c.a >= 0.5) {
+            const chiaro = window.__luce(c) > 0.5;
+            const spento = Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 40;
+            const coloreTurno = /^(Bianco|Giallo|Verde|Rosso|Blu|Nero)$/.test((e.textContent||'').trim());
+            if (chiaro && spento && !coloreTurno)
+              accesi.push(`${s}: ${Math.round(r2.width)}x${Math.round(r2.height)} ${st.backgroundColor} «${(e.textContent||'').trim().slice(0,20)}»`);
+          }
+        }
+      });
+    }
+    return { misurate, deboli: [...new Set(deboli)], accesi: [...new Set(accesi)] };
+  }, SCHERMATE);
+  await q.close();
+  misurateInTutto += r.misurate;
+  r.deboli.forEach(x => deboliInTutto.push(`${larghezza}px ${x}`));
+  r.accesi.forEach(x => accesiInTutto.push(`${larghezza}px ${x}`));
+  console.log(`  ${String(larghezza).padStart(4)}px: ${r.misurate} scritte misurate · ${r.deboli.length} sotto la soglia · ${r.accesi.length} superfici accese`);
+}
+ok(misurateInTutto > 1500, 'ci sono scritte da misurare', `${misurateInTutto} in tutto`);
+ok(deboliInTutto.length === 0, 'nessuna scritta sotto la soglia di leggibilita\'',
+   deboliInTutto.length ? '\n        ' + deboliInTutto.slice(0, 8).join('\n        ') : 'tutte sopra');
 
 // ------------------------------------------------------------------
 console.log('\n3. NIENTE RESTA ACCESO IN MEZZO AL BUIO');
 // ------------------------------------------------------------------
-const accesi = await p.evaluate((schermate) => {
-  const fuori = [];
-  for (const s of schermate) {
-    switchTab(s); renderContent();
-    document.querySelectorAll('#main-container *').forEach(e => {
-      const r = e.getBoundingClientRect();
-      if (r.width * r.height < 4000) return;        // i quadratini colorati vanno bene
-      const c = window.__rgb(getComputedStyle(e).backgroundColor);
-      if (!c || c.a < 0.5) return;
-      // il giallo dei tasti e' l'app: quello ci sta. Qui si cercano i
-      // rettangoli chiari e SPENTI, cioe' i bianchi rimasti indietro.
-      const chiaro = window.__luce(c) > 0.5;
-      const spento = Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 40;
-      // Il quadratino del colore del turno e' bianco perche' E' il colore
-      // bianco: sta scritto sulla licenza e dice quali giorni si lavora.
-      // Quello non si tinge di scuro, o direbbe una cosa falsa.
-      const coloreTurno = /^(Bianco|Giallo|Verde|Rosso|Blu|Nero)$/.test((e.textContent||'').trim());
-      if (chiaro && spento && !coloreTurno)
-        fuori.push(`${s}: ${Math.round(r.width)}x${Math.round(r.height)} ${getComputedStyle(e).backgroundColor} «${(e.textContent||'').trim().slice(0,20)}»`);
-    });
-  }
-  return [...new Set(fuori)];
-}, SCHERMATE);
-ok(accesi.length === 0, 'nessun rettangolo bianco rimasto indietro',
-   accesi.length ? accesi.slice(0, 4).join(' | ') : 'nessuno');
+ok(accesiInTutto.length === 0, 'nessun rettangolo bianco rimasto indietro',
+   accesiInTutto.length ? accesiInTutto.slice(0, 5).join(' | ') : 'nessuno');
+
+const p = await apri(b, true);
 
 // ------------------------------------------------------------------
 console.log('\n4. L\'INTERRUTTORE FA QUELLO CHE DICE');

@@ -761,7 +761,37 @@
            su nero. Ci e' voluto uno scatto per accorgersene. */
         :root[data-tema="scuro"] header.bg-yellow-400.text-gray-900,
         :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900 { color: var(--giallo); }
-        :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900\/60 { color: rgba(242,194,12,.55); }
+
+        /* ---- LA BARRA LATERALE DEL TABLET E DEL COMPUTER --------
+           Sul telefono la striscia in cima era gia' stata scurita nella
+           v160. La barra laterale no - e sul telefono non si vede, perche'
+           compare solo da tablet in su. Risultato: al buio su iPad restava
+           una colonna gialla accesa alta tutto lo schermo, e dentro le
+           scritte erano diventate chiare perche' il modo scuro le aveva
+           schiarite tutte. Crema su giallo: misurato 1,17 di contrasto su
+           4,5 che ne servono. Undici voci su quattordici illeggibili, e
+           l'anno a 1,08 - scuro su scuro.
+           Il contenitore forzava scuro, i figli forzavano chiaro.
+           Adesso la barra si scurisce come la striscia, e il giallo torna
+           dov'e' utile: la voce aperta e l'etichetta dell'anno.
+           I selettori portano «aside.bg-yellow-400» e non solo «aside»
+           perche' devono pesare piu' della regola che protegge le scritte
+           nere sui tasti gialli, due blocchi piu' su. */
+        :root[data-tema="scuro"] aside.bg-yellow-400 {
+            background-color: var(--carta);
+            border-right-color: var(--filo);
+        }
+        :root[data-tema="scuro"] aside.bg-yellow-400.text-gray-900,
+        :root[data-tema="scuro"] aside.bg-yellow-400 .text-gray-900 { color: var(--inchiostro-su); }
+        :root[data-tema="scuro"] aside.bg-yellow-400 .bg-yellow-500 { background-color: #272320; }
+        :root[data-tema="scuro"] aside.bg-yellow-400 .bg-yellow-500\/60 { background-color: var(--filo); }
+        :root[data-tema="scuro"] aside.bg-yellow-400 .hover\:bg-yellow-500:hover { background-color: #322d27; }
+        :root[data-tema="scuro"] aside.bg-yellow-400 .border-yellow-500 { border-color: var(--filo); }
+        /* Il numero di versione nella striscia: l'avevo smorzato al 55%
+           per non farlo gridare, e a quel punto faceva 3,90 di contrasto
+           invece di 4,5. Al 70% ne fa 5,47 e resta comunque discreto.
+           Calcolato, non aggiustato a occhio. */
+        :root[data-tema="scuro"] header.bg-yellow-400 .text-gray-900\/60 { color: rgba(242,194,12,.7); }
         /* IL LOGO SULLA STRISCIA SCURA
            Di giorno la striscia e' gialla, cioe' chiara, e un logo con
            l'inchiostro scuro - che e' come sono fatti quasi tutti - ci si
@@ -1848,7 +1878,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 164;
+        const VERSIONE_APP = 165;
 
         function profiloCompilato() {
             const p = window.profilo || {};
