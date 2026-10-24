@@ -69,6 +69,61 @@ cancellare a mano dalla console quando il nuovo accesso funziona su tutti i disp
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Le ore che scrivi tu chiudono il turno (versione 166)
+
+Un turno nasce con un orario di fine: «Le otto» va dalle 8:00 alle 20:00. Finché quell'ora non
+arriva, l'app lo considera **in corso** e conta il €/h sulle ore passate dall'orologio — è il
+contatore dal vivo, che si aggiorna ogni minuto mentre lavori.
+
+Ma le ore si possono correggere: si smette prima per un impegno e si scrive **10** al posto di
+12. Quella correzione però non toccava né l'inizio né la fine, e il conto guardava **solo
+quelli**. Risultato: il turno restava «in corso» fino alle 20:00 e il €/h continuava a
+scivolare.
+
+Misurato, con 400 € incassati e 10 ore scritte a mano:
+
+| momento | il turno dice | €/h mostrato |
+| --- | --- | --- |
+| appena scritto | in turno | 39,98 |
+| mezz'ora dopo | in turno | 38,07 |
+| un'ora dopo | in turno | 36,34 |
+| un'ora e mezza dopo | in turno | 34,76 |
+| alle 20:00 | finito | 40,00 |
+
+Due ore di numero sbagliato, e poi il salto al valore giusto all'ora di fine che non è stata
+lavorata.
+
+Adesso, **quando le ore lavorate raggiungono quelle dichiarate, il turno è finito**: 400 € in
+10 ore fanno 40 €/h, e ci restano.
+
+### Il commento nel codice aveva già previsto il caso
+
+Nella funzione che salva la modifica c'era scritto: *«Le ore restano modificabili in qualsiasi
+momento, anche molto dopo aver registrato il turno: capita di finire prima per un impegno e
+accorgersene dopo»*. L'intenzione c'era. Mancava il collegamento: il salvataggio scriveva
+`ore`, e chi decide se il turno è in corso leggeva `inizio` e `fine`.
+
+### Quello che NON doveva cambiare, e non cambia
+
+La correzione sta in una riga sola, ma tocca il cuore del contatore dal vivo. Quindi la prova
+verifica soprattutto i casi che devono restare identici:
+
+- **il turno normale a metà** — «Le otto» dichiara 12 ore in una finestra di 12, quindi le
+  raggiunge esattamente alle 20:00: niente cambia, e nel frattempo il €/h resta quello dal
+  vivo;
+- **lo Spezzato** — dichiara 12 ore in una finestra di 14, con 2 ore di pausa in mezzo. La
+  pausa era già tolta prima del confronto, quindi le ore guardate sono quelle lavorate
+  davvero: a 13 ore dall'inizio ne risultano 11, ed è giusto;
+- **il turno non ancora cominciato** e **la giornata di riposo**, che non sono turni in corso;
+- **zero ore dichiarate**, dove vale l'orologio come prima;
+- **due turni nello stesso giorno**, dove le ore del turno chiuso si sommano a quelle fatte
+  finora in quello aperto.
+
+`prove/testOreTurno.mjs`, 19 controlli. Il turno si costruisce **attorno all'ora in cui la
+prova gira**, così vale a qualunque ora, e si guarda come si comporta mezz'ora, un'ora, due ore
+più avanti. Tolta la riga, la prova fallisce e mostra le ore che scivolano: `10, 10.5, 11,
+11.5`.
+
 ## Al buio la barra laterale restava accesa (versione 165)
 
 Su iPad e sul computer, in modo scuro, la barra laterale restava **gialla piena** — una

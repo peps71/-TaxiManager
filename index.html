@@ -1878,7 +1878,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 165;
+        const VERSIONE_APP = 166;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -10875,6 +10875,27 @@
                 if (ora >= pFin) ore -= (pFin - pIni) / 3600000;
                 else if (ora > pIni) ore = (pIni - inizio) / 3600000;
             }
+
+            // LE ORE SCRITTE A MANO CHIUDONO IL TURNO
+            // Un turno nasce con un orario di fine - «Le otto» finisce alle
+            // 20:00 - e finche' quell'ora non arriva l'app lo considera in
+            // corso e conta il €/h sulle ore passate dall'orologio.
+            // Ma le ore si possono correggere: capita di smettere prima per
+            // un impegno, e si scrive 10 al posto di 12. Quella correzione
+            // pero' non toccava ne' l'inizio ne' la fine, e qui dentro si
+            // guardavano solo quelli: il turno restava «in corso» fino alle
+            // 20:00, e il €/h continuava a scivolare - con 400 € e 10 ore
+            // scritte si vedeva 39,98 e poi 38,07, 36,34, 34,76, per tornare
+            // a 40 soltanto all'ora di fine che non e' stata lavorata.
+            // Adesso quando le ore lavorate raggiungono quelle dichiarate il
+            // turno e' finito, e il conto si ferma sul numero che hai scritto.
+            // Sui turni normali non cambia niente: «Le otto» dichiara 12 ore
+            // in una finestra di 12, e le raggiunge esattamente alle 20:00.
+            // Lo Spezzato nemmeno: la pausa e' gia' stata tolta qui sopra,
+            // quindi le ore confrontate sono quelle lavorate davvero.
+            const dichiarate = parseFloat(t.ore);
+            if (Number.isFinite(dichiarate) && dichiarate > 0 && ore >= dichiarate) return null;
+
             return ore;
         }
 
