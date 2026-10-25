@@ -56,6 +56,37 @@ l'accesso non riesce e l'app lo dice con un avviso che nomina il passaggio manca
 I vecchi dati nella cartella `public` restano lì, non più leggibili dall'app: si possono
 cancellare a mano dalla console quando il nuovo accesso funziona su tutti i dispositivi.
 
+### Un indirizzo solo: `peps71.github.io`
+
+L'app è vissuta per un periodo a **due indirizzi**: `peps71.github.io` (GitHub Pages) e
+`taximanager-5ac5b.web.app` (Firebase Hosting). Si è deciso di tenere **solo il primo**.
+
+Il motivo non è il disordine, è che **da questo repository non parte niente verso
+`web.app`**: non c'è `firebase.json` né `.firebaserc`. Tutto quello che si pubblica va su
+GitHub Pages, quindi la copia su `web.app` resta ferma alla versione caricata a mano
+l'ultima volta.
+
+E questa è la parte che conta: il percorso dei dati sul Cloud è
+`artifacts/taximanager-2026/users/<id>/…`, e `taximanager-2026` è **scritto fisso nel
+codice** — non contiene l'indirizzo. Due indirizzi con lo stesso account Google non sono due
+archivi: sono **due finestre sullo stesso archivio**. Una versione vecchia che scrive nella
+stessa cartella di una nuova non conosce i campi arrivati dopo (il logo, i versamenti in
+contanti, le note, le ore corrette dei turni) e può ignorarli o sovrascriverli.
+
+Quello che resta separato fra i due indirizzi è solo ciò che sta sul dispositivo: memoria
+locale, magazzino delle foto, copia salvata per l'uso senza campo. Sono tre cose che il
+browser tiene separate per indirizzo, non per scelta dell'app.
+
+**Da NON fare: cancellare o disattivare Firebase Hosting.** L'accesso con Google passa per
+`taximanager-5ac5b.firebaseapp.com` — è il valore di `authDomain` nella configurazione, ed è
+lì che vive la paginetta che gestisce il ritorno da Google. Togliere di mezzo quel pezzo
+rischia di rompere l'accesso **anche su GitHub Pages**. «Togliere web.app» vuol dire smettere
+di aprire quell'indirizzo: nessuna impostazione da cambiare nella console.
+
+Prima di abbandonarlo, però, va controllata una cosa sola: se su `web.app` si è registrato
+qualcosa **senza aver fatto l'accesso**, quei dati sono rimasti solo lì e non sono mai saliti
+sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica sull'altro.
+
 ## Come funziona il salvataggio
 
 1. Ogni dato viene scritto subito nella memoria del telefono (`localStorage`): l'app
