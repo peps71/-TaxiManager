@@ -218,6 +218,79 @@
         .tasto-minuto { min-height: 0; }
 
         /* ============================================================
+           LA NAVIGAZIONE DA TASTIERA
+           Chi gira l'app con il tasto Tab - perche' usa un Mac senza
+           toccare lo schermo, perche' ha un tastierino sull'iPad, o perche'
+           di mouse non ne usa - non vedeva NIENTE: nessun segno di dove si
+           trovasse. Misurato: zero regole di focus in tutta l'app, e
+           novantacinque elementi con «outline-none», che spegne anche il
+           contorno che il browser metterebbe da solo.
+           Senza questo, premere Invio e' tirare a indovinare.
+
+           PERCHE' :focus-visible E NON :focus
+           :focus scatta anche quando clicchi col dito o col mouse, e
+           lascerebbe un anello acceso attorno a ogni cosa toccata: fastidio
+           puro su un telefono. :focus-visible lo accende solo quando ci sei
+           arrivato con la tastiera, che e' il caso in cui serve.
+
+           PERCHE' «outline» E NON UN'OMBRA
+           L'ombra e' gia' occupata: le barrette colorate dei riquadri (v159)
+           sono ombre interne, e un anello fatto con l'ombra le cancellerebbe
+           proprio mentre ci passi sopra. Il contorno e' un altro canale e
+           non da' fastidio a nessuno. Con lo stacco di due punti si disegna
+           appena fuori dall'elemento, sul fondo della pagina, dove si vede.
+           ============================================================ */
+        :root { --fuoco: #14120d; }
+        button:focus-visible,
+        a:focus-visible,
+        select:focus-visible,
+        summary:focus-visible,
+        label:focus-visible,
+        [role="button"]:focus-visible,
+        [tabindex]:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible {
+            outline: 3px solid var(--fuoco);
+            outline-offset: 2px;
+        }
+        /* IL COLORE DELL'ANELLO LO DECIDE IL CONTENITORE, NON IL TASTO
+           L'anello si disegna FUORI dall'elemento, con due punti di stacco:
+           quindi sta sul fondo del genitore, non su quello del tasto.
+           Al primo tentativo l'avevo legato al tasto - anello scuro sui
+           tasti gialli - e la prova l'ha bocciato: il tasto «Oggi» e' una
+           pastiglia gialla dentro la scheda SCURA, e un anello scuro li'
+           spariva (contrasto 1,15 su 3 che ne servono).
+           Dentro le superfici scure l'anello si schiarisce.
+           Il colore si posa sulla SUPERFICIE, non su chi ha il fuoco: cosi'
+           lo eredita anche chi l'anello se lo prende per conto d'altri - il
+           riquadro del campo data qui sotto, che a fuoco non ci va mai.
+           Al secondo tentativo l'avevo ancora legato a «:focus-visible», e
+           quel riquadro restava con l'anello scuro sul nero: contrasto 1.
+           «.bg-gray-900 > *» e non «.bg-gray-900» perche' quella classe
+           veste sia i pannelli scuri sia i tasti neri: dentro un pannello
+           l'anello va chiaro, ma il tasto nero ha l'anello FUORI di se', sul
+           fondo chiaro della pagina, e li' deve restare scuro. */
+        .eroe, .eroe *, .bg-gray-900 > * { --fuoco: #ffffff; }
+
+        /* IL CAMPO DATA INVISIBILE
+           Sulla scheda del giorno la data si legge per esteso - «domenica 25
+           ottobre» - e sopra c'e' steso un campo data trasparente che apre il
+           calendario del telefono. Trasparente vuol dire opacita' zero:
+           qualunque anello gli si metta addosso non si vedra' mai.
+           L'anello va sul riquadro che lo contiene, che invece si vede.
+           Qui si guarda :focus e non :focus-visible: su un campo data a cui
+           si e' tolto l'aspetto nativo Chromium non fa scattare
+           :focus-visible per niente - misurato, non supposto. E non e' una
+           rinuncia: questo campo e' trasparente, ci si arriva solo col Tab o
+           toccando la data, e in tutti e due i casi far vedere dove si e'
+           finiti e' giusto. */
+        :has(> .data-coperta:focus) {
+            outline: 3px solid var(--fuoco);
+            outline-offset: 2px;
+            border-radius: 0.5rem;
+        }
+
+        /* ============================================================
            QUANDO IL DITO PREME, QUALCOSA SI MUOVE
            Fino alla v157 nell'app non c'era un solo punto che reagisse al
            tocco: premevi «Registra corsa» e per un attimo non succedeva
@@ -265,7 +338,9 @@
             line-height: 1.15;
             font-weight: 900;
             padding: 0.9rem 0.4rem;
-            border-radius: 0.75rem;
+            /* 14 punti, come tutti gli altri tasti dalla v158: qui era
+               rimasto a 12 ed era l'unico angolo diverso in una fila. */
+            border-radius: 0.875rem;
             min-height: 56px;
             display: flex;
             align-items: center;
@@ -466,7 +541,8 @@
         }
         .eroe-campo {
             background: rgba(250,204,21,.14); color: #fff; border: 0;
-            border-radius: 0.6rem; font-weight: 650;
+            /* 10 punti: era a 9,6, un valore fuori da ogni scala. */
+            border-radius: 0.625rem; font-weight: 650;
         }
         /* Un menu a tendina dentro una scheda scura: la casella e' chiara di
            suo su ogni sistema, qui si veste di scuro. Le voci del menu che si
@@ -662,6 +738,7 @@
            ============================================================ */
         :root[data-tema="scuro"] {
             --sfondo:        #14120f;   /* il fondo della pagina */
+            --fuoco:         #f4f0e6;   /* l'anello della tastiera, che al buio si schiarisce */
             --carta:         #1d1a16;   /* le schede */
             --pannello:      #35302a;   /* la scheda importante: SALE, non si ribalta */
             --inchiostro:    #e6e1d6;
@@ -1878,7 +1955,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 166;
+        const VERSIONE_APP = 167;
 
         function profiloCompilato() {
             const p = window.profilo || {};

@@ -52,6 +52,7 @@ titolo "modo scuro";              giro testScuro.mjs
 titolo "il logo";                 giro testLogo.mjs
 titolo "annullare un modulo";     giro testAnnulla.mjs
 titolo "ore del turno";           giro testOreTurno.mjs
+titolo "navigazione da tastiera"; giro testTastiera.mjs
 titolo "disegni accodati";        giro testDisegni.mjs
 titolo "si installa come app";    giro installabile.mjs
 titolo "service worker";          giro testSW.mjs

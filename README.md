@@ -99,6 +99,100 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La navigazione da tastiera, e perché il redesign non si è fatto (versione 167)
+
+Richiesta: un redesign completo, con design system, nuova identità visiva e revisione di
+tutte le schermate. Prima di toccare un file, le cose sono state **misurate**. Il risultato ha
+ribaltato la diagnosi di partenza due volte.
+
+### Prima misura: i tasti
+
+Contando le stringhe delle classi: **108 «vestiti» diversi per 164 tasti, 75 usati una volta
+sola**. Sembrava il difetto più grosso dell'app.
+
+Contando i tasti **disegnati sullo schermo**: **37 forme**, non 108. E di 181 tasti,
+**138 sono alti esattamente 44 punti** e **130 hanno lo stesso angolo**. La regola dei 44px
+(v72) e la scala degli angoli (v158) li uniformavano già: la varietà stava nelle stringhe, non
+negli occhi.
+
+### Seconda misura: gli spazi
+
+Contando le classi: ~70 valori distinti fra imbottiture, margini e distanze, compresi 1.5, 2.5
+e 3.5.
+
+Misurando le distanze **renderizzate** fra elementi: 16px (72 volte), 12px (44), 24px (39),
+8px (34), 20px (16), 32px (7). Su circa 280 distanze, **oltre il 95% sono multipli di 4**.
+Fuori griglia restano una manciata di valori: 10, 14, 21, 26.
+
+### Quindi
+
+Il linguaggio visivo c'era già, costruito e verificato nelle versioni dalla 89 alla 166: scala
+dei corpi, scala degli angoli, colore spostato dal fondo all'accento, modo scuro con il
+contrasto misurato a tre larghezze, reazione al tocco, zone sicure, bersagli da 44 punti.
+
+Rifarlo da zero avrebbe voluto dire rompere roba verificata per riottenere, con mesi di
+difetti nuovi, quello che c'era già — e contro le regole stesse del brief (punti 2, 3 e 12
+della sua Fase 5).
+
+**Un buco vero però c'era, ed era totale.**
+
+### Girare l'app con il tasto Tab: non si vedeva niente
+
+Zero regole di focus in tutta l'app, e **95 elementi con `outline-none`**, che spegne anche il
+contorno che il browser metterebbe da solo. Chi usa un Mac senza toccare lo schermo, o un
+tastierino sull'iPad, premeva Invio tirando a indovinare.
+
+Adesso ogni comando raggiunto col Tab mostra un anello da 3 punti, staccato di 2, e il colore
+lo decide la **superficie** su cui l'anello viene disegnato.
+
+### Tre errori miei, tutti trovati dalla prova
+
+1. **Avevo legato il colore al tasto.** Ma l'anello si disegna *fuori* dall'elemento: sta sul
+   fondo del genitore. Il tasto «Oggi» è una pastiglia gialla dentro la scheda scura, e un
+   anello scuro lì spariva — contrasto **1,15** su 3 che ne servono.
+2. **Avevo schiarito l'anello nella striscia gialla.** Bianco su giallo: **1,53**.
+3. **Il campo data trasparente.** Sopra la data scritta per esteso c'è steso un campo
+   invisibile che apre il calendario: qualunque anello gli si metta addosso non si vedrà mai.
+   Va sul riquadro che lo contiene. E lì `:focus-visible` non scatta affatto — su un campo
+   data a cui si è tolto l'aspetto nativo Chromium non lo fa scattare, misurato, non supposto:
+   per quell'unico elemento si guarda `:focus`.
+
+La forma finale è una riga sola: il colore si posa sulla superficie (`.eroe`, `.eroe *`,
+`.bg-gray-900 > *`), così lo eredita anche chi l'anello se lo prende per conto d'altri.
+`.bg-gray-900 > *` e non `.bg-gray-900` perché quella classe veste sia i pannelli scuri sia i
+tasti neri: dentro un pannello l'anello va chiaro, ma un tasto nero ha l'anello *fuori* di sé,
+sul fondo chiaro della pagina, e lì deve restare scuro.
+
+### Due errori della prova, non dell'app
+
+La prova bocciava l'app anche quando l'app aveva ragione:
+
+- misurava **l'elemento trasparente** invece del riquadro che porta l'anello;
+- campionava un istante in cui `document.activeElement` puntava ancora a un elemento che il
+  fuoco l'aveva già perso — e lì nessun anello *deve* esserci.
+
+Entrambi verificati mettendo a fuoco lo stesso campo a mano: l'anello c'era.
+
+### Le prove
+
+`prove/testTastiera.mjs`: preme **Tab per davvero**, 36 comandi raggiunti, e per ognuno misura
+che l'anello ci sia e che si veda contro il fondo su cui è disegnato. Di giorno il più debole
+sta a **12,22**, al buio a **11,23**, dove ne servono 3. E col mouse l'anello deve restare
+spento, che su un telefono sarebbe un cerchio acceso attorno a ogni cosa toccata.
+
+### Le due rifiniture fatte
+
+Gli unici due angoli fuori da ogni scala, tutti e due in classi dell'app: i tasti del metodo
+di pagamento da 12 a 14 punti (erano l'unico angolo diverso in una fila), e le caselle dentro
+la scheda scura da 9,6 a 10.
+
+### Quello che resta fuori, dichiarato
+
+Dodici tasti con corpi di testo fuori dalla terna (18, 14 e 11 punti) e sedici con il testo in
+tondo invece che in grassetto. Sono marginali e alcuni sono voluti — il corpo da 14 dei tasti
+del metodo è stato calibrato nella v142 perché «Satispay» e «App / Voucher» non andassero a
+capo a 375 punti. Toccarli senza una ragione visiva vera è rischio gratuito.
+
 ## Le ore che scrivi tu chiudono il turno (versione 166)
 
 Un turno nasce con un orario di fine: «Le otto» va dalle 8:00 alle 20:00. Finché quell'ora non
