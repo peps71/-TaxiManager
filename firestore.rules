@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// Regole di sicurezza del database di TaxiManager.
+//
+// Prima i dati stavano sotto /artifacts/{app}/public/data/... e le regole erano
+// aperte: chiunque conoscesse l'indirizzo del progetto poteva leggere e scrivere
+// i movimenti. Adesso ogni account ha la sua cartella, con dentro il proprio
+// identificativo, e qui si dice che dentro ci puo' entrare solo lui.
+//
+// COME SI APPLICANO
+//   console.firebase.google.com  ->  progetto taximanager-5ac5b
+//   Build -> Firestore Database -> scheda "Rules" (Regole)
+//   incollare tutto questo file al posto di quello che c'e', poi "Publish".
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // La cartella di un account: /artifacts/{app}/users/{uid}/...
+    // request.auth.uid e' l'identificativo di chi sta chiedendo, messo da
+    // Firebase dopo l'accesso: non si puo' falsificare dal browser.
+    match /artifacts/{appId}/users/{uid}/{documenti=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // La vecchia cartella pubblica: da qui in avanti non entra piu' nessuno.
+    // Resta scritta perche' negare in modo esplicito e' piu' chiaro che
+    // affidarsi al fatto che, senza una regola, l'accesso e' comunque negato.
+    match /artifacts/{appId}/public/{documenti=**} {
+      allow read, write: if false;
+    }
+
+    // Tutto il resto del database e' chiuso.
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}

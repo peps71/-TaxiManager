@@ -1,0 +1,4779 @@
+# TaxiManager
+
+Applicazione web (PWA) per la gestione quotidiana del lavoro di taxi: corse e incassi,
+spese, turni, calendario, parco auto, scadenze, rendimento e stima delle tasse. Funziona da browser,
+si installa sulla schermata Home di iPhone e Mac e sincronizza i dati fra i dispositivi
+tramite Firebase/Firestore.
+
+## File
+
+| File | A cosa serve |
+| --- | --- |
+| `index.html` | L'app completa: interfaccia, calcoli e sincronizzazione Cloud |
+| `sw.js` | Service worker: tiene l'app disponibile anche senza campo |
+| `firestore.rules` | Regole di sicurezza del database: da incollare nella console Firebase |
+| `tailwind.config.js`, `tailwind.in.css` | Servono a rifare il foglio di stile incorporato in `index.html` |
+| `manifest.json` | Dati di installazione (nome, icone, colori) |
+| `icon-*.png`, `favicon*`, `apple-touch-icon-180.png` | Icone dell'app |
+| `icona-sorgente.jpg` | L'immagine da cui nascono tutte le icone |
+| `strumenti/icone.mjs` | Ritaglia `icona-sorgente.jpg` e rigenera le icone |
+| `prove/` | Le prove automatiche: `sh prove/tutte.sh` le lancia tutte (vedi `prove/LEGGIMI.md`) |
+| `TaxiManager_2026_iPhone.html` | Prima versione, tenuta come riferimento |
+
+## Accesso e sicurezza dei dati
+
+Fino alla versione 43 l'app entrava nel Cloud con un accesso anonimo e scriveva tutto in
+una cartella `public`: chiunque conoscesse l'indirizzo del progetto Firebase poteva leggere
+e scrivere i movimenti. Adesso non più.
+
+- Si entra con **Google**, da `Cloud & Sync`. Una volta per dispositivo: l'accesso resta
+  memorizzato.
+- I dati stanno in `artifacts/{app}/users/{tuo-identificativo}/…`, una cartella per
+  account.
+- Le regole in [`firestore.rules`](firestore.rules) lasciano entrare in quella cartella
+  **solo** chi ha quell'identificativo. La vecchia cartella `public` è chiusa
+  esplicitamente, e tutto il resto del database pure.
+- **Senza accesso l'app funziona per intero**, solo su quel dispositivo: niente va sul
+  Cloud. Uscendo dal Cloud non si cancella niente.
+- Al primo accesso, quello che è già registrato sul dispositivo viene caricato nella
+  cartella dell'account: è così che i dati arrivano sul secondo dispositivo.
+
+### Cosa va fatto una volta sola nella console Firebase
+
+Sono tre cose, su [console.firebase.google.com](https://console.firebase.google.com) →
+progetto `taximanager-5ac5b`. Prima di cominciare, scarica un backup `.json` dall'app.
+
+1. **Authentication → Sign-in method → Google → Enable**, scegli l'email di supporto,
+   salva.
+2. **Authentication → Settings → Authorized domains**: verifica che ci sia
+   `peps71.github.io`; se manca, aggiungilo.
+3. **Firestore Database → Rules**: incolla il contenuto di `firestore.rules` al posto di
+   quello che c'è e premi **Publish**.
+
+Finché il punto 3 non è fatto il database resta aperto; finché non sono fatti 1 e 2
+l'accesso non riesce e l'app lo dice con un avviso che nomina il passaggio mancante.
+
+I vecchi dati nella cartella `public` restano lì, non più leggibili dall'app: si possono
+cancellare a mano dalla console quando il nuovo accesso funziona su tutti i dispositivi.
+
+## Come funziona il salvataggio
+
+1. Ogni dato viene scritto subito nella memoria del telefono (`localStorage`): l'app
+   funziona per intero anche senza rete.
+2. Se il Cloud è raggiungibile lo stesso dato viene inviato a Firestore e compare
+   sugli altri dispositivi in tempo reale.
+3. Se il Cloud non risponde il dato resta comunque salvato in locale e l'app lo dice
+   con un avviso, invece di far credere che il salvataggio sia fallito.
+
+Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
+impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
+
+## Le ore che scrivi tu chiudono il turno (versione 166)
+
+Un turno nasce con un orario di fine: «Le otto» va dalle 8:00 alle 20:00. Finché quell'ora non
+arriva, l'app lo considera **in corso** e conta il €/h sulle ore passate dall'orologio — è il
+contatore dal vivo, che si aggiorna ogni minuto mentre lavori.
+
+Ma le ore si possono correggere: si smette prima per un impegno e si scrive **10** al posto di
+12. Quella correzione però non toccava né l'inizio né la fine, e il conto guardava **solo
+quelli**. Risultato: il turno restava «in corso» fino alle 20:00 e il €/h continuava a
+scivolare.
+
+Misurato, con 400 € incassati e 10 ore scritte a mano:
+
+| momento | il turno dice | €/h mostrato |
+| --- | --- | --- |
+| appena scritto | in turno | 39,98 |
+| mezz'ora dopo | in turno | 38,07 |
+| un'ora dopo | in turno | 36,34 |
+| un'ora e mezza dopo | in turno | 34,76 |
+| alle 20:00 | finito | 40,00 |
+
+Due ore di numero sbagliato, e poi il salto al valore giusto all'ora di fine che non è stata
+lavorata.
+
+Adesso, **quando le ore lavorate raggiungono quelle dichiarate, il turno è finito**: 400 € in
+10 ore fanno 40 €/h, e ci restano.
+
+### Il commento nel codice aveva già previsto il caso
+
+Nella funzione che salva la modifica c'era scritto: *«Le ore restano modificabili in qualsiasi
+momento, anche molto dopo aver registrato il turno: capita di finire prima per un impegno e
+accorgersene dopo»*. L'intenzione c'era. Mancava il collegamento: il salvataggio scriveva
+`ore`, e chi decide se il turno è in corso leggeva `inizio` e `fine`.
+
+### Quello che NON doveva cambiare, e non cambia
+
+La correzione sta in una riga sola, ma tocca il cuore del contatore dal vivo. Quindi la prova
+verifica soprattutto i casi che devono restare identici:
+
+- **il turno normale a metà** — «Le otto» dichiara 12 ore in una finestra di 12, quindi le
+  raggiunge esattamente alle 20:00: niente cambia, e nel frattempo il €/h resta quello dal
+  vivo;
+- **lo Spezzato** — dichiara 12 ore in una finestra di 14, con 2 ore di pausa in mezzo. La
+  pausa era già tolta prima del confronto, quindi le ore guardate sono quelle lavorate
+  davvero: a 13 ore dall'inizio ne risultano 11, ed è giusto;
+- **il turno non ancora cominciato** e **la giornata di riposo**, che non sono turni in corso;
+- **zero ore dichiarate**, dove vale l'orologio come prima;
+- **due turni nello stesso giorno**, dove le ore del turno chiuso si sommano a quelle fatte
+  finora in quello aperto.
+
+`prove/testOreTurno.mjs`, 19 controlli. Il turno si costruisce **attorno all'ora in cui la
+prova gira**, così vale a qualunque ora, e si guarda come si comporta mezz'ora, un'ora, due ore
+più avanti. Tolta la riga, la prova fallisce e mostra le ore che scivolano: `10, 10.5, 11,
+11.5`.
+
+## Al buio la barra laterale restava accesa (versione 165)
+
+Su iPad e sul computer, in modo scuro, la barra laterale restava **gialla piena** — una
+colonna accesa alta tutto lo schermo — e dentro le scritte erano diventate **chiare**, perché
+il modo scuro le aveva schiarite tutte.
+
+Crema su giallo. Misurato: **1,17** di contrasto, dove ne servono 4,5.
+
+| | |
+| --- | --- |
+| voci del menu illeggibili | **11 su 14** |
+| contrasto delle voci | 1,17 (serve 4,5) |
+| l'anno nel menu | 1,08 — scuro su scuro |
+
+Il contenitore forzava scuro, i figli forzavano chiaro: la barra ha su di sé `bg-yellow-400` e
+`text-gray-900`, e una regola della v160 protegge le scritte nere sui tasti gialli. Ma ogni
+voce del menu porta il suo `text-gray-800`, che in modo scuro diventa chiaro e vince
+sull'eredità.
+
+Adesso la barra si scurisce come la striscia del telefono — che era già stata scurita nella
+v160 — e il giallo torna dov'è utile: la voce aperta e l'etichetta dell'anno. Da 11 scritte
+rotte a **zero**, la peggiore da 1,17 a 13,29.
+
+### Perché la prova non l'aveva visto: girava solo sul telefono
+
+`testScuro.mjs` misurava il contrasto di ogni scritta — 634 di esse — e diceva che andava
+tutto bene. Però girava **a una sola larghezza, 390 punti**. Da tablet in su compare la barra
+laterale, che sul telefono **non esiste**: era semplicemente fuori dal campo visivo della
+prova.
+
+E c'era un secondo limite: guardava solo dentro `#main-container`. La barra laterale e la
+striscia in cima stanno fuori di lì.
+
+Adesso gira a **tre larghezze** — telefono, tablet, computer — e guarda **tutta** la pagina.
+Da 634 scritte misurate a **2.256**.
+
+### E ne ha trovata subito un'altra
+
+Appena allargato lo sguardo, il numero di versione nella striscia del telefono: **3,90**.
+L'avevo smorzato io al 55% nella v160 per non farlo gridare, e a quel punto non si leggeva
+più. Al 70% fa 5,47 e resta comunque discreto. Calcolato, non aggiustato a occhio.
+
+Era lì da cinque versioni, in cima a ogni schermata del telefono, e la prova non poteva
+vederlo perché stava fuori dal contenitore che guardava.
+
+## Il logo spingeva il titolo fuori dal menu (versione 164)
+
+Sul Mac, con un logo caricato, «TaxiManager» nel menu laterale usciva dal menu e finiva sopra
+il contenuto.
+
+Il menu è largo 208 punti (256 sugli schermi grandi). Con il taxi disegnato, largo 32, accanto
+ci stava «TaxiManager» e tutto tornava. Con un **logo vero** — una targhetta con dentro una
+scritta, che è come sono fatti i loghi dei radiotaxi — servivano **284 punti in 207**: il
+titolo usciva di settantasei.
+
+Affiancare non ci sta e basta. Quindi, **solo quando c'è un logo**, la testa del menu si mette
+in colonna: il logo prende tutta la larghezza che vuole, e il titolo con i suoi due righini
+sta sotto, intero. Senza logo non cambia niente.
+
+Misurato prima e dopo: il titolo passa da **76 punti fuori** a **54 dentro**.
+
+### Perché non se n'era accorto nessuno
+
+La prova degli sbordi c'era già e girava a sette larghezze. Non l'ha visto per **tre** motivi,
+tutti e tre sistemati:
+
+1. **Non metteva mai un logo.** È arrivato nella v161 e il semenzaio della prova non è stato
+   aggiornato: senza logo, nel menu ci sta tutto. Adesso ne mette uno largo, come sono quelli
+   veri.
+2. **`h1` non era fra i tag che guardava** (`div, p, span, td, button`). Il titolo del menu è
+   un `h1`. Adesso ci sono anche `h1, h2, h3, label, a`.
+3. **Cercava la cosa sbagliata.** Guardava il testo tagliato *dentro* il suo riquadro, e se la
+   pagina intera sbordava. Ma qui il testo non era tagliato e la pagina non sbordava: a
+   tagliare era il menu stesso. Da fuori sembrava tutto a posto.
+
+Il controllo nuovo è quello che mancava: **chi esce dal proprio contenitore**. Per ogni
+elemento dentro il menu, la striscia in cima e il contenuto, si confronta il suo rettangolo
+con quello della cassa che lo contiene.
+
+Rimettendo il difetto com'era, la prova dice: `h1 «TaxiManager» esce da aside di 63px`.
+
+### Una distinzione che è costata un secondo giro
+
+Al primo tentativo il controllo nuovo segnalava anche le linguette di Gestione. Ma quelle
+stanno in una fila che **scorre di lato**: le prime sono fuori a sinistra, ed è giusto così —
+dalla v158 la fila si sposta apposta per centrare quella aperta.
+
+Quindi si salta quello che ha sopra di sé un contenitore che **scorre** (`auto`, `scroll`). Un
+contenitore che **taglia** (`hidden`) no: quello è proprio il caso da scoprire.
+
+## «Copia salvata: nessuna» — tre stati invece di due (versione 163)
+
+Il riquadro in «Backup e impostazioni» confronta due cose: la **pagina** (l'app che stai
+guardando) e la **copia salvata** (il service worker, che è quello che serve al telefono i
+file dell'app — la pagina stessa, le icone, il manifesto). Quando le due non coincidono i
+difetti diventano impossibili da capire, ed è per questo che il riquadro esiste.
+
+Diceva però solo due cose: *allineate* oppure *NON allineate*. E «copia vecchia» e «copia che
+non c'è ancora» sono due situazioni diverse che vogliono due risposte diverse.
+
+### Il consiglio che non si poteva eseguire
+
+Con **nessuna** copia installata, il riquadro diceva «NON allineate», spiegava che «a servire
+i file è la copia salvata» — cioè che qualcosa di vecchio stava servendo i file, mentre non
+stava servendo niente nessuno — e offriva il tasto **«Butta via la copia salvata e rifalla»**:
+un'istruzione che non si può eseguire, perché copia non ce n'è.
+
+Adesso sono tre stati:
+
+| Stato | Cosa dice | Tasto |
+| --- | --- | --- |
+| copia = pagina | tutto allineato, in grigio | nessuno |
+| copia più vecchia | NON allineate, in giallo | «Butta via la copia salvata e rifalla» |
+| nessuna copia | non ancora installata, in grigio | nessuno |
+
+Il terzo spiega anche l'unica conseguenza vera: finché la copia non c'è, **l'app non si apre
+senza campo**. È la copia che la tiene disponibile in garage o in un sottopasso.
+
+### L'avviso che restava acceso quando non valeva più
+
+Difetto peggiore del primo. La risposta alla domanda «copia, che versione sei?» veniva chiesta
+**una volta sola** per sessione e poi tenuta. Ma subito dopo un aggiornamento — o dopo aver
+svuotato i dati del sito — la copia ci mette qualche istante a prendere il comando: se l'app
+chiedeva proprio in quel momento si sentiva rispondere «nessuna», se lo segnava, e teneva il
+riquadro acceso **per tutto il tempo che l'app restava aperta**, anche dopo che la copia aveva
+preso il comando un secondo dopo.
+
+Ora una risposta vera (un numero) si tiene, un «nessuna» no: si richiede. E quando la copia
+prende il comando l'app lo sente (`controllerchange`) e **la riga si raddrizza da sola**,
+senza chiudere e riaprire niente.
+
+### La prova che ha quasi rotto l'app
+
+Per provare l'arrivo di una versione nuova, `testSW.mjs` ne deve fabbricare una: scrive
+`v999` dentro `sw.js` e alla fine lo rimette com'era. Quel «alla fine» era un `finally`, e un
+`finally` non gira se il processo muore prima — basta mandare l'uscita della prova in `head`,
+che chiude il tubo e fa morire node a metà.
+
+È successo proprio mentre lavoravo a questa versione: **`sw.js` è rimasto a `v999` nel
+repository**. Un commit distratto avrebbe mandato a chi usa l'app un numero di versione falso,
+rompendo gli aggiornamenti per tutti. Me ne sono accorto perché la prova, al giro dopo,
+falliva su un numero che non c'entrava niente.
+
+Adesso l'originale si mette da parte **su disco** prima di toccare qualunque cosa, e la prima
+cosa che la prova fa al giro successivo è rimetterlo a posto. Anche se un giro muore di colpo,
+il prossimo ripara. Verificato facendo il danno apposta.
+
+### Le prove
+
+Dentro `testSW.mjs`, che è l'unica che gira su HTTP vero e quindi l'unica dove un service
+worker esiste davvero: senza copia la riga deve dire «non ancora installata» e **non** offrire
+di buttarla via; presa il comando, **senza riaprire l'app**, deve dire «tutto allineato».
+Rimettendo il congelamento com'era, la prova fallisce.
+
+## La via d'uscita da un modulo aperto per sbaglio (versione 162)
+
+Aprendo il modulo completo — corsa, spesa o turno — in fondo c'erano due tasti, e **salvavano
+tutti e due**: «Salva e avanti» e «Salva e basta». Il secondo sembra un'uscita e non lo è:
+chiude *dopo* aver salvato. Chi apriva il modulo sbagliando tasto non aveva nessun modo di
+tornare indietro se non chiudere e riaprire l'app.
+
+Una via d'uscita c'era, ma scritta **sopra** il modulo («Chiudi il modulo completo»). Quando
+te ne accorgi stai guardando i tasti in fondo, e lassù non ci torni.
+
+### Perché il tasto sta in due posti
+
+- **In cima**, una crocetta accanto al titolo: è lì che sei nell'istante in cui capisci di
+  aver sbagliato, perché il modulo si è appena aperto.
+- **In fondo**, insieme agli altri tasti: è lì che lo si va a cercare dopo aver letto il
+  modulo.
+
+Sono i due punti in cui uno guarda, e costano una crocetta e una parola.
+
+### Chiede conferma solo se c'è qualcosa da perdere
+
+Modulo intonso: si chiude e basta. È il caso del tasto sbagliato, e non deve costare una
+domanda. Con qualcosa scritto dentro, prima chiede — e dicendo no resta tutto com'era.
+
+Il primo tentativo guardava se i campi erano **pieni**, e sul modulo del turno chiedeva
+sempre: quello nasce già compilato, con i km del turno prima e le ore del tipo scelto.
+Chiedere «perdi quello che hai scritto» a chi non ha scritto niente è proprio il fastidio da
+evitare.
+
+La differenza il browser la sa già: `defaultValue` è il valore con cui il campo è nato,
+`value` è quello che c'è adesso. Diversi vuol dire che ci hai messo mano tu. Niente attributi
+da aggiungere, niente da ricordarsi al prossimo campo.
+
+### Il rischio che non si vede guardando
+
+Un tasto dentro un `<form>`, senza `type="button"`, **è un submit**. Un «Annulla» fatto così
+salverebbe invece di annullare — e la schermata farebbe esattamente la stessa cosa in tutti e
+due i casi: il modulo si chiude. Te ne accorgeresti dopo, trovando una spesa che non hai mai
+voluto registrare.
+
+`prove/testAnnulla.mjs` lo verifica nel modo in cui si vede davvero: scrive 42,50, preme
+Annulla, conferma, e poi **conta i movimenti**. Se sono aumentati, il tasto stava salvando.
+
+### Le prove
+
+38 controlli, gli stessi su tutti e tre i moduli: il tasto c'è in cima e in fondo, nessuno dei
+due è un submit, a modulo intonso non chiede niente e non salva niente, con qualcosa scritto
+chiede una volta sola, dicendo no resta aperto con i dati dentro, dicendo sì si chiude senza
+salvare, e la crocetta in cima fa la stessa cosa.
+
+In fondo c'è anche il controllo opposto, che serve quanto gli altri: **«Salva e basta» deve
+continuare a salvare**. Un tasto messo male dentro un modulo può rompere anche l'invio.
+
+## Il tuo logo al posto del taxi disegnato (versione 161)
+
+Da **Gestione → Backup e impostazioni → Dati del titolare → Logo**: scegli un'immagine e
+quella prende il posto del taxi disegnato, in cima sul telefono e nel menu sul computer.
+
+**Il nome resta.** La striscia in cima mostra già il tuo nome quando la scheda è compilata, e
+quello dice con quale scheda stai lavorando — su un telefono che passa di mano conta più del
+marchio. Il logo sostituisce il simbolo, non te.
+
+### Perché non si è riusato il compressore delle foto
+
+Quello che c'era, fatto per le foto sulle note, produce **JPEG**. Il JPEG non sa cosa sia la
+trasparenza: un logo ritagliato sarebbe finito dentro un rettangolo bianco appiccicato sulla
+striscia gialla, con i bordi sporchi attorno alle scritte.
+
+Il compressore del logo prova prima il **WebP**, che pesa meno, e tiene il **PNG** se il
+telefono il WebP non lo sa scrivere. Safari lo sa fare dal 2020, ma se non lo sapesse fare
+`toDataURL` restituirebbe un PNG **senza dirlo** — quindi si controlla cosa è uscito davvero
+invece di fidarsi del nome che si è chiesto.
+
+L'immagine viene rimpicciolita a 128 punti d'altezza (in cima si vede a 24) e tenuta sotto i
+60 KB.
+
+### Perché sta dentro la scheda e non nel magazzino delle foto
+
+La scheda del titolare viaggia **già** nel backup, nell'esportazione e sul Cloud. Mettendo il
+logo lì, si ritrova sul secondo telefono e dopo un ripristino senza una riga di codice in più.
+Le foto delle note stanno a parte perché sono tante e pesanti; il logo è uno solo e sta in
+qualche decina di kilobyte.
+
+Il logo segue la stessa strada del **colore del turno**: non è un campo di testo, quindi va
+nella bozza mentre lo scegli e viene raccolto quando salvi. Senza quella riga, salvando la
+scheda il logo sparirebbe — e infatti la prova lo verifica apposta.
+
+### Il buco che si nascondeva nel ritorno
+
+Il logo finiva nel file del backup. Ma il **ripristino** filtra i campi della scheda con un
+elenco di nomi, e `logo` in quell'elenco non c'era: rientrando veniva buttato via, in
+silenzio. Il file era giusto, l'app lo scartava.
+
+Non si vede guardando il codice che scrive, né quello che legge: si vede solo **facendo il
+giro intero**, uscire e rientrare. Da qui in poi lo fa la prova a ogni giro.
+
+Già che il logo è l'unico campo della scheda che non è una parolina — finisce nell'indirizzo
+di un'immagine, e un file di backup può scriverlo chiunque — al ritorno si controlla che sia
+davvero un'immagine incorporata e che non sia enorme. Un «logo» che è un copione o una pagina
+viene scartato, e la prova prova anche quello.
+
+### Al buio
+
+Di giorno la striscia è gialla, cioè chiara, e un logo con l'inchiostro scuro — come sono
+fatti quasi tutti — ci si legge sopra benissimo. Di notte la striscia è scura e lo stesso logo
+ci sparirebbe dentro: sotto gli si mette una piastrella chiara, come un adesivo. Non è
+bellissimo, ma un logo che non si vede è peggio. Di giorno la piastrella non c'è.
+
+### Le prove
+
+`prove/testLogo.mjs`, 24 controlli, fa il giro come lo fa chi lo usa: sceglie un file, lo
+vede comparire in cima, controlla che la trasparenza sia sopravvissuta alla compressione,
+salva la scheda, riapre l'app, esporta, ripristina, e infine lo toglie e verifica che torni il
+taxi disegnato **e che il resto della scheda non si sia mosso**.
+
+Tolte a mano, una per una, le due righe che contano — quella che raccoglie il logo al
+salvataggio e quella che lo lascia rientrare dal backup — la prova fallisce e dice quale.
+
+### Una cosa trovata per strada, che col logo non c'entra
+
+La prova del modo scuro semina giornate attorno a **oggi**: girando in un giorno diverso
+tocca dati diversi, e stavolta ha pescato un incasso col metodo «App». Il blu di quel metodo
+sulla scheda scura faceva **4,29** di contrasto, sotto il 4,5 — era lì dalla v160 e si vedeva
+solo in quel caso.
+
+Gli altri quattro colori reggevano (verde 6,26, giallo 7,12, rosso 5,74, celeste 6,54). Il blu
+è stato schiarito di un gradino: 6,05. Vale la pena dirlo perché mostra una cosa della prova:
+non è congelata, continua a cercare su dati nuovi.
+
+## Il modo scuro (versione 160)
+
+Un tassista lavora anche di notte, con il telefono acceso nel supporto. Un'app bianca a
+mezzanotte è una pila in faccia, e si smette di guardarla proprio quando servirebbe.
+
+Da **Gestione → Backup e impostazioni → Aspetto**: *Automatico* (come ce l'ha il telefono),
+*Chiaro*, *Scuro*. La scelta resta anche riaprendo l'app.
+
+### Il verso non è «invertire»
+
+Di giorno la carta è chiara e la scheda importante è nera: il nero risalta perché intorno è
+chiaro. Invertendo, di notte quella scheda diventerebbe **bianca** — un rettangolo acceso in
+faccia, cioè esattamente quello da cui si scappa.
+
+Quindi di notte la scheda importante non si ribalta: **resta scura e sale**, e a tenerla in
+evidenza ci pensa il giallo, che è già il colore dell'app. Stessa cosa per la striscia in
+cima: di giorno è gialla piena, di notte il giallo passa dal fondo alla scritta. È lo stesso
+scambio della v159 con le schede colorate.
+
+I neri sono **caldi**: non `#000` e non il grigio-blu di Tailwind, ma gli stessi marroni
+molto scuri della carta calda del modo chiaro, visti dall'altra parte.
+
+### Niente lampo bianco all'apertura
+
+La scelta la applica un copione che sta **in testa alla pagina**, prima del foglio di stile e
+prima del corpo. Se la decisione arrivasse dopo che l'app si è disegnata, all'apertura si
+vedrebbe un lampo bianco e poi il buio — di notte, in macchina, quel lampo è il difetto
+peggiore di tutti.
+
+Quello stesso copione tiene aggiornato anche il colore della barra di sistema del telefono, e
+se il telefono passa da chiaro a scuro mentre l'app è aperta (e la scelta è «Automatico»)
+l'app segue, senza doverla riaprire.
+
+### Di giorno non è cambiato niente, e si può dimostrare
+
+Tutto il modo scuro sta in **un blocco solo**, e ogni regola comincia con
+`:root[data-tema="scuro"]`. Vuol dire che di giorno quel blocco **non esiste**.
+
+Non è una promessa, sono due misure:
+
+- si leggono tutti i colori di tutte le schermate in modo chiaro, prima e dopo, e non ne
+  spunta uno nuovo (330 colori su 12 schermate);
+- si contano le parentesi del foglio di stile e si verifica che **tutti e 152 i selettori**
+  del blocco siano prefissati. Togliendone uno a mano, la prova lo nomina.
+
+La seconda resta di guardia per sempre: il confronto col «prima» si fa una volta, questa no.
+
+### Come si trova quello che l'occhio non trova
+
+Guardare tredici schermate al buio non basta: una scritta grigia su fondo grigio si nota solo
+se ci si ferma proprio lì. `prove/testScuro.mjs` **calcola il contrasto** di ogni scritta
+contro il fondo su cui sta davvero — risalendo i genitori e tenendo conto delle trasparenze —
+e confronta con la soglia dello standard: 4,5 per il testo normale, 3 per quello grande.
+
+634 scritte misurate. Al primo giro ne sono cadute parecchie, e **nessuna di quelle si vedeva
+a occhio**:
+
+| Cosa | Era | Perché |
+| --- | --- | --- |
+| «COSTO GIORNO», «MARGINE» dentro la scheda scura | 3,45 | la scheda di notte non è più nera: è salita, e le scritte tenui non reggono più |
+| frecce `›` e puntini di separazione | 2,46 | il grigio che avevo scelto era troppo scuro |
+| «dal budget», «L'importo proposto…» | 3,88 | avevo saltato le tonalità `-400` e `-500` dei testi colorati |
+| «Elimina» | 4,06 | idem, sul rosso |
+| il simbolo `€` accanto alla cifra grande | 2,46 | è apposta tenue, e sul nero di giorno si legge; sul grigio caldo di notte no |
+
+I colori nuovi non li ho scelti a occhio: li ho **calcolati**. `#5e584d` dava 2,46,
+`#8a8275` dà 4,56.
+
+La stessa prova cerca anche i rettangoli **chiari e spenti** rimasti indietro, e ne ha trovati
+quattro: i grigi con la trasparenza (`bg-gray-50/50`) sono classi a sé e hanno il colore
+scritto dentro, quindi cambiare la carta non li toccava. Stavano dentro il foglio del
+commercialista.
+
+### Due famiglie di colori che il primo inventario non aveva visto
+
+Avevo contato le classi dentro gli attributi del markup. Ma i colori delle giornate nel
+calendario e i quadratini di Gestione stanno **dentro due elenchi scritti in codice**: `amber`
+e `stone` non comparivano, e infatti nello scatto si vedevano due riquadri accesi in mezzo al
+buio. Si trovano solo cercando in tutto il file.
+
+### Il foglio per il commercialista resta chiaro
+
+Si stampa su carta bianca. Col telefono in modo scuro, senza rimettere i colori di giorno,
+uscirebbe un foglio con le scritte chiare su bianco — quasi vuoto — e una cartuccia di nero
+spesa per i fondi. C'è un controllo che mette il browser in modalità stampa e misura che le
+schede siano tornate bianche.
+
+### Una cosa trovata e NON sistemata
+
+I sei colori della licenza (Bianco, Giallo, Verde, Rosso, Blu, Nero) non sono scelte grafiche:
+sono il colore stampato sulla licenza, quello che dice quali giorni tocca lavorare. Scritto in
+bianco sul verde fa **3,30** di contrasto, sotto la soglia — e vale uguale di giorno, non è
+una cosa portata dal modo scuro.
+
+Ritingere quel verde vorrebbe dire scrivere sullo schermo un colore diverso da quello che c'è
+sul documento. La stessa scritta in **nero** sullo stesso verde farebbe **6,36**: il rimedio
+c'è, costa cambiare anche il modo chiaro, e quindi non è roba di questa versione. Sta scritto
+nella prova, accanto all'eccezione, così non si perde.
+
+## Il colore si sposta: dal fondo alla barretta (versione 159)
+
+Nell'app c'erano **270 riquadri con lo sfondo colorato**, su sette tinte. In Rendimento ne
+stavano quattro di fila — uno nero, uno bianco, uno verdino, uno rosa — e ognuno diceva
+«guarda me». Quando tutti dicono guarda me non si guarda niente per primo: è lo stesso errore
+che l'app aveva nei pesi del carattere prima della v89.
+
+Il colore non sparisce, **cambia posto**. Il riquadro torna bianco come tutti gli altri e la
+tinta resta in una barretta sul fianco e nel colore dell'etichetta. Il verde continua a dire
+«bene» e il rosso «male», ma a dirlo per primo adesso è il numero.
+
+### Una classe più una tinta, invece di trentanove combinazioni
+
+Dei riquadri grossi colorati, **30 sono diventati** `riquadro-tinto` più una tinta:
+
+```
+bg-green-50 border border-green-200 rounded-xl p-3 hover:bg-green-100 transition-colors
+    ->  riquadro-tinto tinta-verde rounded-xl p-3
+```
+
+Cinque tinte in tutto (gialla 15 volte, rossa 7, verde 4, indaco 3, arancio 1), definite in un
+posto solo.
+La prossima scheda non va inventata, si sceglie.
+
+Tre cose decise con cura, e tutte e tre sbagliando prima:
+
+- **La barretta è un'ombra dentro, non un bordo.** Un bordo spesso segue l'arrotondamento e
+  sugli angoli larghi diventa una mezzaluna. Un'ombra dentro resta dritta e la curva la
+  taglia — è la stessa tecnica che l'app usa già per la riga da verificare nei corrispettivi.
+- **L'arrotondamento resta una scelta del markup.** Scritto nella classe, avrebbe vinto su
+  `rounded-2xl` (la regola sta dopo Tailwind) e le schede grandi avrebbero perso la loro misura.
+- **Il filo è quello pieno, non quello chiaro.** Misurando dove stanno davvero questi riquadri
+  è venuto fuori che **tutti e dieci quelli visibili a quel momento stavano dentro una scheda
+  bianca**, non sul fondo color carta: lì un filo quasi bianco non si vede proprio.
+
+### I nove motivi per cui un fondo colorato resta
+
+Non è una svista, è un elenco. Sono i posti dove il colore sta facendo un lavoro:
+
+| Dove | Perché resta |
+| --- | --- |
+| riga del prospetto corrispettivi | aspetta un controllo: il giallo è il segnale |
+| caselle dentro la spiegazione del costo | sono tasselli di un blocco, non schede |
+| corsa aperta in modifica | il verde dice che è un incasso |
+| spesa aperta in modifica | il rosso dice che è un'uscita |
+| fascia in fondo al prospetto | chiude la tabella |
+| tasto bianco che si scalda sotto il dito | è un passaggio, non uno stato |
+| voce più cara dell'elenco | il verde la mette in cima |
+
+| tasto che cancella | il rosso è il senso del tasto, non il vestito |
+
+`testGrafica.mjs` **conta** che siano quelli e non uno di più: se un domani rispunta un
+riquadro grosso col fondo colorato fuori da questo elenco, la prova lo nomina con la riga
+esatta.
+
+Il setaccio della prova ha una sua definizione di «riquadro», e ci è voluto un secondo giro
+per azzeccarla: `p-3` e oltre è una scheda, `px-4` con `py-2` è una casella di totali — e ce
+n'era una proprio così, sfuggita al primo passaggio perché guardavo solo `py-3`. Un tasto
+«Elimina» sta a `px-3 py-2` e resta fuori.
+
+### «Giornata non lavorata» ha smesso di gridare
+
+Era scritto grande, nero e blu, su un fondo azzurrino: la cosa più rumorosa della schermata
+pur non dicendo niente. Una giornata senza corse è il caso più tranquillo che ci sia. Scende
+di un gradino, perde il fondo colorato, e lascia parlare la scheda scura sopra di lei.
+
+### Il foglio per il commercialista
+
+Le ombre **non si stampano**. La barretta, che sullo schermo è un'ombra dentro, sulla carta
+sarebbe sparita — e sarebbe sparita proprio nel foglio che va al commercialista, lasciando
+«Incassi lordi» e «Spese operative» senza nessun colore a distinguerli. In stampa la stessa
+barretta si rifà come bordo, che si stampa sempre. C'è un controllo apposta, che mette il
+browser in modalità stampa e misura.
+
+### Quello che non si è toccato
+
+Le pastiglie piccole (i metodi di pagamento, i cartellini «scaduta») e i quadratini colorati
+della legenda: lì la tinta **è** l'informazione, non il vestito. E l'elenco di Gestione con i
+quadratini colorati, che era già la parte più riuscita dell'app.
+
+### Quello che resta
+
+Il modo scuro. Adesso costa molto meno di prima: i fondi colorati da ripensare erano 270, ora
+i riquadri passano quasi tutti da una classe sola e da sei tinte dichiarate in un posto solo.
+È il lavoro che questa versione ha preparato senza dirlo.
+
+## La grafica: il tocco, le misure, la linguetta che si nascondeva (versione 158)
+
+Tre cose, tutte e tre guardando l'app invece che ricordandosela: le schermate sono state
+fotografate come si vedono su un telefono, e quello che segue è quello che si vedeva.
+
+### Il comando premuto si muove
+
+Nell'app non c'era **un solo punto** che reagisse al tocco. Premevi «Registra corsa» e per
+un attimo non succedeva niente, poi la schermata si rifaceva da sola. Quel vuoto si sente, e
+su un telefono è quello che distingue un'app di oggi da una di dieci anni fa più dei colori.
+
+Adesso il comando premuto si stringe al 96% e si scurisce, per novanta millesimi di secondo.
+Non è un'animazione da guardare: è la conferma che il dito ha preso, e arriva prima che la
+schermata si rifaccia. Un comando **spento** non reagisce — dire «preso» quando non si è
+preso niente è peggio del silenzio.
+
+Insieme sono spariti due fastidi che c'erano da sempre:
+
+- il mezzo secondo che l'iPhone si tiene per capire se stai per toccare due volte
+  (`touch-action: manipulation`): ora il comando parte quando lo tocchi;
+- il doppio riquadro grigio, quello del telefono sopra il nostro
+  (`-webkit-tap-highlight-color`).
+
+Chi ha chiesto al telefono di muovere meno le cose (`prefers-reduced-motion`) non vede
+stringersi niente: resta il colore, e la conferma arriva lo stesso.
+
+C'è una riga che sembra non fare niente, un ascoltatore vuoto del tocco sulla pagina. Serve:
+su iPhone lo stato «premuto» si accende da solo sui `<button>`, che Safari sa già essere
+comandi, ma **non** sui sette `<summary>` e sui cinque elementi che fanno da tasto pur non
+essendolo. Safari li accende soltanto se sulla pagina qualcuno sta ascoltando il tocco.
+
+### Le misure, messe in scala
+
+**I corpi.** Nell'app ci sono 387 scritte a dodici pixel e 160 a quattordici: il grosso di
+quello che si legge sta lì. Dodici pixel sono pochi sempre, e sono ancora meno con il
+telefono nel supporto, mezzo guanto e gli occhiali da presbite. Salgono di uno — 13 e 15 —
+e l'interlinea sale insieme, perché alzare il carattere lasciando le righe dov'erano le fa
+toccare, e un testo fitto si legge peggio di uno piccolo.
+
+**Le etichettine maiuscole vanno nel verso opposto.** «COSTO GIORNO», «TURNO PIÙ
+REDDITIZIO»: non sono testo da leggere, sono il cartellino di quello che viene sotto. Nel
+file stavano in due grafie diverse — 33 con la classe `.etichetta`, 58 scritte a mano con
+`text-xs uppercase` — ed erano la stessa identica cosa. Ora prendono tutte la misura
+dell'etichetta, undici pixel: **il cartellino si fa più discreto proprio mentre il numero
+si fa più grande**, che è il verso giusto.
+
+Serviva anche per un motivo pratico, e l'ha trovato una prova: a 320px «CARBURANTE», tutto
+maiuscolo e spaziato, a tredici pixel non ci stava più e veniva tagliato.
+
+**Gli angoli.** Erano sei misure prese una alla volta, e tre di quelle stavano a due pixel
+l'una dall'altra: 6, 8 e 12. Due pixel non si vedono su una scheda sola, ma su una schermata
+intera l'occhio sente che le cose non sono parenti fra loro. Adesso sono una progressione —
+**8, 10, 14, 20**, ogni gradino circa una volta e mezza il precedente — più il quasi-niente
+dei quadratini colorati della legenda, che sono larghi otto pixel e tondi non devono essere.
+
+Corpi e angoli si riscrivono **in un posto solo**, come già fatto nella v89 per le ombre e
+per i pesi: nel markup non si è toccata una riga.
+
+### La sotto-scheda aperta si nascondeva
+
+Difetto vero, non questione di gusto. La fila in cima a Gestione — Spese, Scadenze, Parco
+auto, Rendimento, Commercialista… — è più larga del telefono e scorre di lato. Ma nessuno le
+diceva di portarsi dove si trova quella aperta: entravi in Rendimento e la linguetta nera
+stava mezza fuori dallo schermo, in Commercialista fuori del tutto. Si vedeva la fila delle
+altre e non si capiva dove si era.
+
+Adesso la fila si porta la linguetta aperta **in mezzo**, così si vedono anche quella prima e
+quella dopo: dicono dove si è nell'elenco. Si sposta solo la fila, scrivendole lo
+scorrimento: `scrollIntoView` avrebbe tirato anche la pagina in verticale, e due righe più su
+c'è chi il punto in verticale lo sta rimettendo com'era.
+
+Dove la fila ci sta tutta non si sposta di un pixel: centrare qualcosa che è già in vista è
+solo un sobbalzo.
+
+### Come si controllano cose che non si leggono
+
+Lo specchio confronta il **testo** di ogni schermata, e qui il testo non cambia: avrebbe
+detto «tutto identico» qualunque cosa fosse successa. Quindi `prove/testGrafica.mjs`, 21
+controlli, misura invece di guardare:
+
+- il tasto si preme **col mouse** e si legge quanto si è stretto e scurito, e che tornando su
+  torni com'era;
+- la linguetta attiva si misura su **otto** sotto-schede e a tre larghezze, confrontando il
+  suo rettangolo con quello della fila: o è tutta dentro, o è un errore;
+- corpi, interlinee e angoli si leggono dal browser e si controlla che siano la scala
+  prevista, non dei numeri qualsiasi.
+
+Restano di guardia anche le due prove di geometria che c'erano già, e sono servite: è
+`troncati.mjs` che ha trovato «CARBURANTE» tagliato, e per via sua il corpo più grande è
+arrivato insieme alle etichettine più piccole invece che da solo.
+
+Un controllo è fallito e **la colpa era della prova, non dell'app**: dava per scontato che a
+1280px la fila delle sotto-schede ci stesse tutta. Misurata, la fila intera chiede 1004px e a
+1280 lo spazio per il contenuto è 960: scorre ancora per davvero, ed è giusto che si sposti.
+La prova ora controlla tutti e due i casi, a 1280 e a 1600.
+
+### Quello che non si è toccato
+
+- **Il carattere.** L'app usa quello di sistema: su iPhone è il carattere di Apple. È già
+  quello giusto, e uno scaricato aggiungerebbe peso e un pezzo che può non arrivare.
+- **Il giallo**, che è l'app.
+- **I 44px dei tasti**: non sono grafica, sono il motivo per cui con mezzo guanto non si
+  cancella una corsa per sbaglio.
+
+### Quello che resta da fare
+
+I 270 riquadri con lo sfondo colorato, su sette tinte, restano come stavano: il colore andrebbe
+spostato dal fondo della scheda a una barretta o all'etichetta, così il numero si legge per
+primo. Ed è ancora da fare il modo scuro, che per chi lavora di notte è la cosa che conta di
+più — ma tocca quei 270 fondi uno per uno ed è una versione sua.
+
+## Uno schema per gli archivi, e due funzioni spezzate (versione 157)
+
+Le ultime due proposte del giro generale.
+
+### Cinque archivi, cinque blocchi identici
+
+Scadenze, versamenti, note, parco auto e voci di budget avevano cinque blocchi di
+sincronizzazione **uguali in tutto tranne il nome**: centotrenta righe per dire
+cinque volte la stessa cosa. Ogni archivio nuovo ne aggiungeva altre ventisei, e
+ogni correzione andava fatta cinque volte — o dimenticata in quattro, che è il
+modo in cui nascono i difetti di questa applicazione.
+
+Adesso passano tutti da `applicaSnapshotArchivio`. **Il prossimo archivio costa
+cinque righe invece di ventisei:**
+
+```js
+annullaAscolti.push(ascoltaArchivio({
+    nome: 'versamenti', chiave: 'taxi_versamenti', etichetta: 'Versamenti',
+    ordina: perDataDecrescente,
+    messaggi: { caricato: 'Versamenti caricati sul Cloud.', soloQui: '...' }
+}));
+```
+
+**Movimenti e turni non passano di qui, ed è voluto**: hanno un meccanismo loro,
+più vecchio e più prudente, costruito per archivi da diecimila righe.
+Riscriverlo per simmetria sarebbe un rischio senza guadagno, sul lavoro di anni.
+
+### La parte che conta: adesso si può provare
+
+Il blocco di Firebase **non parte senza rete**. Quindi tutto quello che ci stava
+dentro non lo provava nessuno — ed è il codice su cui stanno i dati di anni.
+
+Per questo la logica è stata spostata dove gira sempre: arriva un elenco, si
+decide cosa farne, e di Firebase non c'è niente. Il cablaggio a Firestore è
+rimasto di là, ed è una riga.
+
+`prove/testArchivi.mjs` (26 controlli) prova quello che prima era al buio:
+
+- **una cartella vuota sul Cloud non svuota il telefono** — prima si porta su
+  quello che c'è qui, e solo quando il Cloud ha dimostrato di accettare i dati
+  gli si dà ragione;
+- se il Cloud rifiuta la scrittura, i dati restano comunque qui;
+- quando invece svuotare è giusto — se il Cloud ha già consegnato dati, un
+  elenco vuoto vuol dire che li hai cancellati da un altro dispositivo;
+- **l'elenco delle voci di budget non si cancella in nessun caso**, che è la
+  regola di chi usa l'app. Togliendo quella guardia, tre controlli falliscono.
+
+### Un doppione trovato per strada
+
+`formConDatiNonSalvati()` — quella che impedisce a un elenco dal Cloud di
+cancellare la corsa che stai battendo — era scritta **due volte, identica**: una
+nel blocco di Firebase e una nel copione normale, perché da lì il primo non si
+vede. Adesso è scritta una volta sola. Insieme se n'è andata `scadenzeMigrate`,
+una bandiera che veniva messa e non leggeva nessuno.
+
+### Due funzioni spezzate
+
+| | Prima | Adesso |
+| --- | --- | --- |
+| `renderSezioneGiornate` | 353 righe | 211 di preparazione + 145 di disegno, separate |
+| `sezioneStimaTasse` | 269 righe, con due blocchi anonimi da 140 e 85 | tre funzioni con un nome |
+
+La giornata mescolava duecento righe di conti e centocinquanta di disegno: per
+capire da dove usciva un numero bisognava leggerle tutte. Adesso una funzione
+prepara quello che la schermata deve sapere e l'altra lo mette in pagina.
+
+I due blocchi anonimi della stima tasse adesso si chiamano
+`bloccoStimaOrdinario` e `bloccoAccantonamento`. Un pezzo di codice lungo
+centoquaranta righe senza un nome non si cerca e non si cita: per parlarne si
+diceva «quella cosa in mezzo alla scheda del commercialista».
+
+### Lo specchio, di nuovo
+
+Ogni passo è stato verificato confrontando il testo di quindici schermate
+carattere per carattere con la versione di prima: **nessuna differenza**.
+
+E una volta lo specchio ha fatto il suo lavoro nel modo più utile: un taglio
+fatto a occhio invece che per corrispondenza esatta aveva mangiato codice buono.
+`git checkout`, e si ricomincia con sostituzioni precise. **Nessun pezzo di
+quella mezz'ora è arrivato fino a qui.**
+
+## Un solo modo di leggere i movimenti (versione 156)
+
+La seconda proposta del giro generale. Stessa malattia della 155, stessa
+medicina, applicata un piano più sotto.
+
+### Sette modi di dire la stessa cosa
+
+Quarantotto punti dell'applicazione si andavano a prendere l'archivio dei
+movimenti da soli, e ognuno riscriveva il filtro della data a modo suo: chi con
+`startsWith`, chi con `slice(0, 4)`, chi confrontando l'anno, chi controllando
+prima che la data ci fosse e chi no.
+
+Non è una questione di eleganza. È il terreno dove nascono i difetti che non si
+vedono: **due volte in una settimana** una regola era stata aggiornata in un
+punto e dimenticata in un altro — i versamenti nella base delle tasse (153),
+l'importo scritto storto (154).
+
+### Tre letture, e basta
+
+| | |
+| --- | --- |
+| `movimenti(prefisso)` | un pezzo di data: `''` tutto, `'2026'` l'anno, `'2026-03'` il mese, `'2026-03-10'` il giorno |
+| `movimentiFra(da, a)` | un periodo che non comincia il primo del mese — i due anni delle spese fuori budget, il tempo in cui hai avuto una vettura |
+| `movimentoPerId(id)` | uno solo, per identificativo |
+
+Diciotto punti convertiti, **da 48 a 31**. Quelli rimasti sono scritture (che
+l'archivio lo cambiano, non lo leggono) e filtri su un solo giorno, dove di
+regole da sbagliare non ce ne sono.
+
+**Una regola sola, scritta nel codice:** la lista che esce dai lettori non si
+tocca. Dentro un disegno è condivisa fra tutti, e un `.sort()` su quella lista
+arriverebbe addosso a chiunque la chieda dopo.
+
+### Più veloce, non più lenta
+
+Il timore era che una lista condivisa costasse. È successo il contrario: dentro
+un disegno la stessa lista la chiedono in tanti, e adesso si prepara una volta
+sola.
+
+| Schermata | Prima | Adesso |
+| --- | --- | --- |
+| Spese | 31 ms | **24 ms** |
+| Commercialista | 17 ms | **12 ms** |
+| Andamento | 13 ms | **10 ms** |
+| Rendimento | 6 ms | **4 ms** |
+| Parco auto | 7 ms | **4 ms** |
+
+Avvio: 206 ms con 10.080 movimenti (prima 229).
+
+### Lo specchio, e due volte che ha salvato la faccia
+
+Per una semplificazione che non deve cambiare niente serve una rete che guardi
+**quello che si vede**. Lo specchio apre le due versioni — prima e dopo — con
+gli stessi 1.000 movimenti, 240 turni, 24 versamenti e un importo storto, e
+confronta il testo di **quindici schermate carattere per carattere**: 24.339
+caratteri.
+
+Ha anche una storia da raccontare. Alla prima passata ha segnalato una
+differenza **prima che io cambiassi qualcosa**: il contatore «all'ora» che corre
+dal vivo mentre sei in turno, letto a qualche secondo di distanza dalle due
+versioni. Una rete che suona a vuoto si smette di guardarla, quindi il seme
+adesso non mette mai un turno di oggi.
+
+**E due volte ha mancato il bersaglio, il che conta di più.** Convertendo due
+funzioni avevo tolto la riga che dichiarava la variabile della data, e lì sotto
+serviva ancora: `totaliPerChiave` e `corrispettiviMeseCalcola` erano rotte, e lo
+specchio non se ne era accorto perché quelle due non passano da nessuna delle
+schermate che confronta. Le ha prese la rilettura a mano, funzione per funzione,
+e poi la suite completa. **Nessuna rete le prende tutte**: è per questo che se
+ne tengono tre — lo specchio, la lettura, e quarantaquattro prove.
+
+## Una sola base imponibile (versione 155)
+
+La prima delle proposte del giro generale, e la più importante: **togliere di
+mezzo la famiglia di difetti che ha morso due volte in una settimana.**
+
+### Il problema: la stessa regola scritta in quattro posti
+
+La cifra su cui si stimano le tasse la chiedono quattro schermate diverse, e
+ognuna rifaceva il giro dei movimenti per conto suo:
+
+| Dove | Serviva a |
+| --- | --- |
+| `getStats()` | i totali dell'anno, l'andamento |
+| `getReportStats()` | la scheda del commercialista, anche filtrata per mese |
+| `utileFiscaleAnno()` | la base registrata dell'anno |
+| `utileProiettatoCalcola()` | la proiezione, da cui esce la quota di IRPEF della giornata |
+
+Finché le quattro copie dicono la stessa cosa non se ne accorge nessuno. Il
+guaio arriva il giorno in cui se ne cambia una sola — ed è successo davvero con
+i versamenti di contanti (versione 153): tre copie su quattro li contavano, la
+quarta no.
+
+### Adesso il conto si fa in un posto solo
+
+`baseImponibile(prefisso, finoA)` è l'unico punto dove quella regola è scritta.
+Prende un prefisso di data (`'2026'` l'anno, `'2026-03'` marzo, `'2026-03-10'`
+il giorno — la stessa chiave di `aggrega()`) e, se serve, un taglio a una data
+per la proiezione. Le quattro schermate adesso le chiedono tutte a lei.
+
+Sono sparite anche `incassiTracciati()` e `usciteDeducibili()`: due funzioni che
+riscrivevano, ognuna per conto suo, la stessa regola di `metodoTracciato`. Da
+quando il conto si fa in un posto solo non le chiamava più nessuno. **Da sei
+posti a uno.**
+
+### La prova che nessun numero si è mosso
+
+Una semplificazione pericolosa è quella che non si vede: il codice è più pulito
+e una cifra è cambiata. Quindi si sono aperte le due versioni — quella di prima
+e quella di adesso — con **gli stessi 600 movimenti a caso, 20 versamenti e un
+importo scritto storto**, e si sono confrontate **85 cifre**: totali, report
+filtrato per cinque mesi diversi, quote giornaliere, IRPEF, costo della
+giornata, conguaglio, budget.
+
+```
+cifre confrontate: 85
+nessuna cifra si e' mossa
+```
+
+### E il guardiano, perché non succeda più
+
+`prove/baseUnica.mjs` costruisce **dieci archivi a caso** e per ognuno controlla
+che `getStats`, il report, l'utile dell'anno e **la somma dei dodici mesi**
+dicano tutti la stessa cifra — più che le parti tornino col totale e che la
+proiezione non stia mai sotto quello già registrato. **62 controlli.**
+
+Rimettendo il difetto della 153 — una sola strada che si dimentica i versamenti
+— la prova lo prende subito. Dati a caso, non numeri tondi: una divergenza si
+nasconde dietro i numeri tondi.
+
+## Giro generale: un difetto che faceva dire due cose a due schermate (versione 154)
+
+Un giro completo dell'applicazione cercando difetti e cose da semplificare.
+Prima quello che si è trovato, poi quello che **non** si è trovato — che conta
+uguale.
+
+### Il difetto: «NaN €» su una schermata, zero sull'altra
+
+Nei conti si scriveva dappertutto `parseFloat(x.importo || 0)`. Quel `|| 0`
+copre il campo vuoto e il `null`, ma **non una scrittura storta**:
+`parseFloat('abc')` fa `NaN`, e NaN si attacca a tutto quello che tocca.
+
+Bastava **un solo movimento** con l'importo rovinato — un backup scritto a mano,
+un ritorno dal Cloud andato storto, un anno importato da un'altra app — e la
+dashboard mostrava `NaN €` mentre la scheda del commercialista, che quel `|| 0`
+in fondo ce l'aveva, mostrava zero. Due schermate, due risposte, **nessun errore
+da nessuna parte**.
+
+Erano **ventuno punti** scoperti su cinquantatré. Adesso c'è un solo lettore,
+`importoDi()`: quello che non è un numero vale zero, sempre, in tutte le
+schermate. Le ventotto code `|| 0` diventate inutili sono state tolte.
+
+Stessa radice del difetto della 153 (le quattro strade per la base imponibile):
+**una regola applicata in un posto e dimenticata in un altro**.
+
+### Due difetti minori, chiusi
+
+- **Le impostazioni fiscali passavano accanto alla porta del salvataggio.**
+  `saveFiscalSettings` scriveva con `localStorage.setItem` diretto invece che da
+  `scriviLocale`: col disco pieno l'eccezione non la prendeva nessuno, il
+  messaggio non compariva, la striscia rossa nemmeno — e le aliquote nuove
+  restavano a video senza essere mai scritte. Era **l'unico** punto scoperto su
+  trentasei.
+- **Due ordinamenti per importo** usavano `parseFloat` nudo: con un importo
+  storto il confronto dà NaN e l'ordine diventa quello che capita.
+
+### La prova che mancava: `prove/storti.mjs`
+
+Undici casi di roba che in archivio non dovrebbe esserci — importo non numerico,
+importo vuoto, data senza senso, data mancante, tipo sconosciuto, metodo
+mancante, 29 febbraio di un anno non bisestile, importo enorme, identificativi
+doppi — e per ognuno **tre controlli**: nessun numero marcio, nessun «NaN»
+scritto a video su dieci schermate, e le tre strade che contano gli incassi
+devono dire la stessa cifra. **44 controlli.** Rimettendo la falla in un solo
+punto, due falliscono.
+
+### Quello che NON si è trovato, e conta uguale
+
+| Cercato | Esito |
+| --- | --- |
+| Prestazioni | **229 ms** per aprire l'app con 10.080 movimenti; schermate da 3 a 31 ms. Niente da ottimizzare |
+| Codice morto | Nessuno: tutte le funzioni che sembravano orfane sono richiamate |
+| Forma del codice | 491 funzioni, **mediana 14 righe**. Le lunghe sono le schermate, ed è normale |
+| Numeri non protetti | INPS, aliquote e `numeroScritto` erano **già** difesi con `Number.isFinite` |
+| Scritture su disco non protette | 35 su 36 passavano già da `scriviLocale` |
+
+L'applicazione non è un pasticcio da riscrivere. I difetti che restano sono di
+una famiglia sola, e si curano con una medicina sola: **meno posti dove la
+stessa regola viene riscritta a mano.**
+
+## I versamenti di contanti (versione 153)
+
+Un versamento **non è un incasso**: sono gli stessi soldi delle corse, che
+smettono di stare in tasca e cominciano a lasciare una traccia. Quello che
+cambia è dove stanno — e, per il fisco, che da quel momento si vedono.
+
+Questa app conta nella base imponibile **solo quello che lascia traccia** (vedi
+`metodoTracciato`): POS, app, bonifici. I contanti restano fuori finché restano
+contanti. Versati in banca diventano tracciati, ed entrano nel conto delle
+tasse.
+
+In **Gestione → Versamenti** si registra data, cifra, dove e una nota, e in cima
+ci sono le tre cifre che contano:
+
+```
+Incassato in contanti 8.000   ·   Versato 5.000   ·   Resta in cassa 3.000
+```
+
+Nella scheda del commercialista i versamenti stanno **su una riga loro**, sotto
+gli incassi tracciati: sommati dentro, nessuno capirebbe più da dove viene la
+cifra — e quella è la pagina che si porta in studio.
+
+### Cosa si muove, e cosa non si deve muovere
+
+Esattamente due cifre si muovono, ed è giusto: **l'utile fiscale sale** e **i
+contanti in cassa scendono**. Tutto il resto resta fermo al centesimo: incasso
+totale, incasso in contanti delle corse, numero delle corse, spese, budget,
+conguaglio. Un versamento non è un movimento nuovo, e se comparisse fra gli
+incassi li raddoppierebbe.
+
+`prove/testVersamenti.mjs` (29 controlli) misura tutte e due le cose: che le due
+cifre si muovano **dell'importo esatto**, e che le altre tredici non si muovano
+affatto.
+
+### Quattro strade per la stessa base imponibile
+
+Il lavoro vero non è stato la schermata: è stato trovare **tutti** i punti che
+calcolano la base delle tasse. Sono quattro, e ognuno rifà il conto per conto
+suo:
+
+| Dove | Serve a |
+| --- | --- |
+| `getStats()` | i totali dell'anno, l'andamento |
+| `getReportStats()` | la scheda del commercialista, anche filtrata per mese |
+| `utileFiscaleAnno()` | la base registrata dell'anno |
+| `utileProiettatoCalcola()` | la proiezione annualizzata, da cui esce la quota di IRPEF del costo giornaliero |
+
+**Il quarto era sfuggito.** I totali erano giusti, ma la proiezione restava
+ferma: i soldi versati sparivano dal conto di quanto pesa la giornata. Non si
+vedeva da nessuna parte, se non confrontando due numeri che nessuno confronta a
+mano. L'ha trovato la prova, controllando che la quota del costo giornaliero si
+muovesse insieme alle tasse.
+
+### E un difetto che ha trovato il calendario, di nuovo
+
+A 320 punti, nella testata della giornata, «domenica 18» usciva tagliato di
+sedici pixel — e «mercoledì 28» sarebbe stato peggio. Fra le due frecce e la
+data c'era anche il tasto che toglie il filtro: cinquanta punti presi alla parte
+che si deve leggere. Adesso quel tasto sta dall'altra parte della riga, dove va a
+capo da solo quando non ci sta, invece di stringere la data.
+
+Due volte di fila che la data di oggi fa cadere una prova. Non è sfortuna: è una
+prova che gira ogni giorno con un dato diverso, e prima o poi passa da tutti.
+
+## Due paginette nude, per dividere il problema in due (versione 151)
+
+### L'avviso di scadenza spariva il giorno in cui serviva
+
+Mentre si lavorava all'icona, il calendario ha fatto un regalo: una prova è
+andata a sbattere perché **oggi era il 10 ottobre 2026**, cioè esattamente la
+data di rinnovo che quella prova usava. Sotto c'era un difetto vero.
+
+L'avviso guardava solo in avanti: «scade fra N giorni», per i 45 giorni prima
+del rinnovo. Poi, **il giorno del rinnovo**, il periodo nuovo cominciava, la
+prossima scadenza diventava quella dell'anno dopo — a 365 giorni, fuori dai 45 —
+e **l'avviso spariva**. Spariva cioè il giorno esatto in cui l'assicurazione va
+pagata, e restava muto per tutto il tempo in cui si è in ritardo.
+
+Adesso guarda anche indietro: se il rinnovo è passato da non più di 45 giorni e
+di quel periodo non c'è un pagamento vero, l'avviso resta — **«scade oggi»** il
+giorno stesso, poi **«scaduta il …»** in rosso.
+
+| Giorni al rinnovo | Prima | Adesso |
+| --- | --- | --- |
+| +10 | scade fra 10 gg | scade fra 10 gg |
+| 0 | *niente* | **scade oggi** |
+| −5 | *niente* | **scaduta da 5 gg** |
+| −40 | *niente* | **scaduta da 40 gg** |
+| ±120 | niente | niente (giusto: se parlasse tutto l'anno non lo guarderebbe più nessuno) |
+
+**E la prova era fragile.** Diceva «l'avviso dice 10/10/2026»: vero per qualche
+settimana all'anno, falso tutti gli altri giorni. Adesso le scadenze se le
+costruisce a partire da oggi, così dice la stessa cosa in qualunque giorno la si
+faccia girare. Rimettendo il difetto, quattro controlli falliscono.
+
+Dopo la 150 l'icona esce ancora con la lettera. A questo punto le ipotesi sono
+finite, e insistere a tirarne fuori un'altra sarebbe la nona versione al buio.
+Quindi si smette di indovinare e si **bisezione**: si mette in linea il caso più
+semplice possibile e si guarda da che parte casca.
+
+`prova-icona/a/` e `prova-icona/b/` sono due pagine HTML di venti righe. Niente
+app, niente service worker (sono escluse esplicitamente in `daNonIntercettare`),
+niente manifesto, niente protezione sugli indirizzi: **solo le tre righe che
+servono all'iPhone per fare un'icona**.
+
+| Pagina | Icona | Cosa prova |
+| --- | --- | --- |
+| `prova-icona/a/` | `icona.png` — il PNG che usa l'app adesso | se il file va bene così com'è |
+| `prova-icona/b/` | `icona.jpg` — la stessa immagine in JPEG, senza canale di trasparenza | se il problema è il formato |
+
+Quello che il risultato dice, senza bisogno di altre ipotesi:
+
+- **A esce giusta** → il file va bene, e il guaio sta in quello che c'è intorno
+  all'app: la pagina, il service worker, qualcos'altro di quel documento.
+- **A sbaglia e B esce giusta** → il guaio è il PNG. L'icona diventa un JPEG e
+  la storia finisce lì.
+- **Sbagliano tutte e due** → non è né il file né l'app: è il sito o quel
+  telefono, e allora l'unica mossa che resta è cambiare indirizzo all'app.
+
+Tre esiti, tre conclusioni diverse, **nessuna delle quali va indovinata**.
+
+### Il risultato: il terzo
+
+Sulla schermata Home sono comparsi **due quadrati gialli con la lettera P**.
+Tutte e due. Quindi:
+
+- **non è l'app**: le due pagine non ne contengono un pezzo;
+- **non è il service worker**: sono escluse, e il controllo 8sexies lo verifica;
+- **non è il manifesto**: non ce l'hanno;
+- **non è il formato dell'immagine**: una è PNG, l'altra JPEG, stesso esito;
+- **non è il file**: tutti e quattro i file sono in linea, e le icone si aprono.
+
+Resta che l'iPhone **non va proprio a prendere** `apple-touch-icon`, su nessuna
+pagina di questo sito. Il colore del quadrato è `#facc15`, cioè il `theme-color`
+della pagina, e la lettera è l'iniziale del titolo: la pagina la legge, l'icona
+no.
+
+Il codice di questa applicazione è, a questo punto, scagionato per esclusione —
+e il bello è che non è un'opinione: è quello che resta dopo aver tolto tutto il
+resto. Serviva una prova che dividesse il problema in due, e andava fatta sette
+versioni prima.
+
+### La controprova, e la fine della storia
+
+Restava da separare «il sito» da «il telefono», e si è fatto con il gesto più
+semplice che ci fosse: aggiungere alla schermata Home **un sito qualunque**.
+
+**Wikipedia e la Repubblica danno la stessa lettera.**
+
+Fine: non è TaxiManager, non è GitHub Pages, non è il trattino davanti al nome
+del deposito. È quel telefono, e vale per qualsiasi sito. Si risolve nelle
+impostazioni dell'iPhone — Modalità di isolamento, Dati ridotti, un blocco
+contenuti in Safari, o la memoria delle icone da rifare con un riavvio — e si
+verifica con Wikipedia, senza bisogno di toccare questa applicazione.
+
+### Che cosa è servito davvero, dalla 142 alla 151
+
+Dieci versioni per un'icona che non era rotta qui. Tre erano tentativi al buio e
+non hanno sistemato niente. Ma lungo la strada sono venuti fuori quattro difetti
+veri, tutti silenziosi, nessuno dei quali si sarebbe mai fatto notare da solo:
+
+| Versione | Difetto trovato |
+| --- | --- |
+| 145 | il service worker rispondeva con la pagina dell'app a qualunque indirizzo, anche quando gli si chiedeva un file |
+| 147 | le prove giravano su un computer e non c'era modo di sapere che cosa arrivasse al telefono |
+| 148 | le impostazioni fiscali stavano solo sul telefono: cambiando dispositivo tornavano ai valori di fabbrica senza dire niente. E il manifesto arrivava col tipo sbagliato, perché **il banco di prova era più generoso del sito vero** |
+| 151 | l'avviso di scadenza spariva il giorno in cui la scadenza va pagata |
+
+La lezione, scritta qui perché costa meno rileggerla che ritrovarla: **quando
+quello che si misura è a posto e il risultato no, non si cambia un'altra riga.
+Si cambia strumento** — si misura dove sta il problema, e si divide il problema
+in due.
+
+`prove/installabile.mjs` controllava che restassero nude davvero anche con il
+service worker installato — se lui ci avesse messo le mani sopra non avrebbero
+provato più niente, visto che il sospetto era proprio lui.
+
+**Tolte nella versione 152**, finito il loro lavoro: insieme a loro se ne va
+l'eccezione nel service worker e il controllo che le riguardava. Restano scritte
+qui perché la cosa che hanno insegnato vale più di loro — e perché se un giorno
+servisse di nuovo una prova così, si rifà in dieci minuti guardando questa
+pagina.
+
+## Due strade per installare, una per telefono (versione 150)
+
+Svuotati i dati del sito, l'icona esce ancora con la lettera. Quindi non era la
+memoria dell'iPhone. Ma nella descrizione del problema c'era la risposta, e
+andava letta prima:
+
+> nella schermata di **condivisione** vedo il taxi, nella schermata **«Aggiungi
+> alla schermata Home»** vedo la T
+
+Sono **due strade diverse**, e una delle due funziona:
+
+| Strada | Da dove prende l'icona | Esito |
+| --- | --- | --- |
+| Condivisione | `apple-touch-icon` | il taxi |
+| Aggiungi alla schermata Home | il **manifesto** | la lettera |
+
+### Sull'iPhone il manifesto non serve a niente
+
+Android installa leggendo il manifesto. L'iPhone no: ha le sue righe `apple-*`,
+che esistono da prima dei manifesti e dicono **la stessa identica cosa** —
+aprimi a tutto schermo (`apple-mobile-web-app-capable`), chiamami così
+(`apple-mobile-web-app-title`), usa quest'icona (`apple-touch-icon`), colora la
+barra così (`theme-color`).
+
+Quando ci sono tutte e due, l'iPhone preferisce il manifesto — e con questa app
+sceglieva male. I file sono tutti a posto, misurati dal telefono stesso: `200`,
+`image/png`, l'immagine si apre. Semplicemente quella strada non arrivava in
+fondo.
+
+Quindi il manifesto adesso **si aggancia solo dove serve davvero**: su Android,
+con due righe di copione. Sull'iPhone resta la strada di Apple, che su quel
+telefono funziona — lo si è visto, nella schermata di condivisione.
+
+`prove/installabile.mjs` (8quinquies) controlla tutte e due le strade: su un
+browser normale il manifesto c'è; fingendosi un iPhone il manifesto **non** c'è,
+e ci sono tutte le righe che fanno il suo lavoro.
+
+### Quanto è costata questa storia, e perché
+
+Otto versioni. Il difetto vero — il service worker che rispondeva con la pagina
+al posto dei file — è stato trovato alla 145. Le altre sono servite a renderlo
+visibile, a chiudere quello che saltava fuori intorno, e **tre erano tentativi
+al buio**, perché da qui il sito pubblicato non si raggiunge e un computer non è
+un iPhone.
+
+La lezione, scritta qui perché non si ripeta: **quando quello che si misura è a
+posto e il risultato no, non si cambia un'altra riga. Si cambia strumento.** Il
+controllo che gira sul telefono (147) è arrivato quattro versioni dopo il
+momento in cui sarebbe servito, e l'indizio decisivo non è venuto da una misura:
+è venuto da una frase.
+
+## L'icona con la cornice, a tutte le misure (versione 149)
+
+L'icona grande era a pieno campo e solo la versione «ritagliabile» aveva la
+cornice gialla. Adesso **il disegno con la cornice è l'icona**, a 180, 192 e 512
+punti: è quella che si vede sulla schermata Home, e un'icona che sta bene anche
+quando il sistema la ritaglia a cerchio è il caso migliore, non un ripiego. Le
+favicon da 16 e 32 restano a pieno campo — a quelle misure una cornice si
+mangerebbe metà dell'auto.
+
+Cambiato in `strumenti/icone.mjs`, non a mano: i file si rigenerano dalla
+sorgente.
+
+### Cosa era cambiato davvero, visto che adesso si sa
+
+La domanda era: «prima funzionava, cosa è cambiato?». La risposta onesta è
+**niente, in quello che faceva funzionare l'icona**.
+
+L'icona di un'app sulla schermata Home viene presa **una volta sola**, nel
+momento in cui la si aggiunge, e da lì non si aggiorna più. Quella che
+funzionava era stata presa tanto tempo fa e se ne stava lì, immune a qualunque
+versione. La versione 142, rifacendo l'icona ritagliabile, ha dato il motivo di
+rimetterla sulla Home — e **rimetterla** è la sola operazione che quel difetto
+poteva colpire.
+
+Il difetto c'era da prima, e non era nell'icona: il service worker rispondeva
+con la pagina dell'app a qualunque indirizzo, anche quando gli si chiedeva un
+file (versione 145). Chi aggiungeva l'app alla Home riceveva una pagina HTML al
+posto dell'icona e del manifesto. Nessuno l'aveva mai visto perché nessuno
+rimetteva mai l'icona.
+
+Quindi: la 142 non ha rotto niente. Ha fatto scoprire una cosa rotta da tempo,
+nel momento peggiore — e le sette versioni che sono seguite sono servite a
+trovarla (145), a renderla visibile (146, 147) e a sistemare tutto quello che
+nel frattempo saltava fuori intorno (148). Quello che resta da fare non è più
+codice: è convincere l'iPhone a dimenticare il quadrato che si è disegnato.
+
+## Le impostazioni fiscali sul Cloud, e il manifesto col tipo giusto (versione 148)
+
+### Il buco: le impostazioni fiscali stavano solo sul telefono
+
+Aliquota INPS, rata, numero di rate, minimale, addizionali, soglia del
+forfettario e accantonamento sono i numeri da cui dipende **ogni stima delle
+tasse** dell'app. Tutto il resto — movimenti, turni, scadenze, vetture, voci di
+budget, note, la scheda del tassista, perfino le foto — va sul Cloud. Quelli no:
+vivevano in `localStorage` e basta.
+
+Conseguenza: cambiando dispositivo tornavano ai valori di fabbrica **senza dire
+niente**, e i conti delle tasse cambiavano sotto il naso. Un buco silenzioso,
+della stessa famiglia di quelli che questa app passa il tempo a stanare.
+
+Adesso hanno lo stesso trattamento della scheda del tassista: un documento solo
+sul Cloud, un ascolto che li riporta giù, e una scrittura ogni volta che si
+salvano — dal modulo **e** da un ripristino di backup. Se sul Cloud non ci sono
+ancora ma sul telefono sì, si portano su da soli. L'unione è per campi, non per
+sostituzione: quello che il Cloud non dice resta com'è.
+
+`prove/testFiscali.mjs` (14 controlli) mette una spia al posto della scrittura e
+guarda che parta davvero, con dentro gli stessi numeri; che un valore sbagliato
+non mandi niente; che il backup li rimetta e li ripubblichi; e che senza Cloud
+non si rompa nulla. Togliendo la chiamata, due controlli falliscono.
+
+### Il manifesto arrivava col tipo sbagliato, e il banco di prova lo nascondeva
+
+Il controllo che gira sul telefono (versione 147) ha dato il primo dato vero di
+tutta questa storia:
+
+```
+OK manifest.json   200 · application/json · 1 KB · si legge
+```
+
+`application/json`. Lo standard del manifesto chiede **`application/manifest+json`**.
+GitHub Pages serve qualunque `.json` come json generico, mentre il server delle
+prove lo serviva già col tipo giusto: **il banco di prova era più generoso del
+sito vero**, e la differenza non si poteva vedere da qui.
+
+Due correzioni, e la seconda vale più della prima:
+
+1. il manifesto si chiama `manifest.webmanifest`, che GitHub Pages serve come
+   `application/manifest+json`;
+2. **i server delle prove adesso si comportano come GitHub Pages**, non meglio —
+   `.json` come `application/json`, `.webmanifest` col tipo giusto — e
+   `prove/installabile.mjs` controlla che il manifesto arrivi col tipo che lo
+   standard chiede.
+
+Una prova che è più indulgente della realtà non è una prova: è un modo elaborato
+di darsi ragione.
+
+## Nomi nuovi alle icone, e un controllo che gira sul telefono (versione 147)
+
+Con la 146 tutto quello che si poteva misurare da qui era a posto: il file
+dell'icona arriva, il manifesto arriva come testo, la pagina e la copia salvata
+sono la stessa versione. E l'icona sulla schermata Home esce ancora con la
+lettera.
+
+Quando quello che si misura è a posto e il risultato no, la cosa da cambiare
+non è un'altra riga di codice: è **smettere di misurare da lontano**.
+
+### Due mosse insieme
+
+**1. Nomi nuovi alle icone.** L'iPhone si tiene in memoria l'icona che ha già
+costruito per un indirizzo, e gliela si richiede uguale ogni volta. Per un
+indirizzo che non ha mai visto non ha niente da ripescare ed è costretto a
+scaricare:
+
+| Prima | Adesso |
+| --- | --- |
+| `apple-touch-icon-180.png` | `icona-iphone-180-2.png` |
+| `icon-192.png` | `icona-192-2.png` |
+| `icon-512.png` | `icona-512-2.png` |
+| `icon-512-maskable.png` | `icona-ritagliabile-512-2.png` |
+
+Le immagini sono identiche — `strumenti/icone.mjs` le rigenera dalla stessa
+sorgente, byte per byte. Cambia solo il nome.
+
+**2. Un controllo che gira sul telefono.** In **Gestione → Backup e
+impostazioni**, il tasto **«Controlla i file dell'installazione»** chiede a
+*quel* dispositivo il manifesto e ogni icona, uno per uno, e per ognuno dice
+stato, tipo, peso e se l'immagine **si apre davvero**:
+
+```
+OK manifest.json              200 · application/manifest+json · 1 KB · si legge
+OK icona-iphone-180-2.png     200 · image/png · 78 KB · si apre
+OK icona-192-2.png            200 · image/png · 87 KB · si apre
+```
+
+È una lista da fotografare. Queste prove girano su un computer, e **un computer
+non è un iPhone**: finché l'unico modo di sapere cosa arriva al telefono era
+indovinare, si tiravano colpi al buio — la 142, la 144 e la 146 sono tre colpi
+al buio, due dei quali non hanno sistemato niente.
+
+`prove/installabile.mjs` (8quater) controlla che quel tasto funzioni: se si
+rompe lui, si torna ciechi.
+
+## Vedere quale copia sta usando davvero il telefono (versione 146)
+
+Dopo la 145 l'icona del taxi compare nella schermata di condivisione di Safari,
+ma aggiungendo alla schermata Home esce ancora la lettera. Il che dice una cosa
+precisa: **il file dell'icona arriva**, e a non arrivare è qualcos'altro — il
+manifesto, oppure la correzione della 145 non è ancora in uso su quel telefono.
+
+Qui si smette di indovinare e si rende visibile la cosa che finora era invisibile.
+
+### Due versioni, non una
+
+A servire i file dell'app — la pagina, le icone, il manifesto — **non è la
+pagina: è il service worker**, che è un'altra cosa e può essere rimasto
+indietro. Quando le due non coincidono i difetti diventano impossibili da
+capire: si guarda l'app, l'app è aggiornata, e intanto fuori qualcuno sta
+servendo roba vecchia. È esattamente quello che è successo con l'icona.
+
+In **Gestione → Backup e impostazioni**, sotto «Aggiorna adesso», adesso c'è
+scritto:
+
+```
+Pagina v146 · copia salvata sul telefono v146 · tutto allineato
+```
+
+e se non lo sono la riga diventa gialla, lo dice, e compare un tasto **«Butta
+via la copia salvata e rifalla»**: toglie la registrazione del service worker,
+svuota le sue cache e ricarica dalla rete. Tocca solo i file dell'app — corse,
+spese, turni, note e foto stanno in un altro magazzino e non si toccano.
+
+La stessa coppia di numeri la controlla `prove/installabile.mjs` (8ter), così
+una versione cambiata a metà — in `index.html` e non in `sw.js` — non arriva
+mai sul telefono.
+
+### Il punto cieco del controllo delle classi, chiuso
+
+`prove/classi.py` guardava solo gli attributi `class="..."` scritti per esteso.
+Una classe dentro un pezzo calcolato — `class="${pari ? '' : 'bg-yellow-100'}"` —
+spariva insieme al pezzo, e se non esisteva non se ne accorgeva nessuno: è già
+successo due volte (`w-14`, `h-14` alle miniature delle foto). Adesso si
+guardano anche quelle: si prendono i pezzi fra apici e si tengono solo le parole
+che possono essere una classe (con un trattino o due punti), così un «sì»/«no»
+di un ternario non viene scambiato per una. Dalle 510 controllate si passa a
+536, tutte definite.
+
+## La lettera T al posto del taxi: trovata (versione 145)
+
+La causa era qui dentro, nel service worker, e la 144 non l'aveva presa.
+
+Il service worker rispondeva con la pagina dell'app a **qualunque** navigazione
+dentro la sua cartella — compresa quella verso un file. Chiedendo
+`apple-touch-icon-180.png` arrivava `index.html`; chiedendo `manifest.json`,
+pure. Nessuno apre a mano l'indirizzo di un'icona, e per questo il difetto non
+si era mai visto: **l'app funzionava benissimo**. Ma l'iPhone quell'indirizzo lo
+apre, nel momento in cui si tocca «Aggiungi alla schermata Home». Riceveva una
+pagina HTML al posto dell'icona *e* al posto del manifesto, non poteva usare né
+l'una né l'altro, e si disegnava da solo un quadrato con il colore della barra e
+la prima lettera del nome: giallo, con una T.
+
+Due file irraggiungibili per la stessa ragione, un unico effetto visibile. Si
+spiega anche perché la 142 sembrava la colpevole: non lo era. Il difetto c'era
+da prima, e si vede solo quando si rimette l'icona sulla Home — cosa che la 142,
+cambiando l'icona ritagliabile, aveva dato il motivo di fare.
+
+La correzione è una domanda sola, prima di servire la pagina: **questo indirizzo
+è una pagina o un file?** Senza estensione è una pagina dell'app; con
+un'estensione che non sia `.html` è un file, e va servito quel file.
+
+```js
+function eUnaPaginaDellApp(url) { ... }
+if (richiesta.mode === 'navigate' && eUnaPaginaDellApp(richiesta.url)) { ... }
+```
+
+### La prova che mancava, e che adesso c'è
+
+`prove/installabile.mjs` installa il service worker e poi **va agli indirizzi dei
+file come ci va il telefono**, guardando che cosa arriva:
+
+```
+8bis. andando all'indirizzo di un file arriva il file, non l'app
+  apple-touch-icon-180.png: arriva image/png
+  manifest.json: arriva application/manifest+json
+  index.html: apre ancora l'app
+```
+
+Rimettendo il service worker com'era, la prova segnala cinque guasti. È il
+controllo che serviva: tutte le prove di prima chiedevano i file con `fetch`, e
+con `fetch` arrivavano giusti — il difetto stava **solo** sulla navigazione, che
+è esattamente la strada che fa il telefono.
+
+### Che fine fa la 144
+
+La 144 aveva tolto `id` dal manifesto e semplificato i percorsi delle icone: un
+tentativo al buio, perché da qui il sito pubblicato non si raggiungeva. Non era
+la causa. Le semplificazioni restano — sono innocue e più semplici — ma vanno
+messe in conto per quello che sono: non hanno sistemato niente.
+
+## L'icona sulla schermata Home, e un limite di queste prove (versione 144)
+
+Dopo l'aggiornamento alla 142, rimettendo l'app sulla schermata Home dell'iPhone
+al posto dell'icona del taxi è comparso **un quadrato giallo con la lettera T**:
+quello che il telefono si disegna da solo quando, nel momento in cui si tocca
+«Aggiungi alla schermata Home», non riesce a usare nessuna icona. L'icona di
+un'app installata non si aggiorna mai da sola — viene presa una volta sola, in
+quel momento — quindi il quadrato resta finché non si rifà l'operazione.
+
+**La causa non è stata accertata.** Dal contenitore in cui girano queste prove il
+sito pubblicato non si raggiunge (il proxy nega sia `peps71.github.io` sia l'API
+delle Pages), e in locale tutte le icone si scaricano e si decodificano. Quindi
+qui si è tolto di mezzo tutto quello che era cambiato intorno all'icona e si è
+scritta la dichiarazione nel modo più semplice che esista:
+
+| Prima | Adesso | Perché |
+| --- | --- | --- |
+| `"id": "./"` nel manifesto | tolto | Era l'unica cosa aggiunta nella 142 che tocca l'**identità** dell'app. Senza, vale lo `start_url` — che è l'identità che questa app ha sempre avuto |
+| `"src": "./icon-192.png"` | `"src": "icon-192.png"` | Identico una volta risolto, ma una variabile in meno |
+| `<link rel="apple-touch-icon" href="./apple-touch-icon-180.png">` | `href="apple-touch-icon-180.png"`, con `sizes="180x180"`, più la riga `apple-touch-icon-precomposed` per le versioni vecchie di iOS | Stessa ragione, e la misura dichiarata toglie al telefono un passaggio da indovinare |
+
+Le icone non sono state toccate: i file sono quelli, byte per byte.
+
+### Il controllo che mancava
+
+Le prove guardavano che le icone **esistessero** e fossero della misura giusta.
+Non guardavano che **arrivassero**. Adesso `prove/installabile.mjs` le chiede una
+per una come le chiederebbe il telefono e controlla stato, tipo e peso della
+risposta:
+
+```
+4bis. le icone arrivano davvero a chi le chiede
+  icon-192.png: 200 image/png 89354 byte
+  apple-touch-icon-180.png: 200 image/png 79919 byte
+```
+
+### Il limite da tenere a mente
+
+Questo controllo gira **sul computer, su un server locale**. Non dice niente su
+cosa serve GitHub Pages, e non dice niente su cosa fa l'iPhone: Safari sceglie
+l'icona con regole sue, che cambiano da una versione all'altra di iOS, e qui non
+c'è nessun iPhone. Una prova automatica non può chiudere questo cerchio da sola —
+l'ultimo passo resta guardare il telefono.
+
+## Le foto: lo scontrino, il danno, il documento (versione 143)
+
+Una nota dice «gomme nuove, gommista di via Firenze». Con la foto dello
+scontrino attaccata, tre mesi dopo dal carrozziere o dall'assicurazione non si
+cerca più niente in nessun cassetto. Da qui ogni nota può portarsi dietro fino a
+sei foto.
+
+Si scatta dal pulsante **Aggiungi una foto** nel modulo della nota, oppure dalla
+matita su una nota già scritta. Il pulsante non ha l'attributo `capture`: così il
+telefono apre un menu invece della sola fotocamera, e lo scontrino fotografato al
+distributore la mattina si può allegare la sera. Le foto si vedono sia in
+**Gestione → Note** sia **sotto la giornata** a cui la nota si riferisce; si
+toccano e si aprono a tutto schermo.
+
+### Dove stanno le foto, e perché non dove sta il resto
+
+Tutti gli archivi dell'app vivono in `localStorage`, che ha un tetto fra i 5 e i
+10 MB. **Una sola foto dell'iPhone, da 3 a 5 MB, lo riempirebbe.** Quindi due
+accorgimenti, e sono tutti e due obbligatori, non eleganze:
+
+1. **la foto si rimpicciolisce nel telefono prima di salvarla** (`comprimiFoto`):
+   lato lungo 1600 punti e qualità calante finché non sta sotto il quarto di
+   mega. Nella prova una foto da 798 KB a 3000×2000 esce a **243 KB a 1600×1067**,
+   e lo scontrino resta leggibile;
+2. **finisce in IndexedDB**, il magazzino grande del browser, che quel tetto non
+   ce l'ha. Nei dati dei conti entra solo l'identificativo della foto, che sono
+   sedici cifre.
+
+Il risultato lo misura la prova: con una foto allegata il file di backup resta di
+**1 KB** mentre la foto, fuori, ne pesa 243. Nel backup e in tutto `localStorage`
+non c'è nessuna immagine — la prova le cerca una chiave alla volta.
+
+### Sul Cloud, ma non in continuo
+
+Tutti gli altri archivi hanno un `onSnapshot` che tiene i dispositivi allineati da
+solo. Per le foto no: sarebbero megabyte riscaricati a ogni apertura dell'app, in
+mezzo al traffico, a spese del telefono. Si caricano quando si scattano e si
+leggono **una per una, solo quando servono davvero** — cioè quando le si guarda da
+un altro dispositivo. Una volta scese restano nel magazzino locale e non si
+ripassano più. Le regole di Firestore non vanno toccate: coprono già tutta la
+cartella dell'account.
+
+### Il backup delle foto viaggia per conto suo
+
+Dentro il backup normale le foto lo farebbero passare da qualche centinaio di
+kilobyte a decine di megabyte, e quel file deve restare leggero perché lo si fa
+spesso. In **Gestione → Backup** c'è un pulsante a parte, *Scarica le N foto
+allegate*, e il suo gemello per rimetterle. Le note sanno già quali foto cercare:
+nel backup normale ognuna porta la lista degli identificativi. Se una foto manca,
+la nota si disegna lo stesso e il riquadro resta grigio — non si rompe niente.
+
+### Quando una nota se ne va
+
+Una foto senza la sua nota non la ritrova più nessuno: viene eliminata con lei, e
+la domanda di conferma lo dice prima («se ne vanno anche le 2 foto allegate»).
+Staccare una singola foto dalla matita la elimina qui e sul Cloud.
+
+### Due difetti presi mentre si costruiva
+
+**Il riquadro che restava vuoto per sempre.** Le foto non si caricano durante il
+disegno — la schermata resterebbe ferma ad aspettare il magazzino — ma subito
+dopo, riempiendo i riquadri lasciati vuoti. Per non far partire dieci caricamenti
+insieme avevo messo un interruttore: se un riempimento era in corso, il successivo
+si lasciava perdere. Sembrava prudente ed era un difetto: la schermata si
+ridisegna in continuo, e il ridisegno che capitava mentre le foto stavano
+arrivando restava con i riquadri vuoti **per sempre**. Adesso le richieste si
+mettono in fila invece di sparire. È uscito dalla prova, non dall'occhio.
+
+**Due classi che non esistevano.** Le miniature erano larghe `w-14` e alte `h-14`:
+due classi che il foglio di stile dell'app non conosce, quindi due righe che non
+facevano niente, in silenzio. Il controllo delle classi non le aveva viste perché
+stavano dentro una costante JavaScript e non in un attributo `class="..."`. La
+misura adesso sta nello stile, e `prove/classi.py` guarda anche dentro le costanti
+`CLASSE_*`.
+
+## Si installa come una vera app: il controllo, e sei difetti che nascondeva (versione 142)
+
+TaxiManager è una PWA: aggiunta alla schermata Home di un iPhone o di un telefono
+Android si apre a tutto schermo, senza la barra del browser, e funziona senza campo.
+Quello che decide se si comporta da app o da pagina web non si vede mai guardando
+l'app: sta nel manifesto, nelle icone e in tre righe dell'intestazione. Finché
+nessuno lo misura, un difetto lì dentro non dà nessun segnale.
+
+La prova nuova, `prove/installabile.mjs`, lo misura. Il giudizio sul manifesto non
+lo diamo noi: lo chiede al browser stesso (`Page.getAppManifest`), che è lo stesso
+codice che decide se proporre l'installazione. Poi apre davvero le icone e le
+misura un punto alla volta, legge l'intestazione della pagina, confronta il colore
+della schermata di apertura con lo sfondo vero, calcola se la barra in basso e il
+messaggio di servizio stanno sopra la barra di casa dell'iPhone, e infine stacca la
+rete per controllare che `start_url` apra l'app e non la pagina di errore.
+
+Alla prima passata ha trovato sei cose, tutte vere, tutte invisibili a occhio:
+
+| Cosa | Perché contava |
+| --- | --- |
+| L'icona ritagliabile non aveva una vera cornice | Android non mostra l'icona com'è: la taglia con la forma di sistema. Al posto del margine c'era l'arte stessa sfocata e ingrandita - sembrava una cornice, ma restava disegno: il ritaglio tondo si portava via il muso e la coda dell'auto |
+| La stessa icona aveva punti trasparenti | Sull'iPhone i punti trasparenti diventano neri |
+| `background_color` era `#f9fafb`, lo sfondo vero `#faf9f6` | La carta dell'app era diventata calda e il manifesto era rimasto al grigio di prima: all'apertura si vedeva un lampo di colore diverso |
+| Mancava `id` nel manifesto | È il nome con cui il telefono riconosce l'app: senza, cambiando l'indirizzo di partenza la crede un'altra |
+| Mancava `mobile-web-app-capable` | C'era solo la riga per l'iPhone, non quella che legge Android |
+| Il messaggio di servizio stava a 96 punti dal fondo | La barra in basso è alta 63, ma sull'iPhone si allunga di altri 34 per stare sopra la barra di casa: il messaggio ci finiva sopra, proprio mentre dice «corsa registrata». Adesso l'altezza si somma invece di indovinarla |
+
+L'icona non è stata ritoccata a mano: è stato corretto `strumenti/icone.mjs`, che la
+rigenera da `icona-sorgente.jpg`. Ora il margine è giallo taxi pieno e l'arte sta
+tutta dentro la zona sicura. Le altre sei icone sono tornate identiche al byte, il
+che dice che lo strumento è deterministico.
+
+**Un difetto della prova stessa, per ricordarselo.** Il controllo sul messaggio di
+servizio continuava a fallire anche dopo la correzione. Il valore già calcolato non
+serviva - `env(safe-area-inset-bottom)` sul computer vale zero - e bisognava andare a
+leggere la regola nel foglio di stile. Ma la ricerca saltava proprio quella regola:
+nei browser nuovi ogni regola CSS ha una lista di regole annidate, quasi sempre
+vuota, e scendendo lì dentro la regola stessa non la si guardava mai. Una prova che
+dice «rotto» quando è a posto fa perdere tempo quanto una che tace.
+
+## Le note: quello che è successo, con la sua data (versione 141)
+
+Una scheda nuova in **Gestione → Note**. Serve a rispondere a una domanda che
+dentro l'app non aveva risposta: *«quand'è che mi era successo?»*. La gomma
+cambiata, la grandinata, il cliente da ricordare, la multa contestata, la visita
+medica.
+
+Una nota ha tre cose: **quando**, **che tipo** e **che cosa è successo**. I tipi
+proposti sono guasto o riparazione, incidente, multa o contestazione, cliente,
+documenti e pratiche, vettura, salute, lavoro, altro — più «Altro (scrivi tu)»
+per uno che non c'è in elenco, come già funziona per le spese.
+
+### Dove si vedono
+
+Nella scheda **Note**, raggruppate per mese e dalla più recente, con un filtro
+per tipo che compare quando i tipi usati sono più d'uno. E, soprattutto,
+**sotto la giornata a cui si riferiscono**: aprendo quel giorno in «Giornate» o
+in «Andamento», la nota è lì con il suo tipo. Scriverle e non ritrovarle dove
+quella giornata si legge sarebbe stato metà lavoro.
+
+### Quello che le note NON fanno
+
+**Non sono movimenti e non entrano in nessun conto.** Incassi, spese, numero di
+corse, budget, conguaglio, costo della giornata e stima delle tasse non le
+vedono nemmeno. La prova lo verifica una per una: dopo aver scritto due note,
+ognuno di quei numeri è identico al centesimo.
+
+Viaggiano nel **backup** e si sincronizzano sul **Cloud** come scadenze e
+vetture, con lo stesso trattamento prudente: un elenco vuoto che arriva dal
+server si applica solo dopo che il Cloud ha dimostrato di accettare le
+scritture.
+
+### Una guardia che ha fatto il suo mestiere
+
+Registrando la scheda nuova mi ero dimenticato la lista bianca delle schede
+valide. Il risultato non è stato una schermata rotta: `switchTab('note')`
+riportava tranquillamente alla dashboard, perché l'app scarta i nomi di scheda
+che non conosce. Il difetto è saltato fuori alla prima riga della prova, che non
+trovava il campo della data.
+
+Prova nuova, `prove/testNote.mjs`, venti controlli dai tasti veri. Le due sonde
+di impaginazione adesso guardano anche questa schermata.
+
+## Il controllo che trova le spese rimaste senza voce (versione 140)
+
+La 139 chiede di riagganciare le spese **nel momento in cui** rinomini una
+voce. Ma chi l'ha rinominata prima si ritrova il danno già in archivio, e
+nessuno glielo dice. Adesso l'app lo cerca da sola.
+
+In cima al budget compare un avviso quando trova spese che **somigliano a una
+voce ma non le sono agganciate**: quante sono, quanto fanno, le prime sei con
+data e importo, e un tasto **«Aggancia»**. La sezione del budget si apre da
+sola quando ce n'è almeno una.
+
+### Il criterio è stretto di proposito
+
+Si guardano solo le spese che **non si agganciano a nessuna voce** e che non
+sono già nel mucchio dei costi fissi fuori budget (di quelle parla già il
+conguaglio). Di queste, solo quelle il cui nome **contiene il nome di una voce o
+è contenuto in esso**: «Radio» e «Radio taxi» si trovano, «Carburante» e
+«Lavaggio» no. E se una spesa somiglia a **due** voci, l'app tace invece di
+indovinare.
+
+«Aggancia» riscrive solo l'etichetta perché combaci con la voce — importi, date
+e metodi non si toccano — e conserva il dettaglio dopo il trattino. Chiede
+conferma dicendo quante spese e per quanti euro.
+
+Prova nuova, `prove/testOrfane.mjs`, sedici controlli. Oltre a verificare che il
+riaggancio funzioni, misura la cosa che conta davvero: **la giornata perde
+esattamente il doppione**, non un euro di più — carburante e lavaggio restano
+fuori budget perché fuori budget ci stanno per davvero.
+
+## Controllo di coerenza, e la voce rinominata che si perdeva la storia (versione 139)
+
+Un giro completo sul motore costruito dopo la versione 121: il costo della
+giornata con dentro l'IRPEF, il budget fuso col conguaglio, i corrispettivi, il
+segno «da verificare». Stesso metodo di allora: identità che devono valere
+sempre, e se due strade portano allo stesso numero devono portarci davvero.
+
+**Ottantuno identità, nessuna incoerenza.** Fra queste: il costo del giorno è
+budget + spese del giorno + IRPEF da tutte e due le strade che lo calcolano; la
+quota IRPEF moltiplicata per i giorni dell'anno fa l'IRPEF dell'anno, ed è
+identica in ogni giorno dello stesso anno; i contributi INPS restano fuori da
+quella quota; ogni spesa coperta dal budget finisce in una riga del conguaglio,
+una volta sola; i dodici mesi dei corrispettivi fanno gli incassi dell'anno e
+non perdono nemmeno una corsa; i segni «da verificare» contati per giorno fanno
+quelli contati per metodo.
+
+Più dieci situazioni scomode sul motore nuovo — anno senza incassi, voce a zero,
+voce senza nome, bisestile, utile da scaglione alto, solo contanti, spesa con
+data futura, voce che vale un giorno solo, importi negativi per sbaglio: nessuna
+eccezione, nessun NaN, nessuna schermata sporca. E nessuna funzione morta su 471.
+
+### Ma un difetto vero c'era, ed era silenzioso
+
+**Rinominare una voce di budget le faceva perdere tutte le spese già
+registrate.** Una spesa si aggancia al budget dal nome: rinominando «Radio taxi»
+in «Radio», le rate già pagate smettevano di agganciarsi. Il danno era doppio:
+
+- la voce mostrava **speso 0,00 €**, come se non l'avessi mai pagata;
+- quegli stessi soldi ricominciavano a pesare sulla giornata come **spese fuori
+  budget**, mentre la quota del budget pesava lo stesso.
+
+Misurato: la giornata passava da **8,63 € a 18,01 €**, con la stessa spesa
+contata due volte. Senza un avviso, senza un numero rosso: solo un costo
+giornaliero diventato il doppio.
+
+Adesso l'app se ne accorge. Al salvataggio, se il nome è cambiato, cerca le
+spese che erano agganciate a quello vecchio e chiede se riagganciarle. Si
+riscrive solo l'etichetta — importi, date e metodi non si toccano — e il
+dettaglio dopo il trattino si conserva: «Radio taxi - rata marzo» diventa
+«Radio - rata marzo». Rispondendo di no non cambia niente.
+
+Prova nuova, `prove/testRinomina.mjs`, dieci controlli. Verificata nell'unico
+modo che conta: **contro il codice della 138 fallisce**, e fallisce proprio sul
+controllo che la giornata non raddoppi.
+
+## La scheda si chiama «Spese» (versione 138)
+
+Con la stima delle tasse passata in «Commercialista», il nome «Spese e tasse»
+prometteva qualcosa che liù non c'è più. Adesso la scheda si chiama **Spese**,
+sia nel titolo sia nell'indice di Gestione.
+
+Per strada sono venuti fuori **due rimandi a un nome ancora più vecchio**,
+«Spese & Fisco», rimasti da qualche versione fa:
+
+- nella scheda del pareggio, «accantonamento 51% · calcolato sulla stima di
+  Spese & Fisco» — e quella stima, dalla 137, sta in **Commercialista**:
+  il rimando era sbagliato due volte;
+- nel registro spese, «il confronto con quello che hai speso davvero in
+  Spese & Fisco» → adesso ««Spese»».
+
+Aggiornati anche i tre commenti nel codice che citavano il nome vecchio, e le
+prove che aprivano la schermata chiamandola per nome.
+
+## La stima delle tasse va dal commercialista (versione 137)
+
+Stava in fondo a «Spese e tasse», sotto il carburante e la manutenzione. Ma è
+roba da scrivania — INPS, IRPEF, addizionali, la soglia del forfettario — e si
+guarda quando si fanno i conti con chi li firma, non mentre si segna un pieno.
+
+È passata in **Commercialista**, sotto il prospetto da stampare. Con lei si è
+spostato anche il blocco **Approfondimenti fiscali** (il confronto fra le due
+basi di calcolo e la soglia del regime forfettario): diceva di sé «numeri da
+guardare una volta l'anno con il commercialista», quindi lasciarlo indietro
+avrebbe diviso in due lo stesso discorso.
+
+Il markup è quello di prima, intero: cambia solo la schermata che lo ospita. È
+stato estratto in una funzione sua, `sezioneStimaTasse()`, invece di essere
+trascinato da una schermata all'altra — l'unica variabile che prendeva da fuori,
+la soglia del forfettario, adesso se la calcola da sé.
+
+Sta **fuori dal foglio da stampare**: il prospetto è fatto di numeri del
+registro, la stima è un calcolo dell'app, e mescolarli in un documento che va al
+commercialista sarebbe stato scorretto.
+
+### Il totale delle uscite è tornato
+
+Finché la stima stava lì, il totale delle spese dell'anno si leggeva dentro quel
+blocco. Spostandolo, una schermata che parla di spese restava senza il totale
+delle spese. Adesso c'è, sopra le tre schede per categoria: **uscite dell'anno,
+e di cui tracciate**.
+
+### I rimandi
+
+Tre testi puntavano a una sezione che non è più lì. Il budget diceva «INPS e
+IRPEF lasciali fuori: sono già stimate più sotto» → adesso dice «in
+Commercialista». E i due sottotitoli, nella schermata e nell'indice di Gestione,
+dicono cosa c'è davvero in ciascuna.
+
+### La prova
+
+`coerenzaVideo` controllava che sei numeri fiscali comparissero in «Spese e
+tasse»: adesso li cerca in «Commercialista». E c'è un controllo nuovo che
+pretende il contrario — che in «Spese e tasse» quei numeri **non** ci siano
+più. Una sezione spostata che resta anche dove stava è un doppione, ed è
+esattamente l'errore che un cambio così può lasciarsi dietro.
+
+## Righe sempre uguali, e un separatore (versione 136)
+
+Le tre cifre stavano in un blocco unico che andava a capo da sé. Con un budget
+da quattro cifre lo speso finiva sotto; con uno da tre restava accanto. Due
+voci di fila non si leggevano mai allo stesso modo:
+
+    budget 1.387,00 €   speso 0,00 €
+    +1.387,00 €
+    ---
+    budget 1.200,00 €
+    speso 370,00 €   +830,00 €
+
+Adesso la struttura è fissa, qualunque sia la cifra:
+
+    Assicurazione auto                      3,80 €/g
+    budget 1.387,00 €
+    speso 0,00 € · +1.387,00 €
+    ▸ 1 movimento
+
+Il **budget sulla sua riga**, sotto **speso e differenza separati da un punto**,
+e in fondo, solo quando c'è qualcosa da dire, le informazioni secondarie:
+periodo, scadenza, quota reale di oggi, movimenti.
+
+### La rata è rientrata nella riga del budget
+
+Per una voce mensile servono due numeri — la rata e il totale dell'anno. Prima
+stavano su righe diverse; adesso sono insieme, dove il confronto è immediato:
+`budget 9.564,00 € (797,00 €/mese)`.
+
+### Un limite, detto
+
+A **320 px** — iPhone SE di prima generazione e poco altro — due cifre da
+quattro zeri affiancate non ci stanno: restano 180 px di spazio e ne
+servirebbero 185. Lì la differenza va a capo lo stesso, con il separatore che
+resta comunque fra le due. **Da 390 px in su**, cioè su qualsiasi telefono degli
+ultimi dieci anni, stanno sulla stessa riga.
+
+La prova lo dice esplicitamente invece di nasconderlo: controlla la **posizione
+verticale vera** degli elementi a 320, 390 e 430 px, pretende che lo speso stia
+sempre sotto il budget e che il separatore ci sia a tutte le larghezze, e
+pretende l'affiancamento solo da 390 px in su. Otto controlli nuovi,
+ventinove in tutto.
+
+## Tre cifre, tre colori, sempre gli stessi (versione 135)
+
+Le tre cifre sotto ogni voce del budget erano colorate con criteri diversi: il
+budget grigio, lo speso grigio o rosso a seconda di quanto fosse maturato
+dell'anno, la differenza grigia, verde o rossa. Tre regole da ricordare per
+leggere una riga sola.
+
+Adesso la regola è una:
+
+| Cifra | Colore |
+| --- | --- |
+| **budget** | blu — è la previsione |
+| **speso** | **rosso** se qualcosa è uscito, **grigio** se non ancora |
+| **differenza** | **verde** se avanza, **rossa** se sfora, grigia se è pari |
+
+Tutte e tre con lo stesso peso, così si leggono come una riga sola e non come
+tre informazioni di importanza diversa. La stessa regola vale sulla riga delle
+spese fuori budget.
+
+### Cosa si è perso, e dov'è finito
+
+Prima lo «speso» diventava rosso quando quella voce correva più in fretta
+dell'anno — un'informazione utile, ma che richiedeva di sapere la regola.
+Adesso il rosso dice solo «qui è uscito del denaro». Il confronto col passo
+dell'anno non è sparito: sta nel suggerimento al tocco prolungato sullo speso
+(«A oggi ne è maturato 1.060,20 €») e, per tutto il budget insieme, nella barra
+dello stato di avanzamento sopra l'elenco.
+
+Otto controlli nuovi (ventuno in tutto) su quattro voci costruite apposta — mai
+pagata, sotto budget, sforata, pari — e non sulle classi scritte nel codice ma
+sul **colore calcolato dal browser**, che è quello che l'occhio vede davvero.
+
+## Budget e conguaglio, una sezione sola (versione 134)
+
+Erano due schede separate che parlavano delle **stesse voci**: sopra l'elenco
+modificabile («Assicurazione auto · 3,80 €/g»), mezzo schermo più giù una
+tabella con gli stessi nomi e i numeri veri («Assicurazione auto · 1.387,00 € ·
+speso 0,00»). Per sapere se l'assicurazione stava dentro il budget bisognava
+cercarla due volte.
+
+Adesso la voce è **una riga sola**:
+
+    Assicurazione auto                       3,80 €/g   [modifica] [elimina]
+    budget 1.387,00 € · speso 0,00 € · +1.387,00 €
+
+Toccandola si aprono i movimenti che l'hanno fatta, come faceva la tabella del
+conguaglio. Modifica ed eliminazione sono sulla stessa riga.
+
+### Cosa resta, e dove
+
+Tutto quello che c'era nel conguaglio è rimasto, dentro la stessa scheda: la
+**barra dello stato di avanzamento** (a che punto è l'anno, quanto ne hai
+speso), la **differenza complessiva** accanto alla previsione giornaliera in
+testata, l'avviso sui **movimenti con data futura**, quello su un anno **senza
+nessuna spesa registrata**, e la riga gialla delle **spese fuori budget** in
+fondo all'elenco, con l'assegnazione a una voce.
+
+La colonnina «a oggi» di ogni riga non c'è più come testo: su un telefono
+allungava la riga di un terzo. Il segnale che serviva c'è ancora, ed è più
+diretto: **«speso» diventa rosso** quando quella voce corre più in fretta
+dell'anno. Il valore esatto resta nel suggerimento al tocco prolungato.
+
+Via anche l'importo per periodo sulle voci annuali («1.387,00 €/anno» diceva la
+stessa cosa di «budget 1.387,00 €»); resta sulle mensili, dove 797 €/mese e
+9.564 € l'anno sono due informazioni diverse.
+
+### Quanto si è accorciato
+
+Con dieci voci e le loro spese, misurato a 390 px:
+
+| | Prima | Dopo |
+| --- | --- | --- |
+| Le sezioni del budget | 978 + 1666 = **2644 px** | **1626 px** |
+| La pagina intera | 5146 px | **4104 px** |
+
+Tre controlli nuovi nella prova (tredici in tutto): la sezione deve portare i
+numeri del conguaglio, e dev'essercene **una sola** — così se un domani qualcuno
+rimette la seconda scheda, la prova se ne accorge.
+
+## Il budget compattato (versione 133)
+
+Con dieci voci, la sezione del budget era alta **2181 px** su un telefono: si
+scorreva mezzo minuto per arrivare al conguaglio. Adesso è **969 px**, meno
+della metà, con le stesse dieci voci.
+
+### Da dove venivano tutti quei pixel
+
+**Tre paragrafi di spiegazione sempre aperti** nella testata della sezione:
+cosa sono i costi fissi, perché il budget è la base minima, cosa succede quando
+il conto vero supera la previsione. Testo giusto, ma da leggere una volta, non
+ogni volta che apri la pagina. Sono finiti nel pieghevole «Come funziona, e
+come si compila», insieme a quelli che c'erano già. Nella testata restano il
+titolo, il numero di voci e la previsione giornaliera.
+
+**Ogni voce era una scheda** col suo bordo, il suo fondo grigio e due pulsanti
+scritti a parole («Modifica», «Rimuovi»). Adesso l'elenco è un blocco solo con
+le righe divise da una linea, come il registro delle corse: nome e quota
+giornaliera sopra, importo e periodo in piccolo sotto, e due icone — matita e
+cestino — a destra. Da ~110 px a **60 px** per voce.
+
+**Il tasto «Salva il budget»** stava sempre lì, anche quando non c'era niente
+da salvare. Adesso compare solo mentre una voce è aperta in modifica: chiudendo
+con «Fatto» il salvataggio avviene già.
+
+### Com'è adesso
+
+Il tasto **«+ Inserisci una voce di budget»** in cima, e sotto l'elenco
+intitolato **«Budget del 2026»** con modifica ed eliminazione su ogni riga.
+
+### Quello che è saltato fuori per strada
+
+Stringendo le righe, due nomi finivano tagliati a 375 e 390 px — «Commercialista»
+e «Finanziamento» sono parole singole e lunghe, e non vanno a capo. La scheda è
+passata da `p-6` a `p-5` (sedici pixel di larghezza in più, che su un telefono
+stretto contano) e la classe del nome adesso spezza la parola invece di
+lasciarla tagliare: una parola spezzata si legge, una tagliata no.
+
+Prova nuova, `prove/testBudgetCompatto.mjs`: undici controlli. Misura
+**l'altezza** della sezione e di una riga con dieci voci — non è una prova di
+stile, è una prova di quanta pagina occupa, che è la cosa che si era rotta —
+controlla che le spiegazioni ci siano ancora ma chiuse, e percorre
+inserisci / modifica / elimina dai tasti veri.
+
+## Due caselle, non tutta la riga (versione 132)
+
+La 131 colorava la riga intera. Sbagliato: una riga tutta gialla dice che c'è
+qualcosa da guardare, ma non dice **dove** — e in un prospetto che si compila
+una colonna alla volta è proprio il «dove» che serve.
+
+Adesso si accendono **due caselle e due soltanto**: il **giorno** e il **metodo
+di pagamento** con cui quella corsa è stata incassata. Le altre colonne, la
+colonna del totale compresa, restano bianche.
+
+    Giorno    Contanti    POS        Conto     Totale
+    10/03 █    61,00     █ ⚑ 42,50       —      103,50
+    12/03       —            —          18,00    18,00
+
+La casella del giorno tiene la barra arancione sul bordo sinistro: sta nella
+colonna che resta ferma mentre la tabella scorre di lato, quindi la vedi da
+qualunque colonna tu stia guardando.
+
+La prova adesso controlla anche il contrario di quello che deve succedere:
+**una sola** casella colorata fra i metodi, il totale bianco, e le righe senza
+segno completamente pulite. Ventisette controlli.
+
+## La riga da controllare si vede (versione 131)
+
+La cella colorata da sola non bastava: la tabella dei corrispettivi scorre di
+lato, e se la colonna di quel metodo è fuori schermo non si vede più niente.
+
+Adesso la riga si evidenzia su tre livelli, dal generale al particolare:
+
+- **tutta la riga** prende un fondo giallo chiaro;
+- **la colonna del giorno** — quella che resta ferma mentre la tabella scorre,
+  quindi l'unica che si vede sempre — prende una tinta più carica e una barra
+  arancione sul bordo sinistro;
+- **la cella del metodo** tiene la tinta più decisa e la bandierina.
+
+Così la riga dice **quale giorno** guardare e, dentro la riga, la cella dice
+**quale cifra** controllare.
+
+I colori sono scritti a mano invece che con le classi di Tailwind, perché
+devono scavalcare il fondo fisso della colonna ferma: senza, quella resterebbe
+bianca in mezzo a una riga gialla.
+
+Sei controlli nuovi nella prova (ventisei in tutto), e non sul markup ma sul
+**colore calcolato**: la riga segnata deve staccarsi da quelle normali, la
+colonna ferma dev'essere colorata e portare la barra, e le righe senza segno
+devono restare bianche.
+
+## Il segno va sulla colonna del metodo (versione 130)
+
+Nella 129 i corrispettivi portavano il promemoria in due posti: un riquadro
+giallo in cima alla sezione, con l'elenco di tutte le corse da controllare, e
+una pastiglia nella colonna del giorno. Era troppo, e soprattutto era nel posto
+sbagliato: il prospetto dei corrispettivi si compila **una colonna alla volta**,
+quindi la nota serve dov'è la cifra da controllare, non sopra tutto il resto.
+
+Adesso il segno sta **solo nella cella del metodo di pagamento** con cui quella
+corsa è stata incassata. La cella prende un fondo giallo chiaro e una
+bandierina; se le corse da verificare in quel giorno e con quel metodo sono più
+d'una, accanto alla bandierina c'è il numero. Il resto della tabella non cambia.
+
+Via il riquadro in cima e via la pastiglia nella colonna del giorno. La
+funzione che costruiva l'elenco del mese non la guardava più nessuno ed è stata
+tolta.
+
+Nel registro della giornata e sulla testata della giornata non cambia niente:
+lì il segno resta dov'era.
+
+## Una corsa da ricontrollare a fine mese (versione 129)
+
+Capita di registrare una corsa su cui resta qualcosa da verificare: un importo
+da confermare, una ricevuta da cercare, una convenzione da controllare. Finora
+l'unico modo era ricordarselo.
+
+Adesso ogni corsa ha una **bandierina**. Toccandola la corsa si segna, e il
+segno la segue dappertutto:
+
+- **nel registro della giornata**: la riga diventa gialla e porta la pastiglia
+  «da verificare»;
+- **sulla testata della giornata**, anche chiusa: «2 da verificare», così non
+  serve aprire l'elenco per accorgersene;
+- **nei corrispettivi**, che è il posto dove i conti del mese si chiudono: in
+  cima alla sezione c'è l'elenco di quello che resta da controllare — data,
+  importo, metodo — con un tasto «Verificata» per togliere il segno, e ogni
+  riga apre la giornata corrispondente. La riga del giorno, nella tabella,
+  porta il suo conteggio.
+
+Si può anche segnare al momento: nel modulo della corsa c'è la spunta **«Da
+verificare a fine mese»**.
+
+### Quello che il segno NON fa
+
+Non è una nota e non cambia nessun importo: incassi, totali del mese, numero
+di corse e stima delle tasse restano quelli di prima. È un promemoria, e si
+toglie toccandolo di nuovo. Il campo si scrive sul movimento solo quando c'è:
+una corsa senza niente da verificare resta pulita com'era.
+
+Nel **prospetto CSV** la colonna «Da verificare» compare solo se quel mese ha
+almeno una corsa segnata: nei mesi normali il file che va al commercialista
+resta identico a prima.
+
+Prova nuova, `prove/testVerifica.mjs`: diciassette controlli sul dato, sulle
+tre schermate e sul fatto che nessun importo si muova.
+
+## L'aggiornamento non arrivava sul telefono (versione 128)
+
+«L'hai rilasciata la v127? Perché anche se aggiorno rimane alla precedente.»
+La versione era pubblicata davvero — GitHub Pages l'aveva messa online — ma
+sul telefono non arrivava. Il difetto era nel service worker, ed era vero.
+
+### Cosa succedeva
+
+Installandosi, il service worker si scarica i file dell'app con `cache.add`.
+`cache.add` fa una **fetch normale**, e una fetch normale può essere servita
+dalla **cache HTTP del browser**. GitHub Pages manda `Cache-Control:
+max-age=600`: per dieci minuti dopo uno scarico, la stessa richiesta torna
+dalla cache senza toccare la rete.
+
+Quindi: due versioni pubblicate a meno di dieci minuti l'una dall'altra (v126
+alle 11:32, v127 alle 11:42) e il service worker **nuovo** si salvava la pagina
+**vecchia**. Il numero di versione del service worker cambiava, l'app no.
+
+Il tasto «Aggiorna adesso» peggiorava le cose: `registration.update()` non
+trovava niente di nuovo da installare, la pagina si ricaricava, e si riapriva
+la stessa versione. Da fuori sembrava che il tasto non facesse niente.
+
+### Le tre correzioni
+
+1. **I file si scaricano dalla rete, per forza**: `cache.add(new Request(file,
+   { cache: 'reload' }))`. Se un browser vecchio non conosce l'opzione si
+   riprova alla maniera di prima — meglio una copia dubbia che nessuna copia
+   offline.
+2. **Il service worker si registra con `updateViaCache: 'none'`**, così nemmeno
+   lui può essere letto da una cache.
+3. **«Aggiorna adesso» ha una via d'uscita.** Quando non trova una versione in
+   attesa non si limita più a ricaricare: chiede al service worker di
+   riscaricare i file dalla rete (messaggio `RISCARICA_APP`) e poi ricarica.
+   Costa pochi secondi e toglie di mezzo il caso peggiore, cioè una copia
+   vecchia già finita in cache. I messaggi dicono cosa sta succedendo invece di
+   tacere.
+
+### La prova che mancava
+
+`prove/testSW.mjs` non poteva vedere questo difetto: il suo server serve i file
+con `no-cache`. La prova nuova, `prove/testAggiorna.mjs`, si comporta come
+GitHub Pages (`max-age=600`), pubblica una versione A, scalda la cache HTTP,
+pubblica una B entro i dieci minuti e controlla che in cache finisca la B.
+
+Verificata nell'unico modo che conta: **con il service worker della v127 la
+prova fallisce**, con quello nuovo passa.
+
+## Le diciture, riscritte da gestionale (versione 127)
+
+L'app parlava come un amico al bar: «Come va il 2026», «Ti resta», «Quanto?»,
+«Mi fa fattura», «Da dove a dove (se vuoi)», «Benvenuto: dicci chi sei». È un
+gestionale per un'attività di taxi, non una chiacchierata: le diciture adesso
+dicono la cosa e basta.
+
+### Titoli e sezioni
+
+| Prima | Adesso |
+| --- | --- |
+| Come va il 2026 | Andamento 2026 |
+| Le mie auto | Parco auto |
+| Ti resta | Margine |
+| Da mettere da parte · Tuoi | Da accantonare · Netto |
+| Resta a te | Netto stimato |
+| Come è fatto questo conto | Dettaglio del calcolo |
+| 3 scadenze da tenere d'occhio | 3 scadenze in avvicinamento |
+| Paghi queste cose, ma non sono nel budget | Costi ricorrenti non presenti a budget |
+| A che punto sei | Stato di avanzamento |
+| Cosa c'è, anno per anno | Dati presenti, anno per anno |
+| Giornata / Mese più fiacco | Giornata / Mese peggiore |
+
+### Campi dei moduli
+
+| Prima | Adesso |
+| --- | --- |
+| Quanto? | Importo (€) |
+| Come ha pagato? · Come hai pagato? | Metodo di pagamento |
+| Mi fa fattura | Con fattura |
+| Che spesa è | Tipo di spesa |
+| Da dove a dove (se vuoi) | Tratta (facoltativa) |
+| Quanto vale oggi, a occhio (€) | Valore attuale stimato (€) |
+| Quanto hai incassato (€) | Importo incassato (€) |
+| Quanto ti è costata | Costo sostenuto |
+| Quanto costa ogni chilometro | Costo al chilometro |
+| Quale ti è convenuta di più | Quale è stata più conveniente |
+
+### Sottotitoli delle schermate
+
+Descrivono il contenuto invece di commentarlo:
+
+- «Quanto ti costa un giorno di lavoro, dove vanno i soldi e quanto è già del
+  fisco» → «Costo di una giornata, ripartizione delle uscite e quota già
+  destinata al fisco»
+- «Quelle che hai avuto, quella che usi: quanto sono costate e quanta strada
+  hanno fatto» → «Vetture in uso e dismesse: costi sostenuti e chilometri
+  percorsi»
+- «Quale turno e quale giorno della settimana ti rendono di più» → «Resa per
+  turno e per giorno della settimana»
+- «dati al sicuro sul Cloud» → «Dati sincronizzati sul Cloud»
+
+### La scheda del titolare
+
+«Benvenuto: dicci chi sei» è diventato «Dati del titolare», «Lo faccio dopo»
+è «Compila più tardi», «Salva e comincia» è «Salva e prosegui». Anche i testi
+di spiegazione sono passati dal «tu» all'impersonale.
+
+### Una parola che non ci stava
+
+«DA ACCANTONARE», in maiuscolo con le lettere distanziate, a 320 px non entrava
+in mezza colonna: «ACCANTONARE» è una parola sola e non va a capo. Tolta la
+spaziatura extra su quella sola etichetta, e le due cifre sotto passate alla
+classe che adatta il corpo come le altre.
+
+## Una cifra sola per il pareggio (versione 126)
+
+La testata scura diceva **Spese 83,90** e la scheda sotto **Costo fisso al
+giorno 93,61**: due numeri diversi per la stessa giornata. Per sapere quanto
+serviva per andare a pari bisognava guardare in due posti e capire perche' non
+coincidevano.
+
+Adesso c'è una funzione sola, `costoGiornata`, e la leggono tutte e due. Tre
+pezzi:
+
+1. la **quota dei costi a budget** di quel giorno — l'assicurazione pesa ogni
+   giorno, non solo il giorno in cui la paghi;
+2. le **spese fuori budget di quel giorno** — se oggi hai fatto il pieno, oggi
+   devi incassare quei soldi in più per andare a pari;
+3. la **quota dell'IRPEF** che l'anno promette.
+
+La casella si chiama **«Costo giorno»** invece di «Spese»: dentro c'è anche una
+tassa, e una tassa non è una spesa già uscita. Di conseguenza il **«ti resta»**
+della testata è ora esattamente il **«sopra / sotto il pareggio»** della scheda:
+
+    COSTO GIORNO  −88,77        PAREGGIO            88,77
+    TI RESTA       −0,47        SOTTO IL PAREGGIO   −0,47
+
+Un'occhiata sola, a fine turno, dice quanto manca.
+
+Il cambio vale anche in **Giornate**, perché lo stesso giorno non può dire due
+numeri diversi in due schermate. Su un periodo intero — un mese, tutte le
+giornate — la casella resta **«Spese»** con le spese vere: lì non c'è un
+pareggio da leggere, ci sono soldi usciti.
+
+### Un primo tentativo sbagliato, e come è saltato fuori
+
+La prima versione di questo cambio faceva entrare nel costo del giorno la
+**media mensile** delle spese fuori budget, perché era quello che la scheda
+faceva già. Le prove hanno bocciato il risultato: in `testCoperto`, una
+giornata con 50 € di gasolio registrato mostrava «Costo giorno −1,61» e «Ti
+resta 198,39» — ma in tasca c'erano 150 €, non 198. Quei 50 € erano usciti
+davvero, quel giorno.
+
+Quindi il modello è cambiato: le spese fuori budget restano sul giorno in cui
+le hai fatte, come ha sempre fatto la testata. Solo le voci a **budget** si
+spalmano — che poi era il senso della versione 109. E la domanda «quanto devo
+guadagnare oggi per andare a pari» trova una risposta letterale: se oggi hai
+speso 50 € di gasolio, oggi te ne servono 50 in più.
+
+### Un meno solo in tutta l'app
+
+Mettendo le due cifre una accanto all'altra e' saltato fuori che erano scritte
+con due segni diversi. `Intl` scrive il negativo con il trattino (`-`), mentre
+l'app scrive il meno tipografico (`−`) dove lo mette a mano. Nella stessa riga
+si leggeva «−88,77» e «-0,47», di lunghezza e altezza diverse. Adesso i tre
+formattatori lo uniformano una volta per tutte. I CSV e i backup non passano da
+li': scrivono i numeri grezzi, quindi nessun file cambia.
+
+Cinque controlli nuovi in `prove/testPareggio.mjs` (diciassette in tutto): le
+due cifre devono coincidere, la casella deve cambiare nome fra giorno e
+periodo, e il meno dev'essere sempre lo stesso.
+
+## L'IRPEF entra nel costo della giornata (versione 125)
+
+### «Sopra il pareggio: −32,00» non voleva dire niente
+
+L'etichetta era fissa. Quando il numero era negativo — la giornata non aveva
+coperto i suoi costi — la scheda diceva comunque «SOPRA il pareggio» e sotto
+mostrava un numero rosso col meno. Due cose che si contraddicono.
+
+Adesso l'etichetta segue il segno: **«Sopra il pareggio»** con il più, in
+verde, quando la giornata ha reso più di quello che costava; **«Sotto il
+pareggio»** con il meno, in rosso, quando è rimasta indietro. Il segno è
+scritto per esteso: un «+12,40» verde e un «−32,00» rosso si leggono senza
+doverci pensare.
+
+### Il costo del giorno adesso comprende l'IRPEF
+
+Finora il costo di una giornata era: la quota giornaliera delle voci a budget
+più la media delle spese fuori budget. L'IRPEF non c'era, per una ragione
+corretta in teoria — non è un costo fisso, è una percentuale sull'utile, e a
+utile zero non se ne paga — ma inutile per chi lavora: a giugno la cartella
+arriva lo stesso, e va messa via un po' per volta.
+
+Adesso c'è una terza voce:
+
+    a budget 83,90 € + spese fuori budget 0,00 € + IRPEF stimata 21,52 €
+
+È l'IRPEF a scaglioni **più le addizionali regionali e comunali** che ci si
+aspetta sull'utile che l'anno promette al ritmo tenuto finora — la stessa
+proiezione che l'app già usava per scegliere la percentuale di accantonamento —
+divisa per i giorni dell'anno. Si sposta man mano che l'anno va, perché si
+muove l'utile su cui è calcolata.
+
+**I contributi INPS restano fuori**: quelli sono una voce del budget, e
+contarli qui vorrebbe dire contarli due volte.
+
+### L'avviso sul doppio conteggio
+
+Lo stesso rischio vale per l'IRPEF: se nel budget c'è già una voce che la
+comprende, la stessa tassa finirebbe nel conto due volte. L'app controlla i
+nomi delle voci di budget e, se ne trova una che parla di IRPEF, lo dice in
+chiaro nella scheda invece di lasciare un numero gonfio senza spiegazione.
+
+### Il pareggio e il «ti resta» non sono più la stessa cifra
+
+Erano uguali, e adesso non lo sono più: la scheda scura in cima dice quanto ti
+è rimasto in mano dopo le spese, il pareggio dice quanto serve perché la
+giornata paghi anche la sua parte di tasse. La scheda lo spiega, sotto «Come è
+fatto questo conto».
+
+Anche il pieghevole sull'accantonamento è stato riscritto: diceva «le tasse non
+spostano il pareggio», che adesso non è più vero. Quello che si mette da parte
+è la tassa su quello che fai **in più** del ritmo dell'anno, perché il ritmo
+dell'anno è già dentro il costo del giorno.
+
+### Il titolo
+
+«Quanto costa questa giornata» è diventato **«Costo fisso al giorno»**.
+
+Nuova prova, `prove/testPareggio.mjs`: dodici controlli sulla composizione del
+costo, sulle due etichette con il loro segno e il loro colore, e sull'avviso
+del doppio conteggio.
+
+### Un difetto che si vedeva solo mentre lavoravi
+
+Cercando una regressione che non c'era, la prova dei testi tagliati ha trovato
+una cosa vera: nella schermata «Giornate», **mentre sei in turno**, la
+pastiglia «in turno» compare accanto alla data e a 320 px le toglieva settanta
+pixel. Si leggeva «sabato 3» e «ottobre 2026» tagliati a metà.
+
+Non era una novità di questa versione: c'era anche prima, e le prove non lo
+vedevano perché seminavano turni dalle 8 alle 20 — il difetto compariva solo se
+la prova girava dentro quella fascia. Adesso la prova fa cominciare il turno di
+oggi un'ora fa e finire fra un'ora, qualunque sia l'ora in cui gira: il caso
+stretto si prova sempre. La riga va a capo e la pastiglia scende sotto invece
+di stringere la data.
+
+## Meno decorazione, piu' chiarezza (versione 124)
+
+Niente di nuovo in questa versione: e' un giro di pulizia su quello che si vede
+e si legge.
+
+### Le emoji nei pulsanti sono andate via
+
+I pulsanti dicevano «💾 Salva e comincia», «📥 Scarica Backup Completo (.json)»,
+«🗑️ Cancella tutto». Un'emoji non la disegna l'app: la disegna il telefono, con
+il suo stile e la sua eta', e cambia da un modello all'altro. Nell'app le icone
+sono disegnate a mano, tutte dello stesso tratto: un'emoji accanto a una di
+quelle stona, e dentro un pulsante non aggiunge niente che il testo non dica
+gia'. Adesso i pulsanti sono solo testo.
+
+Erano in tutti i messaggi di conferma, dove ogni riga cominciava con ⚡ o ✅.
+Anche quelli sono puliti: «Corsa salvata e sincronizzata.» invece di «⚡ Corsa
+salvata e sincronizzata!».
+
+### I messaggi di avviso si riconoscono dal colore
+
+I messaggi che segnalano un guaio cominciavano con ⚠️. Al posto dell'emoji c'e'
+un secondo tipo di messaggio: `showToast(testo, 'avviso')` lo scrive in rosso
+chiaro con il bordo in tinta, mentre quello normale resta giallo. Si distingue
+anche di sfuggita, e non dipende da come il telefono disegna un simbolo.
+
+I sedici avvisi dell'app sono passati al nuovo tipo.
+
+### Le cifre tagliate
+
+Una prova nuova, `prove/troncati.mjs`, cerca in tutte le schermate gli elementi
+il cui contenuto non ci sta nel riquadro - `scrollWidth` piu' largo di
+`clientWidth` - a 320, 390 e 768 px di larghezza. Il controllo di impaginazione
+che c'era non li vedeva: il testo non esce dal riquadro, ci sta dentro tagliato
+con i puntini.
+
+Ne ha trovati **venti**, e fra questi delle cifre: «−6.026,...», «39.673,00»
+tagliato a meta'. Una cifra con i puntini non e' un'informazione incompleta, e'
+un numero che non si puo' leggere.
+
+Sono state risolte con due classi che adattano il corpo del carattere alla
+larghezza invece di tagliare (`.cifra-casella` per le tre caselle della scheda
+scura, `.cifra-riquadro` per i riquadri), con `.titolo-schermata` sui dieci
+titoli di schermata, mandando a capo i sottotitoli invece di troncarli, e
+rifacendo le righe del confronto fra anni su due livelli invece di tre colonne
+strette. La prova ora sta nel giro di `prove/tutte.sh`: adesso non c'e' piu'
+niente di tagliato.
+
+### Un solo selettore dell'anno per schermata
+
+In Andamento c'erano due tendine dell'anno a mezzo schermo di distanza: una
+nella testata, una dentro la scheda scura del riepilogo annuale - e il titolo
+diceva comunque «Come va il 2026». Tre volte la stessa cosa. E' rimasta quella
+della testata.
+
+### I nomi dei metodi di pagamento nelle tendine
+
+Nelle tendine i metodi avevano un pallino colorato davanti: «🟢 Contanti»,
+«⚫ POS / Carta». Dentro una `<option>` non si puo' colorare niente, e il
+pallino era il trucco per avere comunque un colore - ma e' un'emoji come le
+altre. Adesso c'e' il nome scritto per intero. I badge e i pulsanti, dove il
+colore lo fa il CSS, non cambiano.
+
+Ne e' venuto fuori un difetto: il pulsante dei corrispettivi componeva la sua
+etichetta prendendo la prima parola da quella mappa, cioe' il pallino. Senza
+pallino avrebbe scritto «Contanti Contanti». Sistemato, e la mappa che era
+rimasta identica a un'altra e' stata cancellata.
+
+### Un nome che non ci stava
+
+La prova dell'impaginazione, a 320 px, trovava «Carburante» tagliato nel
+riquadro delle voci che l'app propone per il budget: accanto ai due pulsanti a
+quel nome restano 82 px e gliene servono 89. Una parola sola non va a capo, e
+spezzarla a meta' si legge peggio. Adesso il corpo del carattere si adatta,
+come per le cifre, e la parola resta intera.
+
+### Le diciture
+
+I titoli in Maiuscolo Come In Inglese sono passati all'italiano: «Registra
+Nuova Corsa (Incasso)» → «Registra una corsa», «Dettaglio Spese per Categoria»
+→ «Spese per categoria», «2. Indicatori di Performance Turni & Veicolo» →
+«2. Turni e veicolo», «Report Economico & Operativo Servizio Taxi» →
+«Riepilogo economico e operativo del servizio taxi». Anche «Ora Inizio» →
+«Ora di inizio» e «Incasso / Ora» → «Incasso all'ora».
+
+## Quattro cose che mancavano (versione 123)
+
+### Riassegnare una spesa a una voce di budget
+
+Una spesa si aggancia al budget **dal nome**: «Tasse e Contributi - INPS» trova la voce «Tasse e
+Contributi». Quando i due nomi non combaciano — una vecchia riga «Costi fissi - Assicurazione
+infortuni», una categoria scritta a modo suo — la spesa resta fuori, e per sistemarla bisognava
+riscrivere la categoria a mano indovinando la forma giusta.
+
+Adesso, aprendo la riga «fuori budget» del conguaglio, ogni movimento ha un menu **«Assegna a»**:
+scegli la voce e il nome lo riscrive l'app, tenendo il dettaglio. «Costi fissi - Assicurazione
+infortuni» assegnata a «Tasse e Contributi» diventa «Tasse e Contributi - Assicurazione
+infortuni». Se il dettaglio e' gia' il nome della voce non lo si ripete. **Importo, data e metodo
+non si toccano**: cambia solo l'etichetta con cui la spesa si fa trovare.
+
+### La scadenza del budget e' una scadenza vera
+
+Una voce a scadenza con la sua data — l'assicurazione il 10 ottobre, il bollo il 30 aprile — e'
+una scadenza a tutti gli effetti. Scriverla una seconda volta fra le scadenze vorrebbe dire
+tenere due elenchi allineati a mano, e prima o poi uno dei due resta indietro.
+
+Adesso **compare da sola** nel calendario delle scadenze, con il marchio «dal budget», e
+**si spunta da sola**: quando registri il pagamento, l'app lo vede e la da' per fatta (tolleranza
+45 giorni dalla data prevista, perche' una polizza la si paga qualche giorno prima o dopo). Non
+si puo' spostare ne' eliminare da li': si cambia la voce, e c'e' il tasto che ci porta.
+
+Solo le voci **annuali a scadenza**: una rata mensile riempirebbe il calendario di dodici righe
+l'anno, e una voce a consumo non ha una data di scadenza.
+
+### Il confronto con l'anno scorso
+
+In **Andamento**, sotto il grafico del mese e dell'anno: incassato, corse, ore, euro all'ora e
+speso, con la variazione in percentuale e la freccia.
+
+Il confronto guarda lo **stesso tratto**, che e' la sola cosa che lo rende onesto: il 3 ottobre
+non si paragona un anno intero con dieci mesi. Dal 1° gennaio a oggi contro dal 1° gennaio alla
+stessa data dell'anno prima; per un mese in corso, dal primo del mese a oggi contro gli stessi
+giorni. Un anno gia' chiuso si confronta per intero, e l'etichetta dice sempre quale tratto sta
+guardando. Senza dati dell'anno prima il riquadro non compare.
+
+Il 29 febbraio si arretra al 28, che in un anno normale e' l'ultimo giorno di quel febbraio.
+
+### La schermata «Oggi» spezzata
+
+`renderSezioneGiornate` era di **587 righe**: per cambiare la riga di una spesa bisognava
+scorrere il modulo della corsa, i filtri e il registro. Sei pezzi sono usciti come funzioni
+proprie — `schedaGiornata`, `rigaCorsaGiornata`, `rigaSpesaGiornata`, `moduloCorsa`,
+`corsaLampoHTML`, `spesaLampoHTML` — e quello che gli serve arriva come **argomento invece che
+per cattura**, cosi' si legge dalla firma. La funzione scende a **325 righe**.
+
+Verificato come nella 114: l'HTML esatto di tutte e quattordici le viste, prima e dopo, identico
+a meno dei rientri.
+
+## Le prove entrano nel repository, e un giro a cercare contraddizioni
+
+Le prove automatiche stavano in una cartella di lavoro fuori dal repository, e un riavvio della
+macchina le ha cancellate tutte una volta. Adesso stanno in **`prove/`**, con il codice che
+controllano: `sh prove/tutte.sh`. Sono 26 e fanno **120 controlli**.
+
+Portabili: cercano `index.html` partendo da dove stanno, e il motore del browser dove e'
+installato (o dove dice `PLAYWRIGHT=...`).
+
+### Il giro di controllo
+
+Oltre alle identita' dei conti gia' viste nella 121, questa tornata ha aggiunto quattro prove
+nuove, pensate per trovare quello che le identita' non vedono:
+
+- **`testUso.mjs`** — l'app usata **dai suoi pulsanti**: registra un turno dal modulo del
+  calendario, tre corse e una spesa dai moduli veri, poi modifica un importo e cancella una
+  riga, controllando che i totali seguano e che il disco segua. I conti possono tornare tutti e
+  l'app rompersi appena la tocchi.
+- **`testLimiti.mjs`** — nove situazioni scomode (archivio vuoto, un turno senza corse, corse
+  senza turno, tutto a zero, 29 febbraio, capodanno a cavallo, voce di budget a zero, importi
+  enormi, caratteri speciali), passando tutte le schermate e cercando a video `NaN`, `Infinity`,
+  `undefined`: niente.
+- **`coerenza2.mjs`** — 37 identita' nuove: `getReportStats` rifa' da capo l'aggregazione che
+  fa gia' `aggregaCalcola`, due strade per lo stesso numero e **vanno confrontate**. Piu' il
+  report mese per mese che deve ricomporre l'anno, e le vetture (costo/km = perdita/km +
+  spese/km).
+- **`testGiorni.mjs`** — il giro dei giorni su cui poggia tutto il budget. Se saltasse o
+  ripetesse un giorno ai cambi dell'ora legale, i totali dell'anno sarebbero sbagliati e
+  **nessuno se ne accorgerebbe**, perche' le altre prove userebbero tutte lo stesso giro.
+  Provato su cinque anni con fuso `Europe/Rome`: 365 e 366 giorni esatti, tutti diversi, e le
+  due domeniche del cambio ora passano lisce. Una voce da 3.650 € l'anno matura 3.650,00 €
+  tanto nel 2026 quanto nel 2028 bisestile.
+- **`testIntegrita.mjs`** — un backup esportato e reimportato restituisce tutto identico:
+  movimenti, turni, scadenze, vetture, voci di budget, scheda, e i campi di una riga (nota,
+  fattura, metodo, categoria). E le scadenze rispettano la cadenza.
+
+**Esito: nessun difetto nuovo.** Dopo le correzioni della 121 e della 122 l'app regge a tutto.
+
+### E le prestazioni non hanno bisogno di niente
+
+Misurato su 8.640 movimenti e dieci voci di budget: la schermata piu' lenta e' «Spese e tasse»
+con **32 ms**, il conto piu' caro e' `budgetRealeAnno` con **10 ms**, e registrare una corsa
+costa 18 ms. L'indice dei pagamenti della 116 ha fatto il suo lavoro: non c'e' niente da
+ottimizzare.
+
+Struttura: 439 funzioni, **nessuna dichiarata e mai usata**, **nessun blocco di dieci righe
+ripetuto identico**.
+
+## Il budget e' il pavimento, non il soffitto (versione 122)
+
+*«Non capisco perche' c'e' tanto divario fra la spesa giornaliera a budget e quella reale. Io
+vorrei che fosse piu' o meno la stessa cifra; poi se supero, dal giorno in cui si supera aumenta
+anche la spesa fissa giornaliera. Se invece il budget e' superiore, a fine anno ci sara' il
+conguaglio.»*
+
+Aveva ragione, ed era un difetto della 116. Il pagamento vero comandava **sempre** — anche
+quando era piu' basso della previsione. Rifatto il conto con i suoi numeri:
+
+```
+  voce                    tipo        budget/giorno   reale/giorno   differenza
+  Manutenzione           consumo         5,48          6,12          +0,64
+  Spese banca            scadenza        1,37          1,02          -0,35
+  Radio taxi             scadenza        8,63          7,19          -1,44
+  Ristoro                consumo         1,69          2,24          +0,55
+  Tasse e Contributi     scadenza       13,15          6,91          -6,24
+                                      ------------------------------------
+  TOTALE                                30,32         23,49          -6,83
+```
+
+Quasi tutto il divario veniva da una voce sola: 4.800 € l'anno di tasse e contributi, di cui a
+ottobre ne risultavano pagati 2.523 — e la giornata scendeva a 6,91 invece di 13,15. Ma quei
+soldi vanno tirati fuori lo stesso: di qui a dicembre arrivano. Le voci «a consumo» si
+comportavano gia' bene (salgono quando superi, mai sotto); erano quelle «a scadenza» a tirare
+giu' il numero.
+
+Peggio ancora con le rate: pagata la prima di due semestrali, la giornata **dimezzava** fino
+all'arrivo della seconda.
+
+### La regola, adesso una sola per tutte le voci
+
+> La giornata pesa **almeno** quanto hai previsto. Il conto vero comanda solo quando **supera**
+> la previsione. Se a fine anno il budget risulta piu' alto del dovuto, a dirlo c'e' il
+> conguaglio.
+
+```
+  budget 4.800, pagati 2.523  →  resta a 13,15 al giorno (il budget)
+  budget 4.800, pagati 6.000  →  sale a 16,44 al giorno (la spesa vera)
+  budget 1.387, prima rata di 750  →  resta a 3,80 (non dimezza piu')
+  budget 1.387, pagata 1.500       →  sale a 4,11 (come nella 116)
+```
+
+Il conguaglio non cambia: continua a confrontare la **previsione scritta** con il **speso
+davvero**, ed e' li' che si vede se il budget era largo o stretto. Erano cinquantanove controlli
+automatici, adesso sono sessantadue.
+
+## Controllo di coerenza, e la media che contava i giorni che non c'erano (versione 121)
+
+Un giro completo a cercare contraddizioni: lo stesso numero, detto da parti diverse dell'app,
+deve essere lo stesso. Non si controlla che i conti siano giusti in assoluto — si controlla che
+**non si contraddicano**.
+
+### 43 controlli sui conti, 17 su quello che compare a video
+
+Sessanta identita' che devono valere sempre, su un archivio di due anni e 1.872 corse:
+
+- gli incassi dell'anno contati in **quattro modi** (`aggrega`, il grafico annuale, i dodici
+  grafici mensili, i dodici `aggrega` mensili) e contro la somma grezza del registro;
+- le ripartizioni che devono ricomporre il totale: i cinque metodi di incasso, le categorie di
+  spesa, tracciato + contanti, deducibili + non deducibili;
+- `getStats` contro il registro, e `utileFiscaleAnno` contro `getStats` — due strade diverse
+  per lo stesso numero;
+- tasse = INPS + IRPEF + addizionali; imponibile = utile − contributi; netto = cassa − tasse;
+- budget dell'anno = somma delle voci = somma dei dodici mesi; budget **reale** = somma dei 365
+  giorni;
+- il conguaglio: totali = somma delle righe, speso = somma dei movimenti elencati, il conteggio
+  dichiarato = i movimenti che si vedono aprendo la riga;
+- la giornata: vere = fuori budget + pagate a budget; spalmate = fuori budget + quota.
+
+E poi i numeri **letti a video**, perche' i conti possono tornare e una schermata mostrare lo
+stesso la variabile sbagliata: gli stessi importi devono comparire in Andamento, in Spese e
+tasse, nel Commercialista, in Rendimento, e lo stesso mese deve coincidere fra due schermate
+diverse.
+
+**Esito: nessuna contraddizione.** Tre segnalazioni erano aspettative sbagliate della prova, non
+dell'app: «Spese e tasse» non stampa il totale degli incassi (lo divide in tracciati e contanti,
+che e' la divisione che conta per il fisco) ne' l'utile di cassa (mostra il netto), e il registro
+spese parte filtrato sul giorno. Le somme tornano tutte: 40.236 + 10.164 = 50.400.
+
+### Ma una incoerenza vera c'era
+
+Nel riquadro «quanto costa questa giornata» si leggeva: *«251,80 €: 3,80 € di budget più 248,00 €
+di media delle spese fuori budget»*. Duecentoquarantotto euro al giorno di media non torna con
+7.339 € di spese in un anno.
+
+`mediaAltreSpese` **sommava tutto il mese ma divideva per i giorni gia' passati**. Il 2 del mese,
+con otto rate gia' scritte per i giorni successivi, la media diceva **310 € al giorno invece di
+62**: cinque volte tanto.
+
+Non e' un caso di laboratorio: le spese con data futura le crea l'app stessa, quando si fa una
+serie ricorrente in anticipo. E il conguaglio quelle le esclude di proposito — *«si conta quando
+arriva»* — quindi le due parti dell'app seguivano due regole diverse sullo stesso dato.
+
+Adesso somma e divisore guardano la stessa finestra, con la regola del conguaglio. Stessa cura a
+`giorniLavoratiDelMese`: un turno segnato in calendario per la settimana prossima non e' un
+giorno lavorato, e contandolo abbassava la quota per giornata di un lavoro non ancora fatto.
+
+Ho cercato lo stesso difetto in tutte le altre medie dell'app: non c'e'. `mediaCorsa`,
+`mediaOra`, `mediaGiorno`, `mediaMese` e l'euro-ora prendono numeratore e divisore dallo stesso
+insieme di movimenti.
+
+I tre controlli nuovi girano a ogni rilascio.
+
+## Da dove viene una spesa fuori budget (versione 120)
+
+Aprendo la riga «fuori budget» della 119 si vede *quali* sono le spese. Manca pero' la cosa che
+decide che farne, e che e' una distinzione grossa:
+
+| | |
+| --- | --- |
+| **generata dall'app** | non e' un pagamento. L'hanno scritta le versioni vecchie, che mettevano i costi fissi nel registro un mese alla volta. Se la stessa spesa e' registrata anche a mano, questa la **conta due volte** e va tolta. |
+| **registrata da te** | e' un pagamento vero. **Non va cancellata**: sparirebbe dalle spese dell'anno e dalla stima delle tasse. |
+
+Adesso ogni movimento della riga fuori budget porta il suo marchio, e la spiegazione dice cosa
+fare in un caso e nell'altro. Le generate dall'app si tolgono in blocco da **«Backup e
+impostazioni → Costi fissi scritti come movimenti»**, che gia' c'era; quelle vere, se sono gia'
+coperte da una voce di budget che si chiama in un altro modo, si sistemano correggendo la
+categoria della spesa perche' combaci con la voce.
+
+La differenza fra le due la fa l'identificativo: quelle scritte dall'app cominciano per
+`fissi-`. Non e' una stima, e' un fatto.
+
+## Le righe del conguaglio si aprono (versione 119)
+
+La riga **«Altre spese fisse registrate — fuori budget»** diceva *«2 movimenti, l'ultimo il
+16/05»* e si fermava li'. Sapere che ci sono due spese senza poter sapere **quali** e' una
+domanda lasciata a meta' — e per le spese fuori budget e' proprio quella la domanda che conta.
+
+Adesso ogni riga del conguaglio con dei movimenti si apre: la tocchi e vedi data, descrizione,
+metodo e importo di ognuno, dal piu' recente. Una alla volta, per non allungare la tabella.
+
+Per la riga fuori budget c'e' anche la spiegazione: quelle spese sono scritte come costi fissi
+ma non corrispondono a nessuna voce del budget — o la voce e' stata tolta, o le scrivevano le
+versioni vecchie dell'app. Contano nelle spese dell'anno e nelle tasse, ma non hanno un budget
+con cui confrontarsi.
+
+Due dettagli di impaginazione che cambiano tutto su un telefono: la tabella scorre in
+orizzontale, il dettaglio no — resta agganciato al bordo sinistro e largo quanto lo schermo,
+se no per leggerlo bisognerebbe trascinare la tabella. E ogni movimento sta su **due righe**:
+con data, metodo e importo sulla stessa riga la descrizione si riduceva a «Cost...», ed e'
+proprio la descrizione quello che si sta cercando.
+
+### Nove classi che non facevano niente
+
+Il foglio di stile incorporato si rigenera leggendo le classi usate nel file. Usarne una che al
+momento della generazione non c'era non da' nessun errore: **quella classe semplicemente non fa
+niente, in silenzio.**
+
+Controllando, ne ho trovate nove in questa condizione — e tre erano sulla striscia in cima
+introdotta dalla 112 (`top-0`, `right-0`, `z-[60]`): la striscia c'era, ma non stava dove
+doveva. Sono scritte a mano nel blocco di stile, come gia' `.barra-fondo`.
+
+Il controllo e' ora **dentro il giro delle prove** e blocca tutto se trova una classe usata e
+non definita. Mi era sfuggito perche' il mio controllo precedente guardava una riga fissa del
+file — la 27 — e il blocco della CSP della 113 aveva spostato il foglio di stile alla 78.
+Adesso la riga del foglio si cerca, non si indovina.
+
+## Le tasse e i contributi entrano nel budget (versione 118)
+
+Tre cose, nate da una segnalazione: *«ci sono gia' spese tasse e contributi, ma non li vedo nel
+budget. Sono spese fisse.»* Aveva ragione, ed era un difetto introdotto dalla 117.
+
+### 1. Il legame fra una spesa e la sua voce guarda anche il dettaglio
+
+Le spese si scrivono **«Famiglia - Dettaglio»**: `Tasse e Contributi - INPS`,
+`Tasse e Contributi - INAIL 2025`. Per legarle al budget l'app guardava il pezzo *prima* del
+trattino («Tasse e Contributi») e, in seconda battuta, la categoria base — che per quel nome e'
+«Altro». Quindi **chi tiene una voce di budget per ogni tributo**, chiamandola «INPS», non
+agganciava niente: quelle spese restavano fuori dal budget e dal conguaglio pur essendo costi
+fissi in piena regola.
+
+E la voce che la 117 proponeva si chiamava «Contributi INPS (rate fisse)»: **non si sarebbe
+agganciata a nessuno dei movimenti reali.** Difetto mio, e non di poco conto.
+
+Adesso si prova anche il dettaglio dopo il trattino. L'ordine conta: prima la famiglia, poi il
+dettaglio, poi la categoria base — se esistono tutte e due le voci comanda la piu' generale.
+
+| La tua voce di budget si chiama | Aggancia |
+| --- | --- |
+| `Tasse e Contributi` | tutte: INPS, INAIL, Camera di Commercio |
+| `INPS` | solo le due INPS |
+| tutte e due | la famiglia prende tutto, il dettaglio niente |
+
+### 2. L'app guarda le tue spese e propone
+
+La proposta della 117 parlava solo di INPS, con una cifra presa dalle impostazioni fiscali.
+Adesso guarda i **movimenti veri degli ultimi due anni**, raggruppa per il nome con cui il
+budget li cercherebbe, e propone quelli che tornano negli anni senza avere una voce che li
+raccolga — con l'importo che e' **la media di quello che hai speso davvero**.
+
+Due anni e non uno, perche' una voce annuale dentro una finestra di dodici mesi puo' comparire
+una volta sola e sembrare un caso isolato. E si propone solo cio' che torna (due anni diversi,
+o almeno tre movimenti) e che pesa (da 100 € in su): una spesa una tantum da venti euro non e'
+un costo fisso, e proporla sarebbe rumore.
+
+Resta la regola della 117: **si propone, non si aggiunge di nascosto**, e ogni «No» si ricorda
+voce per voce. L'INPS continua ad avere il suo posto, con la cifra ufficiale invece che con una
+media, ma solo se non e' gia' uscita fra le spese vere.
+
+### 3. Una voce puo' avere la sua scadenza
+
+Campo nuovo **«Quando scade»** sulle voci a scadenza: il giorno e il mese in cui la paghi
+(l'anno non conta, si ripete). Serve a due cose:
+
+- la spesa matura **dal rinnovo al rinnovo** invece che dal 1° gennaio — per una polizza di
+  ottobre, l'anno solare non vuol dire niente. Vale anche prima che il primo pagamento sia
+  registrato: finora li' si ripiegava sull'anno solare;
+- la riga della voce avvisa: **«Scade fra 8 giorni, il 10/10/2026»**, in arancione, e in rosso
+  se la data e' passata senza che tu abbia registrato il pagamento. L'avviso sparisce da solo
+  quando il periodo in corso risulta pagato — dirlo di una cosa gia' pagata sarebbe rumore.
+
+### E le diciture
+
+«Una bolletta ogni tanto» e «Un po' alla volta» erano chiare ma non professionali. Adesso:
+
+| | |
+| --- | --- |
+| **A scadenza — importo stabilito** | assicurazione, bollo, INPS, finanziamento |
+| **A consumo — spesa variabile** | carburante, lavaggio, ristoro |
+
+Il vecchio valore `accumulo` resta riconosciuto, perche' puo' essere gia' salvato da chi ha
+usato la 116 o la 117.
+
+## Le rate fisse INPS nel budget, se le vuoi (versione 117)
+
+Le **quattro rate del minimale** (4 × 1.130,34 = 4.521,36 € l'anno) si pagano **anche a utile
+zero**. Non dipendono da quanto guadagni, quindi sono un costo del lavorare esattamente come
+la licenza o il radio taxi — e fino alla 116 non stavano da nessuna parte: né nel budget, né
+nell'accantonamento. Il pareggio giornaliero era sottostimato di **12,39 €**.
+
+**Non fanno doppione con l'accantonamento sul margine**, e non è un'impressione: l'aliquota che
+la scheda della giornata applica al margine è *marginale* — dice quanto costa l'euro guadagnato
+in più. Raddoppiando la rata fissa nel calcolo, le tasse totali salgono ma quell'aliquota resta
+**43,0%**, identica al decimale. Il 24% sull'eccedenza oltre il minimale, quello sì, segue il
+guadagno ed è già lì dentro: nel budget non ci va.
+
+### Si propone, non si aggiunge di nascosto
+
+L'elenco del budget è dell'utente, e una voce da 4.521 € comparsa da sola sposterebbe il
+pareggio di dodici euro al giorno senza che si capisca perché. Quindi nella scheda **Budget dei
+costi fissi** compare un riquadro che spiega il conto e lascia decidere: **«Aggiungila al
+budget»** o **«No, lascia così»**. La scheda si apre da sola quando il riquadro c'è, altrimenti
+resterebbe nascosto in un pieghevole chiuso.
+
+Il riquadro **non compare** a chi ha già una voce sua che parla di contributi (si guarda largo:
+*INPS*, *contributi*, *previdenza*), e dopo un «no» non torna più.
+
+L'importo non è scritto a mano nel codice: si legge da **rata × numero di rate** delle
+impostazioni fiscali, così se cambi la rata il conto proposto cambia con te. Una volta
+aggiunta è una voce come le altre — la modifichi, la togli, e quando registri le rate vere è
+il pagamento a comandare, come tutte le voci dalla 116 in poi.
+
+## La previsione vale finché non arriva il conto (versione 116)
+
+Fin qui una voce di budget era una previsione e basta: scrivevi 1.387 € di assicurazione e la
+giornata maturava 3,80 € per sempre, anche dopo che la polizza l'avevi rinnovata a 1.500. Per
+far tornare i conti bisognava andare a correggere la voce a mano — e intanto il conguaglio,
+che serve proprio a dirti di quanto hai sforato, perdeva il suo termine di paragone.
+
+**Adesso la previsione vale finché non arriva il conto. Da quel momento comanda il conto.**
+
+Rinnovi il 10 ottobre 2026 a 1.500 €: da quel giorno, e fino al 9 ottobre 2027, la giornata
+pesa 4,11 € invece di 3,80. I giorni prima restano a 3,80, perché allora era quello il costo.
+Il 2027 si apre già a 4,11, perché la polizza lo copre. Non devi correggere niente.
+
+### Due quote, e non vanno confuse
+
+| | chi la usa | da dove viene |
+| --- | --- | --- |
+| `quotaVocePrevista` | la scheda del Budget, il Conguaglio | solo quello che hai scritto tu |
+| `quotaVoceReale` | la giornata: «quanto mi costa oggi» | il conto vero, quando c'è |
+
+È questa separazione che tiene in piedi il conguaglio: se la quota reale comandasse anche lì,
+la differenza fra previsto e speso verrebbe zero per costruzione e il riquadro non direbbe più
+niente. Così invece continua a dire, giustamente, **−113,00 € · speso più del budget**.
+
+### Le tre regole
+
+**1. Alla scadenza, se non hai ancora rinnovato, resta l'ultimo importo pagato.** Non si torna
+alla previsione vecchia: l'assicurazione non ricomincia a costare quello che costava due anni
+fa solo perché la polizza è scaduta.
+
+**2. Le rate della stessa annata si sommano.** Due semestrali da 750 € fanno un'annata da
+1.500, e il giorno in cui arriva la seconda rata **tutta l'annata si ricalcola** — compresi i
+mesi già passati, che erano stati contati a metà.
+
+**3. Le voci che si accumulano hanno una regola loro.** Ogni voce adesso dichiara *come la
+paghi*: «una bolletta ogni tanto» (assicurazione, bollo, finanziamento) oppure «un po' alla
+volta» (carburante). Per le seconde non c'è un conto che fa fede: finché stai dentro la
+previsione vale la previsione, perché quei soldi li spenderai lo stesso; **dal giorno in cui
+la superi** comanda quello che hai speso davvero, diviso i giorni che hai percorso.
+
+Nell'elenco delle voci, ognuna dice che cosa la sta comandando oggi: *«Oggi pesa 4,11 € al
+giorno · 1.500,00 € pagati il 10/06/2026, coprono fino al 09/06/2027»*. Dove previsione e
+realtà coincidono la riga non compare, per non fare rumore.
+
+E nella testata del budget ci sono tutti e due i numeri — la previsione e «coi conti veri» —
+così la differenza con la scheda di «Oggi» non sembra più un errore.
+
+### L'indice dei pagamenti
+
+Smistare i movimenti voce per voce è il conto più caro dell'app. Fatto nel modo ingenuo —
+una lettura per ogni voce e per ognuno dei 365 giorni dell'anno — sono **3.650 letture di
+tutto l'archivio**:
+
+```
+  budgetRealeAnno('2026') su 10.122 movimenti e 10 voci:  3.534 ms
+  con l'indice:                                               25 ms
+```
+
+Centoquaranta volte più veloce, stesso risultato al centesimo. L'indice si fa in **una
+passata sola** per tutte le voci e si rifà solo quando i movimenti cambiano davvero. Non si
+appoggia alla memoria del disegno (quella della 113), perché questi conti servono anche fuori
+da un disegno e lì quella memoria è spenta — ed era proprio lì che costava i 3,5 secondi.
+
+La chiave della memoria tiene due cose, non una: un contatore che `scriviLocale` fa salire a
+ogni scrittura, e il numero dei movimenti. Il primo copre l'uso normale, il secondo copre chi
+li cambiasse scavalcando `scriviLocale`. Un indice vecchio darebbe numeri sbagliati senza dire
+niente, ed è il tipo di errore peggiore. C'è una prova che registra e cancella spese
+**passando dalla strada normale dell'app** e controlla che la quota segua.
+
+## Lo spazio, e come liberarlo (versione 115)
+
+I dati stanno nella memoria che il browser riserva all'app, e quella memoria ha un tetto: fra
+i 5 e i 10 MB a seconda del browser. Tre anni di lavoro pesano circa 1,1 MB, quindi il muro
+arriverebbe verso il decimo o dodicesimo anno — e quel muro e' il problema piu' serio di
+quest'app, perche' e' silenzioso (per questo c'e' la striscia rossa della 111).
+
+In **«Gestione → Backup e impostazioni»** c'e' adesso **Spazio su questo dispositivo**:
+
+- quanto si sta usando, con la barra che diventa arancione al 60% e rossa all'85%;
+- cosa c'e' dentro, **anno per anno**: movimenti, turni, quanti KB;
+- e per ogni anno vecchio, il tasto **Archivia**.
+
+Il tetto mostrato e' il piu' basso fra quelli in giro (5.120 KB), non il piu' alto: meglio
+allarmarsi un anno prima che un giorno dopo.
+
+### Cosa fa «Archivia», detto per intero
+
+1. Scarica subito `TaxiManager_Archivio_<anno>.json` con i movimenti e i turni di quell'anno.
+2. Aspetta, e poi **ti chiede se il file c'e' davvero**. Se rispondi di no, non cancella niente.
+3. Solo allora toglie quell'anno da questo dispositivo **e dalla tua cartella sul Cloud**.
+
+Il terzo punto non e' una scelta: la cartella sul Cloud e' la verita' e il telefono ne e' una
+copia, quindi cancellare solo qui non servirebbe a niente — il primo pacchetto di
+sincronizzazione riporterebbe tutto indietro. Vuol dire che l'anno sparisce da **tutti** i
+dispositivi, e questo va detto in questi termini, non con un «liberi spazio».
+
+Si rimette quando vuoi con lo stesso «Importa backup» di sempre: il file ha la stessa forma di
+un backup intero. Provato: si archivia, l'anno sparisce da memoria e disco, gli altri restano
+intatti, e reimportando il file si torna esattamente al punto di prima.
+
+**L'anno in corso e quello precedente non si archiviano**, e il tasto li' non compare: servono
+per le tasse, per il conguaglio e per i confronti, e sono quelli che si guardano davvero.
+
+## Una funzione per scheda, invece di una da millequattrocento righe (versione 114)
+
+`disegnaContenuto` era una sola funzione di **1.414 righe**: la catena di «se la scheda e'
+questa, allora tutto questo HTML», dieci rami uno dietro l'altro. Per cambiare una riga della
+scheda Scadenze bisognava scorrere la scheda Uscite, quella delle Spese e quella del
+Commercialista.
+
+Adesso ogni scheda ha la sua funzione, con il nome dell'etichetta che si legge nell'app:
+
+| Scheda, come la vedi | Funzione |
+| --- | --- |
+| Oggi | `renderSchedaOggi` |
+| Andamento | `renderSchedaAndamento` |
+| Gestione | `renderAltro` (c'era gia') |
+| Uscite | `renderSchedaUscite` |
+| Spese e tasse | `renderSchedaSpeseETasse` |
+| Scadenze | `renderSchedaScadenze` |
+| Le mie auto | `renderSchedaAuto` |
+| Rendimento | `renderSchedaRendimento` |
+| Commercialista | `renderSchedaCommercialista` |
+| Backup e impostazioni | `renderSchedaBackup` |
+
+E la catena di `if`/`else` e' diventata una tabella (`DISEGNO_SCHEDE`), quindi il guscio e'
+passato da 1.414 righe a **41**: legge dove si stava guardando, sceglie la funzione, disegna.
+
+### Come so che non ho rotto niente
+
+Un rimaneggiamento di questa taglia non si prova a occhio. Prima di toccare niente ho salvato
+l'**HTML esatto** di tutte e quattordici le viste (le dieci schede, i tre periodi di Andamento,
+il calendario, piu' le due barre di navigazione) con dati fissi: 280 KB. Dopo, l'ho rifatto e
+confrontato.
+
+```
+  uguali a meno degli spazi: True
+  peso prima/dopo: 285.780 → 281.368 byte (4.412 byte di rientri in meno)
+```
+
+L'unica differenza sono i rientri dentro i testi HTML, perche' il codice e' sceso di un
+livello di annidamento. Negli elementi dove lo spazio conterebbe — `<pre>`, `white-space: pre`
+— l'app non ne ha nemmeno uno (controllato), quindi a video non cambia un pixel. Anzi, la
+pagina pesa 4 KB in meno.
+
+**Quello che NON ho spezzato:** `renderSezioneGiornate` resta a 596 righe ed e' adesso la
+funzione piu' lunga dell'app. Dentro ha cinque funzioni annidate che usano lo stato della
+schermata (il giorno scelto, il filtro metodo, il mese): tirarle fuori vuol dire passarsi quello
+stato a mano, ed e' un lavoro diverso, con un rischio diverso. Si fa a parte, se serve.
+
+## Backup controllato, indirizzi chiusi, un disegno invece di sei (versione 113)
+
+### Un file di backup non puo' piu' far eseguire niente
+
+L'identificativo di una riga finisce dentro un `onclick="deleteRecord('...')"`. Quelli
+dell'app sono cifre e il trattino delle serie, ma **un file di backup e' un file come un
+altro**: se dentro ci fosse un id con un apice, quell'apice chiuderebbe la stringa e quello
+che segue verrebbe eseguito. Due difese, non una:
+
+1. **All'importazione** si accetta solo quello che un id nostro puo' davvero contenere
+   (`/^[A-Za-z0-9_-]{1,64}$/`) e il resto si scarta, come si faceva gia' con la data.
+2. **Al disegno**, tutti e 24 i punti dove un id entra in un `onclick` passano da `escJs()`.
+
+Provato con un backup confezionato ad arte: le righe malformate vengono scartate, niente
+viene eseguito, e l'apice nell'HTML esce protetto invece che nudo.
+
+### L'app puo' parlare solo con Google e Firebase
+
+Una **Content-Security-Policy** chiude gli indirizzi: se un giorno finisse qui del codice che
+non ci deve stare, non avrebbe nessun posto dove mandare i dati. Provato con due server
+locali: con la protezione attiva, un'origine estranea ma raggiungibile viene **rifiutata**;
+disattivandola, la stessa richiesta passa — quindi e' la protezione che lavora, non la rete.
+
+Da sola non basta, e va detto: `'unsafe-inline'` deve restare, perche' i pulsanti dell'app
+usano `onclick="..."` e i copioni stanno dentro `index.html`. La difesa vera contro un backup
+confezionato male e' il controllo sull'identificativo; questa e' la seconda, e serve soprattutto
+**nel verso dell'uscita**.
+
+**La mette un copione invece di essere scritta fissa nel file, e c'e' un interruttore.**
+L'elenco degli indirizzi di Google e Firebase cambia nel tempo, e un indirizzo dimenticato
+non da' un errore chiaro: smette di funzionare l'accesso con Google, e con quello la
+sincronizzazione. Scritta fissa non ci sarebbe rimedio dal telefono. Cosi' invece in
+**«Cloud & Sync» c'e' «Protezione sugli indirizzi»** con il tasto per disattivarla
+(`taxi_csp = 'no'`): l'app torna come prima della 113 e i dati non si toccano. Se il Cloud non
+si raggiunge, dopo otto secondi un avviso lo dice e indica dove guardare.
+
+`frame-ancestors` non c'e': il browser la ignora quando arriva da un `<meta>`, e va messa come
+intestazione HTTP da chi ospita l'app.
+
+### Sei pacchetti dal Cloud, un disegno
+
+All'accesso arrivano sei pacchetti, uno per archivio (movimenti, turni, scadenze, veicoli,
+voci di budget, scheda), e ognuno chiedeva il **suo** disegno completo: sei volte la stessa
+schermata, l'ultima buona e le altre cinque buttate. Adesso le richieste si accodano
+(`renderDifferito`) e si disegna una volta sola, al primo fotogramma utile. Chi chiama
+`renderContent()` a mano — un tasto, un salvataggio — continua a disegnare subito: li'
+l'attesa si vedrebbe.
+
+```
+  sei pacchetti accodati : 1 disegno
+  come prima (uno a uno) : 6 disegni
+```
+
+**Quello che ho deciso di NON toccare:** l'eco di una scrittura dal Cloud ricostruisce l'array
+da capo invece di applicare la singola modifica. Si potrebbe fare meglio con
+`snapshot.docChanges()` e `hasPendingWrites`, e si guadagnerebbero una quindicina di
+millisecondi. Non vale il rischio: quello e' il percorso dei dati, ed e' l'unica cosa che non
+deve rompersi mai. Con l'ordinamento della 111 quel percorso costa ormai poco.
+
+Ultime due pulizie: il titolo della pagina diceva ancora «TaxiManager Pro V28», una versione
+di tre anni fa; e `appId` non va piu' a cercare una variabile `__app_id` che non esiste in
+nessun posto dove quest'app girera' mai.
+
+## L'app si apre subito, la versione nuova aspetta il tuo via (versione 112)
+
+### Prima la copia salvata, non la rete
+
+L'apertura era **rete-prima** con un'attesa fino a 3 secondi. In garage, in un sottopasso, in
+una zona senza campo, si guardava il vuoto per tre secondi — mentre sul telefono c'era una
+copia perfetta dell'app, pronta. Adesso la copia salvata si da' subito. Misurato su un server
+vero, con il service worker in funzione:
+
+```
+  con la rete a 4 secondi di ritardo l'app si apre in 288 ms
+  pagine HTML chieste alla rete per aprirsi: 0
+  senza rete per niente: si apre in 357 ms
+```
+
+In cache l'app ci va **al momento dell'installazione di una versione**, che e' l'unico posto
+che la scrive: cosi' quello che si apre e' sempre la copia coerente con quel service worker,
+mai un misto fra due versioni. Il controllo della versione nuova corre in sottofondo, lo
+chiede la pagina all'avvio e ogni volta che l'app torna in primo piano.
+
+### La versione nuova non entra di prepotenza
+
+Prima il service worker chiamava `skipWaiting()` appena finito di installare: la versione
+nuova prendeva il comando da sola e la pagina si ricaricava — **anche mentre stavi battendo
+una corsa**. Adesso si mette in attesa, e lo dice con una striscia nera in cima che resta
+finche' non la tocchi, con il tasto **«Carica adesso»**. Un avviso che sparisce in tre secondi
+non lo vedi, se in quel momento stai guardando il tassametro.
+
+### Le strisce in cima
+
+Sono due, e stanno in un contenitore solo: quella rossa della 111 (il telefono non riesce a
+salvare) e quella nera della versione nuova. Lo spazio che prendono si **misura**
+(`aggiornaSpazioStrisce`), non si scrive a mano nel CSS: con due strisce aperte insieme
+un'altezza indovinata sarebbe sbagliata e il contenuto finirebbe sotto l'intestazione.
+
+Altra cosa sistemata: la scrittura in cache in sottofondo ora passa da `evento.waitUntil`.
+Senza, il browser poteva spegnere il service worker a meta' scrittura e lasciare in cache una
+copia tronca.
+
+## Una sola porta per scrivere sul disco, e le date ordinate come stringhe (versione 111)
+
+Due interventi nati da un'analisi con le misure in mano, non a sensazione.
+
+### Una corsa non puo' piu' sparire in silenzio
+
+`localStorage.setItem` **lancia un'eccezione** quando lo spazio del telefono e' finito, in
+navigazione privata su Safari, o se i dati dei siti sono bloccati. Nei punti di salvataggio
+quell'eccezione non la prendeva nessuno. Provato simulando il disco pieno:
+
+```
+  eccezione risalita al chiamante: nessuna (inghiottita)
+  la corsa è in memoria (e quindi a video): 1 movimento
+  la corsa è su disco: NO — si perde alla chiusura
+  errori di pagina: nessuno (nessun avviso all'utente)
+```
+
+La corsa compariva a schermo, il totale cresceva, e alla riapertura non c'era piu'. Lo
+scenario peggiore possibile per quest'app: silenzioso e irreversibile.
+
+**Adesso tutte le scritture passano da `scriviLocale()`**, una sola porta, e se il browser
+rifiuta si vede una **striscia rossa in cima allo schermo che non sparisce** — non un avviso
+che svanisce in tre secondi: finche' dura, ogni corsa registrata vive solo nella memoria del
+browser, e questo va detto e tenuto detto. Il messaggio distingue i due casi (memoria piena /
+browser che non lascia salvare) e dice se il Cloud sta comunque tenendo i dati.
+
+Una `scriviLocale()` **esisteva gia'**, ma viveva nel blocco di riserva — quello che vale solo
+quando Firebase non si carica — e il percorso vero non la usava. Adesso ce n'e' una sola,
+quella buona, per tutti e sei gli archivi (movimenti, turni, scadenze, veicoli, voci di
+budget, scheda).
+
+### Le date si ordinano come stringhe, non costruendo oggetti Date
+
+`sort((a,b) => new Date(b.data) - new Date(a.data))` costruiva **due oggetti Date per ogni
+confronto**: circa duecentotrentamila oggetti buttati via per ogni corsa salvata. Ma le date
+stanno scritte `2026-03-10`, e in quel formato l'ordine alfabetico **e'** l'ordine
+cronologico.
+
+| | prima | adesso |
+| --- | --- | --- |
+| ordinare 9.000 righe | 96,2 ms | 4,7 ms |
+| **registrare una corsa** | **106 ms** | **17 ms** |
+
+Sei volte piu' veloce sull'azione che si fa cinquanta volte al giorno (e su un telefono, dove
+il processore e' due o tre volte piu' lento, la differenza si sente).
+
+I nomi sono due, `perDataDecrescente` e `perDataCrescente`, perche' il verso conta: mentre
+facevo questa sostituzione ho girato per sbaglio l'ordine in `statoScadenzeCalcola`, dove
+serviva crescente, e sarebbe tornato il bug della «prossima scadenza» sbagliata della 94. Da
+quell'errore e' nata una prova dedicata che controlla che la prossima sia la piu' vicina.
+
+## Coperto il totale, e solo quello (versione 110)
+
+Nella 108 avevo coperto **tutti** gli importi della scheda scura — Spese, Ti resta, A corsa,
+All'ora — e non era quello che serviva. La ragione c'era: *«ti resta»* rifà il totale per
+differenza e *«a corsa»* moltiplicando per le corse, quindi coprire solo il numero grande non
+lo rende illeggibile a chi sa fare due conti. Ma così la scheda diventava una fila di
+asterischi e **non diceva più niente a chi la guarda**, che è il padrone dei numeri.
+
+Il tasto con l'occhio serve a non far leggere il totale a chi passa accanto al telefono nel
+supporto, non a cifrare la contabilità. Quindi:
+
+| | Con l'occhio chiuso |
+| --- | --- |
+| Il totale incassato (il numero grande) | coperto, cinque asterischi |
+| Spese, Ti resta, A corsa, All'ora | **in chiaro** |
+| Data, corse, turni, ore, chilometri | in chiaro |
+
+Vale nei due posti dove c'è la scheda scura: **Oggi** e la testata dei periodi in
+**Andamento**. La scelta si ricorda come prima (`taxi_incasso_visibile`).
+
+## Le spese a budget, spalmate su tutto l'anno (versione 109)
+
+L'assicurazione si paga una volta l'anno, ma pesa tutti i giorni. Messa tutta sul giorno in
+cui esce dal conto, **quella giornata sembrava chiusa in perdita** e le altre
+trecentosessantaquattro sembravano più ricche di quello che sono.
+
+**Adesso una giornata porta due cose:** le spese vere che il budget *non* copre — il pieno, il
+lavaggio, il parcheggio, quelle del giorno sono del giorno — più la **quota di quel giorno**
+dei costi a budget. Una voce annuale si divide per i giorni dell'anno, una mensile per i
+giorni del mese, una giornaliera vale com'è: è lo stesso conto che già faceva il riquadro
+*«Quanto costa questa giornata»*, portato dentro il numero delle Spese.
+
+Un esempio con l'assicurazione a 1.825 € l'anno: il giorno in cui parte il bonifico la
+testata dice **−5,00 €**, non −1.825,00 €. E i 5,00 € li dice anche in tutti gli altri 364
+giorni.
+
+**La rata vera non si perde.** Resta dov'è, nel registro, nel giorno in cui l'hai pagata: è la
+traccia del pagamento, serve al commercialista e serve al conguaglio fra preventivo e
+consuntivo. Quello che cambia è solo *a quale giornata la si fa pesare*.
+
+Dove si vede:
+
+| Dove | Cosa mostra |
+| --- | --- |
+| **Oggi**, scheda scura con un giorno selezionato | spese spalmate, con il dettaglio nel suggerimento: *spese del giorno + quota a budget* |
+| **Andamento → Giorno**, testata | lo stesso numero: la stessa data non può dire due cifre diverse in due schermate |
+| **Oggi** e **Andamento → Giorno**, sotto l'incasso | quando in quella data hai pagato voci a budget, una riga lo dice: *«… pagati oggi sono già a budget»* |
+| Riga della spesa nel registro | il marchio **a budget** accanto a *fatt.* |
+| Riga della giornata nell'elenco | *spese −1.825,00 · 1.825,00 a budget* — il totale resta quello vero, il registro dice quando hai pagato |
+
+**Mese e anno non cambiano.** Lì le spese restano quelle vere: su una finestra lunga il
+confronto con il budget si fa nel conguaglio, e spalmare non servirebbe a niente. Non cambiano
+nemmeno le deducibili, l'utile, le tasse e l'IVA: quelli contano i movimenti veri, con la
+regola del tracciato (versioni 96-99).
+
+## L'incasso coperto, e l'occhio per scoprirlo (versione 108)
+
+Il totale del giorno stava in chiaro, grande, in cima allo schermo: con il telefono nel
+supporto lo legge anche chi sta dietro. **Adesso nasce coperto** — cinque asterischi della
+stessa misura, così la scheda non cambia forma — e si scopre con il **tasto a forma di occhio**
+accanto alla cifra (bersaglio 44×44).
+
+**Coperto vuol dire coperto davvero.** Nascondere solo il numero grande non serviva a niente:
+*«ti resta»* lo dice per differenza e *«a corsa»* moltiplicando per le corse. Quindi, quando è
+coperto, si coprono tutti gli importi della scheda — il totale, la media a corsa, Spese, Ti
+resta, All'ora. Resta in chiaro quello che non parla di soldi: la data, il numero di corse, i
+turni, le ore, i chilometri.
+
+Vale nei due posti dove c'è la scheda scura: **Oggi** e la testata dei periodi in
+**Andamento**.
+
+**La scelta si ricorda** (`taxi_incasso_visibile`): se lo lasci scoperto resta scoperto anche
+alla riapertura. Ricoprirlo a tradimento, quando ti sei abituato a vederlo, sarebbe peggio che
+lasciarlo in chiaro.
+
+## «Torna alle corse» diventa un tasto (versione 107)
+
+Era una scritta sottolineata in fondo al pannello della spesa, sotto altre due righe di
+testo: la via d'uscita, e non si trovava. Adesso è **un tasto verde pieno a tutta riga**, con
+la freccia indietro — verde come le corse a cui riporta, e alto 52px come gli altri comandi
+della schermata.
+
+Il collegamento *«Nota, data diversa o spesa ricorrente»* resta una scritta, sulla sua riga:
+è un'alternativa per casi rari, non la strada principale.
+
+`testMatita` verifica anche questo: che il tasto sia verde pieno, alto almeno 44px, e che
+riporti davvero al pannello delle corse.
+
+## Un tasto per modificare, e «Aggiungi spesa» ben visibile (versione 106)
+
+Due cose segnalate dalla guida:
+
+**1. La riga di una corsa si apriva in modifica toccandola in qualunque punto.** Con il
+telefono nel supporto e mezzo guanto è un tocco che parte da solo, e ti ritrovi il modulo
+aperto senza sapere perché. Adesso **la riga non è più un pulsante**: per modificare c'è una
+**matita a destra**, bersaglio 44×44, da centrare apposta.
+
+Per farcela stare, la riga è passata **su due righe**: sopra quello che conta — la
+descrizione e l'importo — sotto, in piccolo, l'ora e il metodo. In una riga sola, con la
+matita in fondo, su un telefono stretto la descrizione spariva del tutto e la matita usciva
+dal bordo: misurato a 320px, il pulsante finiva 122px oltre il margine. Adesso sta dentro a
+320, 375 e 390px, e il testo non si accavalla.
+
+**2. «Segna una spesa» → «Aggiungi spesa», e rosso pieno.** Era un contorno rosso su bianco,
+che accanto ai quattro tasti pieni dei pagamenti sembrava un ripensamento. Adesso è pieno,
+bianco su rosso, corpo più grande: la spesa si segna quanto una corsa.
+
+`testMatita` (nuovo) verifica che toccare la riga non apra più niente, che la matita apra la
+modifica sia sulla corsa sia sulla spesa, che il tasto sia davvero rosso pieno e che la
+matita resti dentro la riga con un bersaglio da 44×44.
+
+## «Conto» al posto di «Fattura» (versioni 104-105)
+
+Fra i metodi di pagamento c'era **Fattura / Convenzione**, che era il documento e non il modo
+di pagare. Al suo posto c'è **Conto**: la corsa che il cliente non salda al momento — albergo,
+agenzia, ditta in convenzione. Si segna sul conto e si incassa dopo.
+
+- **`famigliaMetodo()` riconosce «conto», «fattura» e «convenzione» e li porta tutti nella
+  famiglia Conto:** i movimenti già registrati con il vecchio nome continuano a valere e
+  finiscono nello stesso mucchio. Nessuna conversione, nessun dato toccato.
+- «Conto» è **tracciato** (si incassa per bonifico o assegno, una prova resta), quindi entra
+  nella base delle tasse come gli altri metodi tracciati.
+- Compare dappertutto con il nome nuovo: tendine, pannello «Filtra per metodo», corrispettivi,
+  riepiloghi per metodo, foglio per il commercialista.
+- **Un tasto «Conto» nel pannello veloce della spesa**, a tutta riga: quando è il fornitore a
+  segnartela sul conto. Sulle corse il tasto non c'è (v105): «Conto» resta scegliibile dal
+  modulo completo, come prima era «Fattura».
+- **La tendina non perde più un metodo che non è più in elenco.** Aprendo la modifica di un
+  movimento vecchio a «Fattura», il menu mostrava la prima voce e al primo salvataggio il
+  metodo sarebbe cambiato da solo. Adesso il valore che c'è scritto sul movimento viene
+  aggiunto in coda all'elenco, marcato *«come l'avevi segnato»*.
+- Nel raggruppamento delle spese per pagamento «POS / Fattura» si chiama **«Tracciato»**.
+
+`testConto` (nuovo) verifica le famiglie dei nove metodi, il salvataggio dal tasto, che i
+vecchi «Fattura» finiscano nel mucchio Conto (200 + 150 = 350 €), che la tendina non perda il
+valore vecchio, e che «Conto» compaia nei conteggi e nel foglio del commercialista.
+
+## «Su ogni 100 €»: stessa base sopra e sotto la linea (versione 103)
+
+La casella diceva **«Su ogni 100 € incassati»** e faceva `tasse ÷ tutti gli incassi`. Ma dalla
+v99 le tasse si contano sui **soli incassi tracciati**: sopra la linea i contanti non c'erano,
+sotto sì. Ne usciva un numero **meno della metà del vero** — con 5.809,79 € di tasse su
+56.316,90 € di incassi totali veniva 10,32 €, mentre sui 28.982,20 € tracciati il peso reale
+è 20,05 €.
+
+Adesso il rapporto sta sui tracciati da tutte e due le parti, e la casella si chiama
+**«Su ogni 100 € tracciati»**: dice quanto pesa il fisco su cento euro di quelli che entrano
+nella base imponibile.
+
+`testTracciate` lo verifica confrontando il numero a video con `tasse ÷ entrateTracciate`, e
+stampa anche quanto sarebbe venuto con il vecchio conto, così la differenza resta sotto gli
+occhi.
+
+## L'iPad: barra laterale più stretta, colonne che si aprono al momento giusto (versione 102)
+
+Su iPad in verticale la barra laterale da 256px lasciava al contenuto poco più di metà
+schermo, e il report — che da 768px in su si apre su due colonne — ci stava dentro a fatica:
+i due riquadri «Deducibili / Non deducibili» si strozzavano e l'importo usciva dal bordo.
+
+- **Barra laterale `w-52` sul tablet, `w-64` dal desktop** (era 256px sempre), con logo,
+  spaziature e voci un filo più compatti. Il contenuto guadagna 48px.
+- **Le due colonne del report si aprono da `lg` (1024px), non da `md` (768px):** su iPad
+  verticale i blocchi restano larghi e leggibili, uno sotto l'altro.
+- **I cinque indicatori di performance** passano a cinque colonne solo da `xl`: a 1024px
+  «0,00 €/km» veniva tagliato a metà.
+- **I due riquadri della deducibilità sono diventati due righe**, etichetta a sinistra e
+  importo a destra: in riga ci stanno a qualunque larghezza.
+- Nel dettaglio incassi per pagamento il pallino colorato non si stacca più dalla sua voce
+  quando il testo va a capo, e gli importi non si stringono. «POS / Carta di Credito» è
+  diventato «POS / Carta», «Fattura / Convenzione» è «Fattura».
+
+**Il controllo automatico adesso guarda anche il tablet.** `sbordo.mjs` provava solo 320,
+375 e 390px: da questa versione prova anche 768, 820, 1024 e 1280, su tutte e nove le
+schermate, e dice quale testo è tagliato invece di contarli soltanto. Ignora i testi accorciati
+apposta con i puntini — quelli sono una scelta, non un difetto. Entra nella suite: un'impaginazione
+che si rompe sul tablet adesso si vede prima di arrivare sul telefono di chi lavora.
+
+## Impaginazione del foglio per il commercialista (versione 101)
+
+Le quattro caselle della sintesi provavano a stare **orizzontali sul telefono** per
+risparmiare spazio: etichetta a sinistra, numero a destra. Con le righe nuove — tracciati,
+deducibili, la scomposizione dell'INPS — il conto non tornava più e la casella andava a
+pezzi: tre testi accavallati e il numero in mezzo.
+
+- Le caselle sono **in colonna su ogni schermo**: etichetta, numero, dettaglio. Sul telefono
+  una sotto l'altra, dal tablet in su in griglia. Il numero usa la stessa `cifra` del resto
+  dell'app, con il simbolo dell'euro più piccolo.
+- **Testata rifatta:** titolo e anno sulla stessa riga, sotto il menu del periodo e il tasto
+  **«Stampa / PDF»** (era «Stampa / Esporta PDF» e andava a capo in mezzo).
+- **I titoli di schermata sono tutti della stessa misura.** Erano rimasti a `text-3xl` in sei
+  schermate — Calendario, Registro spese, Rendimento, Spese e tasse, Le mie auto, Backup e
+  impostazioni — mentre le altre erano già passate a `text-2xl` con la v90.
+- I due totali in fondo alle spese si chiamano «di cui deducibili» e «non deducibili»: la
+  versione lunga andava a capo e sballava la colonna degli importi.
+
+**E il punto delle migliaia adesso c'è sempre.** In italiano, per impostazione del browser,
+compare solo da 10.000 in su: nella stessa colonna si leggeva «23.636,63» e sotto «4329,50»,
+e sembravano scritti da due persone diverse. Adesso `useGrouping: true` su tutti e tre i
+formattatori.
+
+## L'INPS come si paga davvero (versione 100)
+
+Segnalato dal tassista: **l'INPS artigiani non è il 24% sull'utile.** Sono due pezzi:
+
+- una **quota fissa**, in **quattro rate da 1.130,34 €** (4.521,36 € l'anno), dovuta anche se
+  l'anno va male o si chiude in perdita: copre il reddito fino al **minimale di 18.415 €**;
+- il **24% solo su quello che supera il minimale**.
+
+Prima l'app faceva il 24% su tutto l'utile. Sotto il minimale **sottostimava** — la quota
+fissa si paga lo stesso, anche a zero — e sopra **sovrastimava**, perché contava la
+percentuale anche sulla parte già coperta dalle rate.
+
+| utile fiscale | prima | adesso |
+| --- | --- | --- |
+| 0 € | 0 € | **4.521,36 €** (le rate si pagano comunque) |
+| 10.000 € | 2.400 € | **4.521,36 €** |
+| 18.415 € | 4.419,60 € | **4.521,36 €** |
+| 25.000 € | 6.000 € | **6.101,76 €** (4.521,36 + 24% su 6.585) |
+| 40.000 € | 9.600 € | **9.701,76 €** |
+
+I quattro valori — **rata, numero di rate, minimale, percentuale sull'eccedenza** — si
+cambiano in «Backup e impostazioni» → Impostazioni Fiscali: cambiano ogni anno, e non devono
+restare sepolti nel codice. Lasciando la rata a zero si torna al conto vecchio (percentuale
+secca), per chi avesse un'altra cassa.
+
+Nel prospetto della stima l'INPS adesso è su due righe: *«INPS · rate fisse 4 × 1.130,34 €»*
+e *«INPS · 24% oltre 18.415,00 €»*, così si vede da dove viene il numero. L'IRPEF continua a
+contarsi su quello che resta tolti i contributi.
+
+**Cambia anche l'accantonamento suggerito:** finché l'utile sta sotto il minimale, mille euro
+in più non portano INPS in più — la marginale scende, e la percentuale da mettere da parte
+con lei.
+
+## Anche gli incassi: la stima guarda solo il tracciato (versione 99)
+
+Chiuso il giro: dalla v99 la base delle tasse è **tracciato meno tracciato**, da una parte e
+dall'altra. Prima erano tutti gli incassi meno le sole spese tracciate.
+
+- `utileFiscaleAnno()`, `utileProiettato()` e `getStats()` tengono solo i movimenti con un
+  metodo che lascia una prova, in entrata e in uscita. `getStats()` torna anche
+  `entrateTracciate` e `entrateContanti`.
+- Il prospetto della stima ora comincia da **«Incassi tracciati 2026 — POS, app, bonifico»**,
+  e sotto, in un blocco a parte intitolato **«Fuori da questo conto»**, mette gli incassi in
+  contanti e le spese non deducibili: entrano ed escono dalla cassa davvero — il «ti resta»
+  ne tiene conto — ma restano fuori dal conto delle tasse.
+- Il foglio per il commercialista, sotto gli incassi lordi, dice *«x € tracciati · y €
+  contanti»*.
+- Nel confronto fra le due basi di calcolo **Satispay è passata fra i tracciati**, dov'era
+  giusto stesse: era esclusa dalla colonna B, che quindi risultava più bassa del vero.
+
+**Un avviso in giallo, sotto la stima, che non si toglie:** *questa stima guarda solo i
+movimenti tracciati; per il fisco, in regime ordinario, concorrono al reddito tutti i
+corrispettivi, contanti compresi, quindi il conto vero è più alto.* Quanto più alto lo dice
+il confronto fra le due basi: la colonna A (tutti gli incassi) resta quella che conta per il
+fisco, la colonna B è la base di questa stima, e la differenza fra le due è quello che la
+stima sta lasciando fuori.
+
+## Anche le tre schede di «Spese e tasse» (versione 98)
+
+Rimasto indietro dalla v97: le tre schede in fondo a «Spese e tasse» — Carburante,
+Manutenzione & cura, Altre spese operative — mostravano il **totale intero** con sotto il
+cartellino *«Deducibile 100%»*. Anche sulla parte pagata in contanti, che deducibile non è.
+
+Adesso ogni scheda dice il totale speso e, sotto, **quanto di quel totale va davvero in
+deduzione**:
+
+- tutto tracciato → cartellino verde **«Tutta deducibile»**;
+- in parte no → cartellino blu **«Deducibili 4.320,00 €»** e sotto, in piccolo,
+  *«810,00 € pagati in contanti o senza metodo: fuori»*.
+
+`aggrega()` porta tre totali nuovi (`carburanteDed`, `manutenzioneDed`, `altroSpeseDed`, più
+`usciteDed`) calcolati con la stessa `metodoTracciato()` di tutto il resto — un posto solo
+dove sta la regola.
+
+Sotto le schede una riga lo dice a chiare lettere: *«Deducibili» qui vuol dire pagate in modo
+tracciato, secondo la regola che hai stabilito. Quanto poi sia deducibile ogni singola voce —
+e in che percentuale — lo dice il commercialista: questa è la somma, non la dichiarazione.*
+
+## In deduzione solo le spese tracciate (versione 97)
+
+La regola, decisa dal tassista: **in deduzione vanno solo le spese tracciate.** Dalla v97
+l'app la applica dappertutto, invece di limitarsi a dividere i due mucchi.
+
+**Due utili, che non sono la stessa cosa:**
+
+| | come si calcola | a cosa serve |
+| --- | --- | --- |
+| **Utile di cassa** | incassi − **tutte** le spese | quello che ti resta davvero in tasca |
+| **Utile fiscale** | incassi − **le sole spese deducibili** | la base su cui si stimano le tasse |
+
+Le spese in contanti restano spese vere — tolgono soldi dalla cassa — ma non abbassano
+l'imponibile. Quindi:
+
+- la **stima delle tasse** in «Spese e tasse» si calcola sull'utile fiscale, e il prospetto
+  lo dice riga per riga: *Incassi · Spese deducibili (tracciate) · Utile fiscale*, e sotto,
+  in grigio, *Spese non deducibili*;
+- il **netto stimato** resta al netto di **tutte** le spese: `utile di cassa − tasse`;
+- l'**accantonamento automatico** (la percentuale che l'app suggerisce di mettere da parte)
+  si calcola sullo scaglione dell'utile fiscale, non più di quello di cassa;
+- il **foglio per il commercialista** mostra sotto le spese *«x € deducibili · y € no»*, sotto
+  la stima *«su x € di utile fiscale»*, e in fondo al dettaglio per categoria le due righe
+  divise;
+- anche il **confronto fra le due basi di calcolo** (negli approfondimenti fiscali) toglie
+  solo le deducibili.
+
+**Attenzione, e va detto chiaro: la stima delle tasse sale.** Con la regola vecchia tutte le
+spese abbassavano l'imponibile; adesso i contanti non lo fanno più. Su un esempio da 30.000 €
+di incassi con 6.000 € di spese tracciate e 5.000 € in contanti: utile di cassa 19.000 €,
+utile fiscale 24.000 €, tasse stimate 10.320 € invece di 8.170 €. Se i conti di prima ti
+sembravano più belli, erano semplicemente più ottimisti del dovuto.
+
+**Una spesa senza metodo di pagamento scritto non è deducibile.** Non si sa come è stata
+pagata, e darla per buona sarebbe inventare. Compare nell'elenco come **«Non indicato»**: se
+ne trovi, aprile e scrivi come le hai pagate.
+
+## Spese tracciate o in contanti (versione 96)
+
+Tolto il tasto «Fattura» (v95), le spese avevano tre modi di pagamento: contanti, POS/carta,
+carta carburante. Mancava il **bonifico** — e mancava soprattutto la divisione che conta
+davvero: **quello che lascia una traccia e quello che non ne lascia.**
+
+- **Bonifico** è il quarto tasto del pannello veloce. I tasti sono di nuovo quattro, due per
+  riga: Contanti · POS/Carta · Carta carburante · Bonifico.
+- **`metodoTracciato(metodo)`**: contanti no, tutto il resto sì. Una riga sola, usata
+  ovunque, così non ci sono due idee diverse di «tracciato» in giro per l'app.
+- **«Come le hai pagate»**, nuovo riquadro in fondo al registro spese: i due mucchi in cima
+  — *tracciate* (con quanto di quelle ha anche la fattura) e *in contanti* — e sotto il
+  dettaglio per metodo, con la barra della percentuale. Il riepilogo in alto guadagna la riga
+  *«tracciate X € · contanti Y €»*.
+- Lo stesso riquadro è nel **foglio per il commercialista**, sopra il dettaglio per categoria,
+  e si stampa con il resto.
+
+Sulla deducibilità l'app dice quello che sa e si ferma lì: *«Tracciata vuol dire che del
+pagamento resta una prova: POS, carta, bonifico, app. È quella che il commercialista può
+portare in deduzione senza doverti credere sulla parola. Sui contanti chiediglielo: la regola
+non è uguale per tutte le voci, e non la decide questa app.»* I conti li fa, la qualifica
+fiscale no — quella ha regole che cambiano voce per voce e anno per anno.
+
+## La fattura non è un modo di pagare (versione 95)
+
+Fra i tasti «come ha pagato» c'era **Fattura / Convenzione**, sia sulle corse che sulle
+spese. Ma la fattura non è un modo di pagare: è il documento che ti danno. Il tasto è
+sparito da tutti e due i pannelli — restano solo i modi veri: contanti, POS, Satispay, app,
+carta carburante.
+
+**«Fattura» resta scegliibile nel modulo completo** (il collegamento *«Tratta scritta o data
+diversa»* sulle corse, *«Nota, data diversa o spesa ricorrente»* sulle spese): le corse in
+convenzione già registrate restano quelle che sono, e chi vuole continuare a segnarle così
+può farlo.
+
+Al suo posto, sulle spese, c'è la spunta **«Mi fa fattura»**:
+
+- sta nel pannello veloce, sopra i tasti del pagamento, e nel modulo completo accanto al
+  metodo;
+- si ricorda l'ultima scelta, come categoria e metodo — la si vede sempre prima di salvare;
+- si può mettere e togliere anche dopo, dalla modifica della riga (sia in «Oggi» che nel
+  registro spese);
+- sulla riga compare il cartellino **«con fattura»** (in Oggi, per stare stretto, **«fatt.»**);
+- nel registro spese il totale dice anche **«di cui *x* € con fattura»**.
+
+Serve al commercialista e serve a te: il pieno con la ricevuta del distributore e il pieno
+con la fattura sono la stessa spesa e due cose diverse.
+
+Il campo si chiama `fattura` sul movimento e c'è solo quando è vero: i movimenti vecchi
+restano validi così come sono, senza nessuna conversione.
+
+## La prossima scadenza era quella sbagliata (versione 94)
+
+Segnalato guardando l'app: in cima a **Scadenze** c'era scritto *«Prossima: Bollo Auto»*
+(31 ottobre) mentre il calendario, due dita più sotto, mostrava l'assicurazione il 7 ottobre.
+E *«Entro 30 giorni: 0»* con una scadenza a ventun giorni.
+
+**Perché.** Le tre caselle in cima leggevano la **data scritta nella scheda** della scadenza.
+Per una scadenza che si ripete quella data non è la prossima volta: è l'**àncora** della
+serie, il punto da cui si contano i giri (README, «Il calendario delle scadenze»). Il
+calendario le occorrenze le calcola davvero; le caselle no. Due conti diversi sulla stessa
+pagina, e quello sbagliato era in grande.
+
+Lo stesso errore lo faceva **l'avviso rosso** che compare su Oggi, Andamento e Gestione:
+poteva tacere su una scadenza fra tre giorni e strillare per una che non c'era.
+
+**Adesso** le caselle e l'avviso contano le occorrenze vere, le stesse del calendario, su tre
+anni: l'anno scorso per le arretrate, quest'anno, e l'anno prossimo — perché a dicembre la
+prossima cade oltre capodanno.
+
+Due regole che servivano:
+
+- **Di una scadenza in ritardo conta l'ultima volta, non tutte.** Il bollo del 2025 mai
+  spuntato non è una seconda cosa da fare oltre a quello del 2026: è la stessa, in ritardo.
+  Senza questa regola bastava non spuntare per un anno per avere l'avviso rosso pieno di
+  doppioni.
+- **Prima dell'àncora la serie non esisteva.** Il conto delle occorrenze, per non perdere i
+  bordi dell'anno, ne generava una in più da una parte e dall'altra: quella *prima*
+  dell'àncora finiva nel calendario come se fosse dovuta. È il motivo per cui il promemoria
+  del backup, creato per il 16 dicembre, compariva «da fare oggi» il 16 settembre. Restano
+  solo le date pre-àncora su cui c'è scritto qualcosa (spuntate, o spostate a mano): quelle
+  sono storia vera.
+
+**E le tre caselle stanno su una riga sola**, sul fondo scuro: Scadute · Entro 30 gg ·
+Prossima, con il nome della prossima, la data e i giorni che mancano. Prima erano tre
+schedine chiare in colonna, alte quanto mezzo schermo, per dire due zeri e un nome.
+
+Verificato: `testProssima` (nuovo) fallisce sulla v93 — *prossima: Revisione, tra 65 gg* —
+e passa dalla v94, con l'assicurazione a 21 giorni.
+
+## La divisione per metodo su fondo scuro (versioni 92-93)
+
+Il pannello «Filtra per metodo», nella schermata Oggi, era cinque rettangoli grigi uguali su
+bianco: il colore del metodo — quello dei tasti con cui la corsa è stata salvata — non si
+vedeva da nessuna parte.
+
+Adesso è una scheda scura come quella della giornata, e **ogni riquadro ha il colore del suo
+metodo**: verde contanti, rosso Satispay, blu app, azzurro fattura. Quando ne scegli uno, il
+riquadro si accende pieno di quel colore e in alto compare «filtro attivo» in giallo.
+
+Il POS nei tasti è nero, e sul nero non si vedrebbe: qui porta il **giallo taxi** (v93).
+
+I riquadri sono passati sopra i menu a tendina: quello che si guarda (quanto ho preso in
+contanti) viene prima di quello che si imposta. Gli importi sono senza simbolo dell'euro e
+allineati in colonna, come nelle caselle della scheda in cima.
+
+## «Incasso corsa» (versione 91)
+
+L'etichetta sopra il campo dell'importo, nella schermata Oggi, era **«Quanto hai incassato»**:
+una domanda, e riferita alla giornata più che alla corsa che stai segnando in quel momento.
+Adesso dice **«Incasso corsa»** — è il nome di quello che stai scrivendo, e si distingue a
+colpo d'occhio dal riquadro della spesa qui sotto.
+
+## La stessa lingua in Andamento e Gestione (versione 90)
+
+La direzione della v89 portata sulle altre due schermate. Nessun conto è cambiato.
+
+**Andamento**
+
+- La testata dei periodi (Oggi / Mese / Anno) è la stessa scheda scura della giornata:
+  incasso grande **bianco** invece che giallo — giallo su nero è la coppia che si legge
+  peggio di tutte con il sole in faccia — e sotto le tre caselle **Spese · Ti resta · A corsa**,
+  con le cifre allineate in colonna.
+- **I campi data e mese non sono più rettangoli bianchi dentro il nero.** Erano la cosa più
+  vistosa della schermata e mostravano «09/16/2026». Adesso c'è la data scritta
+  («Mercoledì 16 / settembre 2026», «Settembre 2026») con il campo del telefono trasparente
+  sopra: si tocca e si apre il calendario, come prima. Il pulsante «Ultimo» è diventato una
+  scritta, non un blocco giallo.
+- **Meno doppioni**: il titolo del giorno non è più ripetuto sopra le frecce, e la media a
+  corsa non è scritta due volte (sta nella casella; sotto resta l'euro all'ora).
+- Il riquadro **«Quanto costa questa giornata»** era tutto blu su blu: adesso è una scheda
+  bianca con il blu solo dove serve, la quota in grande e i due riquadri allineati.
+  «Incasso reale della giornata» si chiama **«Sopra il pareggio»**: mostrava la differenza,
+  non l'incasso.
+- Il selettore dell'anno era un blocco nero grande come il titolo: adesso è un comando quieto
+  accanto al titolo, bianco con un filo di bordo.
+
+**Gestione**
+
+- I sei reparti hanno **un colore ciascuno**, tenue: sei quadrati gialli uguali non aiutano a
+  ritrovare la voce, a colpo d'occhio erano sei bolli. La freccia a destra è disegnata, non
+  più il carattere `›`.
+- Titolo e sottotitolo più composti, e la riga non va più a capo sui telefoni stretti.
+
+**Dappertutto**
+
+- Il nero dell'app (`#111827`, blu di suo) è diventato lo stesso nero caldo della scheda
+  della giornata: accanto al fondo color carta il vecchio faceva una macchia fredda.
+- Le etichettine delle sezioni sono una classe sola (`.etichetta`), non tredici copie della
+  stessa riga di classi.
+
+## Una grafica più curata: la giornata in una scheda sola (versione 89)
+
+Quattro bozze a confronto (com'è adesso, «Rifinitura», «Plancia» scura, «Chiaro» senza
+schede), scelta la **Rifinitura**: stesso giallo, stessa struttura, stessi gesti — cambia
+la cura. Niente di quello che si tocca si è spostato.
+
+**Cosa non andava, misurato sulla v88:**
+
+- **287 elementi scritti con il peso massimo del carattere.** Se tutto urla, non si legge
+  niente per primo.
+- **Una sola ombra, piatta** (`0 1px 2px rgba(0,0,0,.05)`): le schede sembravano adesivi
+  appoggiati sul fondo.
+- **L'incasso della giornata a 24px, il titolo «Oggi» a 30px.** Il titolo gridava più dei
+  soldi.
+
+**Cosa è cambiato:**
+
+- **Una lingua visiva sola**, in cima al `<style>`: i colori (fondo color carta `#faf9f6`
+  invece del grigio ufficio, fili e grigi caldi), la scala dei pesi (900 solo sulle cifre
+  grandi, il resto 800/650), due livelli di ombra. Riscrive le classi di Tailwind
+  (`.font-black`, `.shadow-sm`, `.border-gray-100`...), così il tono cambia ovunque senza
+  toccare novemila righe di markup, e una schermata scritta domani nasce già giusta.
+- **La scheda scura della giornata.** Prima erano tre blocchi in fila — il titolo «Oggi», la
+  scheda bianca con il campo data, due rettangoli colorati con i totali — mezza schermata per
+  dire una cosa sola. Adesso: il giorno con le frecce, **l'incasso a 42px**, e sotto la riga
+  che serve a fine turno — **Spese · Ti resta · All'ora**. L'euro all'ora continua ad
+  aggiornarsi ogni minuto mentre il turno è aperto.
+- **La data si legge**: «Mercoledì 16 / settembre 2026» su due righe invece di
+  «Mercoledì 16 Sett…». Il campo data del telefono è ancora lì, trasparente, sopra la scritta:
+  si tocca e si apre il calendario come prima.
+- **Niente più doppioni**: con un giorno selezionato, la scheda del registro ripeteva data,
+  totale e corse già scritti sopra. Adesso mostra solo quello che in cima non c'è — il turno
+  con i suoi orari e i suoi km.
+- **Le emoji dei metodi di pagamento sono diventate icone disegnate** (💵 💳 🔴 📱 🧾 →
+  stesso tratto del resto dell'app). Le emoji le disegna ogni telefono a modo suo. Restano
+  solo dentro i menu a tendina, dove il colore non si può mettere in altro modo.
+- **Il numero grande porta il simbolo più piccolo e più chiaro**: da lontano si legge
+  «116,50», non «€». Nelle tre caselle in fondo l'euro non c'è proprio: lo dice l'etichetta.
+- **In fondo la voce accesa è una pastiglia gialla** dietro l'icona, non un trattino sotto la
+  scritta: a un centimetro dal bordo dello schermo il trattino non si vedeva.
+- Le linguette «Giornate / Calendario» sono sottolineate invece che dentro una scheda: la
+  pagina comincia **40px più su**.
+
+Il foglio di stile è stato rifatto (vedi «Rifare il foglio di stile»): 446 classi usate, 446
+coperte.
+
+## Il promemoria del backup (versione 88)
+
+Le tre copie automatiche (v72) vivono nello **stesso account Google** dell'app. Bastano per
+un guaio tuo — una giornata cancellata per sbaglio, un telefono perso, un telefono nuovo da
+riempire — ma **non per la perdita dell'account**. Un file `.json` scaricato ogni tanto su
+iCloud o su una chiavetta è l'unica copia che non dipende da nessuno.
+
+In «Backup e impostazioni», accanto ai due scarichi, c'è **«⏰ Ricordamelo ogni 3 mesi»**: crea
+nelle Scadenze un promemoria ricorrente «Scarica il backup dei dati», datato fra tre mesi
+(non oggi: il primo giro lo fai adesso scaricando il backup).
+
+Il promemoria **non poteva metterlo nessuno al posto suo**: le scadenze stanno nei dati del
+tassista, nella sua cartella privata, e da fuori non ci si scrive. Quello che si può fare è
+il tasto che lo crea con un tocco.
+
+Dettagli:
+
+- **Non ne fa due uguali.** Se il promemoria c'è già, lo dice e porta in «Scadenze» invece di
+  aggiungerne un altro (il confronto passa da `chiaveNome`, lo stesso che abbina le spese al
+  budget).
+- **Una volta creato, il tasto diventa una conferma**: *«Te lo ricordo il 16/12/2026, e poi
+  ogni tre mesi»*, con il collegamento per andarlo a vedere.
+- Si comporta come qualsiasi altra scadenza ricorrente: si spunta, sparisce, e torna tre mesi
+  dopo. Verificato: nel 2027 cade quattro volte, il 16 di marzo, giugno, settembre e
+  dicembre.
+
+## La sigla in cima (versione 87)
+
+La sigla compare nella barra in alto. **Sigla e colore sono la stessa cosa detta in due modi**
+— identificano la vettura — quindi sono un elemento solo: una targhetta con la sigla scritta
+dentro, colorata del turno. Tre elementi staccati in cima a un telefono si contenderebbero i
+pixel per dire una cosa sola.
+
+```
+🚕 Giuseppe  [ Torino 57 ]  [ v87 ]        turno giallo → targhetta gialla
+🚕 Giuseppe  [ Torino 57 ]  [ v87 ]        senza turno  → targhetta scura
+🚕 Giuseppe La Viana  ●  [ v87 ]           solo turno   → il pallino di prima
+```
+
+**Con la sigla accanto, in cima resta il nome di battesimo.** Il nome per intero non ci
+stava e veniva tagliato — «Giuse…» a 320px, che è peggio di niente. In cima serve
+riconoscersi, non leggere l'anagrafe: il cognome resta nel titolo per chi ci passa sopra, e
+per intero nella scheda e sul foglio del commercialista. Senza sigla, nome e cognome come
+prima.
+
+Misurato a 320, 375 e 390px con sigle corte e lunghe: l'unico caso in cui il nome si accorcia
+ancora è **320px con una sigla da quindici caratteri**, cioè un iPhone SE della prima
+generazione con «Torino 1234 bis». Su 375 e 390 non si taglia niente.
+
+## Sigla e colore del turno (versione 86)
+
+**«Codice radio» diventa «Sigla»**, che è come la si chiama davvero, e l'esempio passa da
+`57` a `Torino 57`. Chi aveva già compilato il campo non lo perde: all'avvio, se c'è un
+vecchio `radio` e la sigla è vuota, il valore si sposta da solo.
+
+**Il colore del turno.** Non è una decorazione: è il colore scritto sulla licenza, quello che
+dice quali giorni tocca lavorare. Si sceglie toccando una pastiglia — bianco, giallo, verde,
+rosso, blu, nero, o nessuno — e compare in due posti:
+
+- un **pallino** accanto al nome nella barra in alto, che è quello che si guarda al volo la
+  mattina;
+- una **pastiglia «Turno giallo»** in testa al riepilogo per il commercialista, accanto a
+  nome, licenza, sigla e partita IVA.
+
+### Un bug trovato dalla prova, e la bozza
+
+Il primo tentativo scriveva il colore scelto direttamente nel profilo. Sembrava innocuo, ma:
+scegliendo il colore a metà compilazione, il riquadro di benvenuto **spariva** — perché a
+quel punto il profilo risultava «compilato» — e ti trovavi il modulo chiuso in faccia senza
+aver salvato niente.
+
+Adesso quello che stai battendo vive in una **bozza** (`window.bozzaProfilo`): il modulo la
+legge, il colore la aggiorna, e solo il salvataggio la travasa nel profilo vero e la butta.
+È lo stesso schema che l'app usa già per i chilometri del turno.
+
+*(Nota di manutenzione: `testBudget` aveva una `location.reload()` in corsa con la `goto`
+successiva e falliva a intermittenza. Tolta: cinque giri di fila, cinque verdi. Un test che
+fallisce a caso è peggio di un test che manca, perché insegna a ignorare il rosso.)*
+
+## La scheda del tassista (versione 85)
+
+### Una premessa: l'app era già di più persone
+
+Non c'era una registrazione da costruire. Chi entra con Google ha **già** una cartella sua
+sul Cloud — `artifacts/{appId}/users/{uid}/…` — e a tenerli separati non è il programma ma
+le **regole del database**, che girano sui server di Google e dal browser non si aggirano:
+
+```
+match /artifacts/{appId}/users/{uid}/{documenti=**} {
+  allow read, write: if request.auth != null && request.auth.uid == uid;
+}
+```
+
+Due tassisti sullo stesso telefono, che entrano con due account, non si vedono i dati a
+vicenda. Quello che mancava non era la separazione: era **l'anagrafica**.
+
+### Cosa c'è adesso
+
+Nome, cognome, numero di licenza, codice radio e partita IVA. Vivono nella cartella privata
+(`profilo/dati`), si sincronizzano fra i dispositivi come tutto il resto, e viaggiano nel
+backup.
+
+**Il benvenuto** compare su «Oggi» al primo avvio e poi non si rivede più. **Non è una pagina
+di registrazione**: una schermata obbligatoria davanti all'app sarebbe un muro fra il
+tassista e la prima corsa, per dei dati che servono a fine mese. C'è un «Lo faccio dopo», e
+la scheda si compila quando si vuole da «Gestione → Backup e impostazioni». Lo stesso modulo
+serve in tutti e due i posti (`moduloProfiloHTML`): due copie finirebbero per divergere — in
+questa app è già successo.
+
+### Dove serve davvero
+
+**In testa al riepilogo per il commercialista.** Un foglio senza nome e partita IVA è un
+foglio anonimo: chi lo riceve non sa di chi è, e in archivio non lo ritrova più.
+
+```
+INTESTATARIO
+Giuseppe La Viana
+Licenza 1234    Codice radio 57    Partita IVA 00743110157
+```
+
+E il nome compare nella barra in alto al posto del marchio: «TaxiManager» lo sai già, il tuo
+nome dice invece con quale account stai lavorando.
+
+### La partita IVA viene controllata
+
+Undici cifre, e l'ultima è un controllo: si sommano le cifre di posto dispari e quelle di
+posto pari raddoppiate (togliendo 9 se superano 9), e il totale deve chiudere alla decina.
+Serve a intercettare una cifra battuta storta, che su un documento che va al commercialista
+non è un dettaglio.
+
+**Avvisa, non blocca**: potresti non averla sottomano, e la scheda si salva lo stesso con un
+messaggio che lo dice.
+
+### Un bug trovato dalla prova
+
+Il primo tentativo metteva il ripristino della scheda **dopo** il controllo «c'è qualcosa da
+rimettere in questo backup?». Risultato: un backup fatto appena installata l'app — che
+contiene la scheda e nient'altro — veniva scartato per «non ci sono movimenti», buttando via
+proprio l'unica cosa che c'era. Adesso la scheda si rimette per prima, fuori da quel
+controllo, e il messaggio lo dice: *«Rimessa la tua scheda. Di movimenti e turni in questo
+backup non ce n'erano.»*
+
+## Revisione generale: più veloce, meno codice (versione 84)
+
+Una passata di analisi e ottimizzazione, **a comportamento invariato**. Misurato su un
+archivio di prova da **9.697 movimenti e 1.096 turni** (tre anni pieni).
+
+### Quanto ci mette a disegnare una schermata
+
+| schermata | prima | dopo |
+|---|---|---|
+| Spese e tasse | 17,2 ms | **10,9 ms** −37% |
+| Andamento · mese | 14,7 ms | **8,1 ms** −45% |
+| Andamento · giorno | 8,9 ms | **7,0 ms** −21% |
+| Oggi | 7,0 ms | **5,8 ms** −17% |
+| Commercialista | 6,5 ms | **6,1 ms** |
+
+### Le quattro cose che pesavano
+
+**1. Il formattatore degli euro si costruiva a ogni importo.** `new Intl.NumberFormat(...)`
+è caro da costruire e gratis da riusare: misurato, ventimila importi costano **613 ms**
+costruendolo ogni volta e **11 ms** riusandolo — **54 volte tanto**. E una schermata di
+questa app formatta centinaia di importi, perché ogni corsa, ogni riga di spesa e ogni
+casella del calendario ne ha uno. Adesso i formattatori sono due costanti
+(`FORMATO_EURO`, `FORMATO_NUMERO`), costruite una volta all'avvio. Era la singola cosa che
+pesava di più.
+
+**2. Ogni spesa ri-normalizzava i nomi di tutte le voci di budget.** Per abbinare una spesa
+alla sua voce, `voceBudgetDiRecord` scorreva le voci ricalcolando `chiaveNome(v.nome)` —
+`normalize('NFD')` più due espressioni regolari — **per ognuno dei millecinquecento
+movimenti dell'anno**. Adesso le voci sono indicizzate per chiave una volta per disegno
+(`indiceVociBudget`), e `chiaveNome` tiene da parte i risultati: i nomi da confrontare sono
+una manciata, ripetuti migliaia di volte. Il conguaglio è passato da **4,00 a 1,75 ms**.
+
+**3. Il giro del budget chiedeva 365 volte quello che non cambiava.** `budgetPeriodo` e
+`budgetVocePeriodo` chiamavano `elencoVociFisse()` e `giorniDelMese()` dentro il ciclo dei
+giorni: 732 chiamate per un disegno di «Spese e tasse». Ora escono dal ciclo, e quanti
+giorni ha un mese o un anno si calcola una volta per sempre (`GIORNI_MESE`, `GIORNI_ANNO`) —
+sono fatti di calendario, non cambiano.
+
+**4. Gli stessi conti chiesti da punti diversi della stessa schermata.** Dodici funzioni
+pesanti (`aggrega`, `conguaglioAnno`, `corrispettiviMese`, `statsForfettario`,
+`calcolaTasseOrdinario`…) passano da una memoria che **vive solo per la durata di un
+disegno**.
+
+### La memoria del disegno, e un bug che ha quasi fatto danni
+
+La memoria si apre e si chiude in un guscio attorno a `renderContent`, con un `try/finally`:
+
+```js
+function renderContent() {
+    memoDisegno.clear();
+    dentroUnDisegno = true;
+    try { disegnaContenuto(); }
+    finally { dentroUnDisegno = false; memoDisegno.clear(); }
+}
+```
+
+Fuori da un disegno `memo()` non tiene niente da parte. **Serve davvero**: il primo tentativo
+svuotava la memoria «alla fine» di `renderContent`, ma quella riga era finita — per un
+aggancio sbagliato — dentro un'altra funzione. Risultato: il riepilogo di oggi restava
+bloccato a zero, perché il valore calcolato al primo avvio (archivio ancora vuoto) veniva
+riletto dopo. Il guscio con `try/finally` non dipende da dove finisce una funzione lunga
+milleduecento righe, e si richiude anche se qualcosa va storto.
+
+### Come so che i numeri non sono cambiati
+
+Una prova che mette a confronto la versione vecchia e quella nuova sullo stesso archivio e
+verifica **68 misure**: i totali di tre anni, il budget e il conguaglio per anno e per mese,
+le serie mensili e annuali, i corrispettivi, la quota del giorno, le tasse, il forfettario,
+le scadenze, l'HTML completo delle dieci schermate.
+
+**68 su 68 identiche.** Più le 39 prove della suite.
+
+### Meno codice
+
+- Tolta `pieghevole()`, mai chiamata (era rimasta dalla 74).
+- Le voci del menu «che spesa è» erano scritte due volte — nel modulo completo e nella spesa
+  lampo — e le due copie **erano già divergenti**: una passava le categorie da `esc()`,
+  l'altra no. Una funzione sola (`opzioniCategoriaSpesa`).
+- Zero blocchi di codice duplicati rimasti (prima: 1), zero funzioni mai chiamate.
+- Tre prove (`testLicenza`, `testRata`, `testMezzo`) erano **rotte da diverse versioni**:
+  cercavano `VOCI_COSTI_FISSI` e `#cf-anno`, spariti col rifacimento del budget. Una prova
+  che non può girare è peggio di nessuna prova, perché sembra copertura e non lo è.
+  Sostituite da `testCostiFissi`, che copre le stesse cose con l'API di oggi: la rata
+  mensile che pesa uguale in ogni mese, il finanziamento escluso dal costo al chilometro,
+  l'abbinamento «Costi fissi – X» nel conguaglio, il raggruppamento dei tipi di spesa.
+
+## Due nomi più asciutti (versione 83)
+
+| prima | adesso |
+|---|---|
+| Quanto rendo | **Rendimento** |
+| Per il commercialista | **Commercialista** |
+
+«Quanto rendo» suonava come una domanda, e una voce di menu non fa domande: dice dove
+porta. «Rendimento» è anche la parola che quella scheda usa già al suo interno, ed è quella
+che si dice al commercialista o in cooperativa.
+
+«Per il commercialista» spiegava troppo: il «per il» è la frase, non l'etichetta. Il
+sottotitolo sotto la voce — *«Il riepilogo da stampare o da esportare»* — dice già a cosa
+serve.
+
+Cambiati l'etichetta nell'indice, il titolo della schermata e la pastiglia nella fila delle
+sezioni: sono tre punti diversi ma leggono tutti lo stesso elenco (`SCHEDE_SECONDARIE`)
+tranne il titolo, quindi non possono divergere per distrazione.
+
+## «Gestione», e muoversi dentro (versione 82)
+
+### Il nome
+
+«Altro» è il nome di un cassetto, non di una scheda: dice dove **non** stanno le cose.
+Dentro ci sono le spese, le tasse, le scadenze, le vetture, i report e i backup — cioè il
+mestiere dalla parte della scrivania. Da qui si chiama **Gestione**, in basso e in cima alla
+schermata: `Oggi · Andamento · Gestione`.
+
+### Il ritorno, e il salto laterale
+
+Entrando in una sezione non c'era modo di tornare all'indice se non ritrovando «Gestione»
+nella barra in basso — che resta accesa, ma non è un tasto «indietro» e nessuno lo legge
+così. E per passare da «Scadenze» a «Le mie auto» servivano due tappe.
+
+Adesso in cima a ogni sezione c'è:
+
+```
+‹ Gestione
+[ Spese e tasse ] [ Scadenze ] [ Le mie auto ] [ Quanto rendo ] …   ← scorre di lato
+```
+
+Il ritorno all'indice, e la fila delle sorelle con quella dove sei accesa: **da una sezione
+all'altra è un tocco solo**. La fila scorre di lato sul telefono e non fa sbordare la
+pagina.
+
+Il **registro spese** non è una voce dell'indice (v80) ma si apre da «Spese e tasse»: il suo
+indietro dice `‹ Spese e tasse` e torna lì, non all'indice (`GENITORE_SEZIONE`). Un
+«indietro» che salta una tappa è peggio di nessun indietro.
+
+Una nota di verifica: la freccia `‹` del ritorno convive con quella del cambio anno nel
+calendario delle scadenze. Per un occhio umano sono due cose diverse (una dice «‹ Gestione»,
+l'altra è una freccia nuda in uno stepper), ma una prova automatica che cercava `‹` prendeva
+la prima delle due. Corretta puntando la freccia per nome (`aria-label="Anno precedente"`),
+che è poi come la trova anche uno screen reader.
+
+## Il €/h che si muove, e l'ora della corsa (versione 81)
+
+### Il €/h dentro il turno
+
+Diviso per le ore del turno **intero**, a metà giornata quel numero non dice niente: alle
+dieci di un turno 08–20, con 40 € fatti, segnava **3,33 €/h** — e uno pensa di stare andando
+male quando sta solo andando da due ore.
+
+Adesso, finché il turno è in corso, il conto è sulle ore lavorate **finora** e si rifà da
+solo ogni minuto:
+
+| ora | incassato | prima | adesso |
+|---|---|---|---|
+| 10:00 | 40 € | 3,33 €/h | **20,00 €/h · 2 h finora** |
+| 18:00 | 220 € | 18,33 €/h | **22,00 €/h · 10 h finora** |
+| a turno chiuso | 260 € | 21,67 €/h | 21,67 €/h *(il consuntivo, invariato)* |
+
+Dettagli che contano:
+
+- **Fuori dal turno** — prima che cominci, o a giornata chiusa — resta il conto sulle ore
+  intere, che è il consuntivo vero. L'etichetta «h finora» compare solo mentre serve.
+- **Turni a cavallo di mezzanotte** (13:00–01:00): alle 00:30 sono 11,5 h, non un numero
+  negativo.
+- **Lo Spezzato**: la pausa si toglie solo quando è già passata. Durante la pausa il conto
+  si ferma all'ora in cui è cominciata, invece di gonfiarsi.
+- **Sotto il quarto d'ora non si divide**: con cinque minuti di lavoro una corsa da 20 €
+  darebbe 240 €/h — vero in aritmetica, falso in tutto il resto. Fino a lì si vede «—».
+- **Due turni nello stesso giorno**: le ore del turno già chiuso si sommano a quelle fatte
+  finora in quello in corso.
+- **Il rinfresco non ridisegna la pagina.** Ogni minuto `aggiornaEuroOraVivo()` riscrive
+  solo quel numero: un rendering completo cancellerebbe un modulo aperto a metà, e con
+  l'app in tasca durante il turno succederebbe di continuo. Quando il turno finisce, quello
+  sì è un ridisegno — ma solo se non c'è un modulo aperto.
+
+### L'ora di inserimento
+
+Ogni corsa e ogni spesa si porta dietro l'ora in cui l'hai scritta (`ora: "09:02"`), e la
+mostra a sinistra della riga nel registro della giornata. Serve a ritrovare l'ordine in cui
+hai battuto le cose e a riconoscere una riga sbagliata fra due uguali.
+
+**È l'ora dell'inserimento, non della corsa**: se segni la sera le corse della mattina, lì
+c'è la sera. Le righe registrate prima della 81 non ce l'hanno e semplicemente non la
+mostrano. L'ora finisce anche nel CSV dei movimenti, in una colonna sua accanto alla data.
+
+Per far posto all'ora, la freccia `›` a fine riga — che è decorativa — sparisce sul
+telefono: quei dodici pixel servono alla descrizione della corsa, che altrimenti diventa
+«Carbur…».
+
+## «Registro spese» esce dall'indice (versione 80)
+
+Di spese si parlava in tre posti: «Oggi» (dove si segnano), «Spese e tasse» (dove si
+leggono, divise per categoria, con il budget e il conguaglio) e «Registro spese». Tre voci
+per una cosa sola sono due di troppo, e l'indice di «Altro» esiste proprio per non far
+cercare.
+
+**La voce è sparita** dall'indice e dal menu laterale (leggono lo stesso elenco,
+`SCHEDE_SECONDARIE`). L'indice passa da sette voci a sei:
+
+```
+Spese e tasse · Scadenze · Le mie auto · Quanto rendo
+Per il commercialista · Backup e impostazioni
+```
+
+**Ma la scheda resta, e si apre da «Spese e tasse».** L'elenco riga per riga è ancora
+l'unico posto dove si **corregge una spesa vecchia** e si **governano quelle che si
+ripetono** (la rata della licenza, il radio taxi): renderlo irraggiungibile avrebbe tolto
+delle funzioni, non una voce di menu. In cima a «Spese e tasse» — che è dove uno lo va a
+cercare — c'è la riga **«Tutte le spese, riga per riga»**.
+
+Se preferisci che sparisca del tutto, si toglie anche quella riga in un attimo.
+
+## Via il POS dal calendario (versione 79)
+
+Il POS nella casella del calendario era nato quando l'incrocio fra giorno e metodo non
+esisteva da nessuna parte. Adesso c'è il prospetto dei corrispettivi (v77), che lo dice per
+**tutti e cinque** i metodi, in colonna e con i totali: nella casella restavano due numeri
+sovrapposti in otto pixel, senza più servire a niente.
+
+Tolto in tutti e quattro i punti della vista Calendario: la casella, il pannello del giorno
+aperto, la testata del mese («POS del mese …») e la legenda. Con lui è sparito anche il
+conteggio che lo alimentava, quindi la vista mensile fa un giro di conti in meno.
+
+Effetto collaterale misurato: a 320px la schermata Giornate passa da **28 elementi con il
+testo tagliato a zero** — era proprio quel numero in otto pixel a non starci.
+
+Il totale della giornata nella casella resta, ed è invariato. **Nella scheda «Giornate» la
+riga «di cui POS» resta dov'era**: lì lo spazio c'è, e serve a chi guarda una giornata alla
+volta.
+
+## Il nome e la versione, anche sul telefono (versione 78)
+
+Il menu laterale, dove stavano il nome dell'app e il numero di versione, sul telefono è
+nascosto dalla 74: ne restava solo una riga in fondo ad «Altro». Ma **la versione va vista a
+colpo d'occhio**: è il primo controllo quando ci si chiede se l'aggiornamento è arrivato
+davvero — ed è già successo di restare fermi su una versione vecchia senza accorgersene.
+
+Adesso in cima c'è una striscia da 57px (non il blocco alto che c'era prima della 74) con
+l'icona, **TaxiManager** e la pastiglia della versione. Su schermo largo non compare: lì il
+menu laterale la dice già.
+
+**La pastiglia si tocca** e porta in «Backup e impostazioni», dove c'è «Aggiorna adesso»: il
+giro che si fa davvero è *che versione ho? è vecchia? aggiorno*, e adesso sono due tocchi
+invece di quattro. Il numero lo scrive il programma da `VERSIONE_APP`, in tutti e due i
+posti, così non può restare indietro rispetto al codice.
+
+## Il prospetto dei corrispettivi (versione 77)
+
+Il registro dei corrispettivi si compila una data alla volta, e per ogni data serve la
+divisione per come hanno pagato. I numeri c'erano già tutti, ma sparsi: il totale del mese
+per metodo da una parte, il totale del giorno dall'altra, e **l'incrocio — che è esattamente
+quello che va trascritto — da nessuna parte**.
+
+In `Andamento → Mese` c'è adesso **Corrispettivi giorno per giorno**: una riga per data, una
+colonna per metodo, il totale del mese in fondo.
+
+```
+Giorno          Contanti     POS   Satispay      App   Fattura     Totale
+01/09 mar · 2     120,00   80,50       0,00     0,00      0,00     200,50
+02/09 mer · 2      95,00    0,00      22,30     0,00      0,00     117,30
+04/09 ven · 3       0,00    0,00       0,00    63,00    200,00     263,00
+Totale Settembre  215,00   80,50      22,30    63,00    200,00     580,80
+```
+
+- **Il filtro** in cima isola un metodo alla volta: comodo quando si trascrive una voce per
+  volta, o per controllare solo il POS.
+- **Le colonne vuote non si mostrano.** Cinque colonne di cui tre a zero rendono la tabella
+  illeggibile su un telefono: compaiono solo i metodi che nel mese hanno qualcosa.
+- **La colonna del giorno resta ferma** mentre si scorre di lato (`.col-ferma`). Con cinque
+  metodi su un telefono, senza questo si perde di vista la riga che si sta copiando.
+- **Toccando la data** si apre quel giorno nel riepilogo giornaliero, per vedere le singole
+  corse.
+- **I giorni senza incassi non compaiono**, e una riga in fondo dice quanti sono: «in
+  Settembre sono 27 su 30».
+- **Un metodo scritto a mano** o arrivato da una versione vecchia non sparisce dal conto:
+  `famigliaMetodo()` lo riporta a una delle cinque colonne, e «App» raccoglie il resto. Un
+  incasso segnato «Voucher comunale» finisce in App, non nel nulla.
+- **Solo gli incassi**: le spese non entrano in questo prospetto.
+
+C'è anche **«Scarica questo prospetto (.csv)»**, per chi compila i corrispettivi al computer
+e preferisce tenersi il foglio aperto accanto invece di leggerlo dal telefono. Separatore
+punto e virgola e virgola decimale, come si aspetta un Excel italiano:
+
+```
+"Data";"Contanti";"POS";"Satispay";"App";"Fattura";"Totale";"Corse"
+"01/09/2026";"120,00";"80,50";"0,00";"0,00";"0,00";"200,50";"2"
+"TOTALE";"215,00";"80,50";"22,30";"63,00";"200,00";"580,80";"7"
+```
+
+Il riquadro è pieghevole e si ricorda come l'hai lasciato, come il budget e il conguaglio.
+
+## Tutti i metodi di pagamento, e la spesa che si vede (versione 76)
+
+### Cinque tasti per la corsa, non due
+
+La 75 aveva solo **Contanti** e **POS**. Sono la maggioranza, non sono tutto: Satispay, le
+app e le convenzioni a fattura ci sono, e mandarle nel modulo completo voleva dire fare sei
+passaggi proprio per i casi meno comuni — quelli in cui ti ricordi meno com'è che si fa.
+
+```
+💵 Contanti       💳 POS
+🔴 Satispay       📱 App / Voucher
+🧾 Fattura / Convenzione
+```
+
+I colori sono gli stessi delle pastiglie nel registro (verde contanti, nero POS, rosso
+Satispay, blu app e fattura), così il tasto insegna la legenda mentre lo usi. Il valore
+salvato è quello vero — `App/Nexi`, `Satispay`, `Fattura` — quindi i totali per metodo, il
+«da versare» e i report li dividono correttamente.
+
+### Quattro tasti per la spesa, e una correzione
+
+La 75 aveva un tasto solo **«POS / Fattura»**, che salvava tutto come `Fattura`: due metodi
+diversi finiti sotto un nome solo, con i conti per metodo che ne risentivano. Corretto.
+Adesso sono quattro, quelli veri di una spesa:
+
+```
+💵 Contanti          💳 POS / Carta
+⛽ Carta carburante   🧾 Fattura
+```
+
+Satispay e bonifico restano nel modulo completo, che si apre lì sotto senza cambiare scheda.
+
+### «Segna una spesa» è un pulsante, non un link
+
+Era un link sottolineato da 12px in fondo al riquadro, in mezzo ad altri comandi piccoli: si
+faceva fatica a trovarlo, e la spesa si segna tutti i giorni quanto la corsa. Adesso è un
+pulsante suo, largo tutta la schermata, 64px di altezza, testo da 18px, con l'icona del più
+dentro un cerchio. Lo stesso pulsante compare anche nei giorni di riposo, dove la corsa è
+bloccata ma la spesa no.
+
+### Una classe sola per i tasti del metodo
+
+Con il corpo normale «Satispay» e «App / Voucher» andavano a capo già a 375px, e quei due
+tasti crescevano più degli altri: l'occhio legge una gerarchia che non c'è. La misura adesso
+è definita una volta sola nel foglio di stile (`.tasto-metodo`), così il prossimo tasto non
+può nascere di misura diversa per distrazione. Verificato a 320, 375 e 390px.
+
+## Anche le spese stanno in «Oggi» (versione 75)
+
+Il pieno si fa tutti i giorni, il lavaggio quasi: è lavoro di turno, non contabilità da
+scrivania. Ma per segnarlo bisognava cambiare scheda — e la 74, spostando il registro spese
+dentro «Altro», l'aveva pure allontanato di un tocco.
+
+Adesso su «Oggi» c'è anche la spesa, con lo stesso meccanismo della corsa:
+
+```
+Stai segnando una spesa                     16/09/2026
+Che spesa è?   [ Carburante ▾ ]
+€ [ 62,35 ]
+[ 💵 Contanti ]  [ 💳 POS / Fattura ]       ← ognuno salva
+```
+
+Il tipo di spesa propone l'ultimo usato, che nove volte su dieci è il carburante. Il metodo
+di pagamento è il pulsante di conferma, come per la corsa, e dopo il salvataggio il campo
+torna vuoto col cursore dentro. Il messaggio conferma anche il totale delle spese di
+giornata. Sotto, «Nota, data diversa o spesa ricorrente» apre il **modulo completo lì
+dentro**, senza cambiare scheda: `moduloUscitaHTML()` è stato estratto da `renderContent` e
+adesso lo usano tutte e due le schermate.
+
+**O la corsa o la spesa, non tutt'e due insieme.** Con i due pannelli aperti nella stessa
+schermata c'erano due pulsanti «Contanti» uno sotto l'altro e due campi «quanto» — e non è
+un'ipotesi: il primo giro di prove ha salvato come corsa un importo che doveva essere una
+spesa, proprio per quell'ambiguità. Sono due lavori diversi, se ne fa uno per volta: aprendo
+la spesa la corsa lampo si chiude, e da «← Torna alle corse» si rientra.
+
+**Le spese si vedono dove si registrano.** Segnare il pieno e non vederlo comparire da
+nessuna parte sarebbe un salto nel buio. Quindi:
+
+- la testata della giornata dice anche `spese −77,35 €`;
+- il riquadro verde in cima aggiunge `spese −77,35 € · ti resta 47,65 €`;
+- aprendo la giornata, sotto le corse c'è **Spese della giornata**, con le stesse righe
+  toccabili delle corse (si tocca, si apre, e lì dentro c'è anche «Elimina»).
+
+**Nei giorni di riposo le spese si registrano lo stesso.** Le corse restano bloccate — un
+incasso in un festivo vuol dire che il tipo di giornata è sbagliato — ma l'auto in un giorno
+di riposo costa come sempre, e l'app lo diceva già («nei riposi le spese corrono lo stesso,
+ma non c'è incasso a coprirle»). Sarebbe stato contraddittorio impedirne la registrazione.
+
+Il **registro completo** di tutte le spese, con i filtri per tipologia e mese, resta in
+«Altro → Registro spese»: quello si guarda a mese, non in mezzo al traffico.
+
+## Tre schede, un riquadro, due tocchi (versione 74)
+
+Secondo e ultimo passo della revisione. La 73 aveva sistemato quello che era
+misurabilmente sotto misura senza spostare niente; qui si sposta.
+
+### Tre destinazioni invece di nove
+
+Il menu era piatto: nove porte tutte uguali in fila. Chi non è pratico le apre a caso
+finché non ritrova quella giusta. Ma in turno si fanno tre cose, e le altre sei sono
+roba da scrivania.
+
+- **Oggi** — il turno, le corse, le spese della giornata
+- **Andamento** — come sta andando, a giorno / mese / anno
+- **Altro** — un indice scritto a parole, con sotto ogni voce cosa ci trovi
+
+Sul telefono le tre stanno in una **barra in basso**, dove arriva il pollice, non in cima
+allo schermo: una mano sola, telefono nel supporto, mezzo guanto. `env(safe-area-inset-bottom)`
+le tiene sopra la barra di casa dell'iPhone. Su schermo largo resta il menu laterale, con le
+tre in cima e le altre sotto una riga di separazione.
+
+Le scadenze in corso **non** finiscono nel cassetto: l'avviso rosso compare su «Oggi» e su
+«Andamento», dove si passa tutti i giorni. Una scadenza nascosta in un sottomenu è una
+scadenza persa.
+
+L'**anno di esercizio** non sta più in cima a ogni schermata: costava ~60px su nove schede e
+si tocca due volte l'anno. Adesso è una pastiglia sulle quattro schermate i cui numeri
+riguardano un anno preciso, più il menu laterale.
+
+### Un riquadro solo, con l'interruttore del periodo
+
+Era il problema più grosso e il meno evidente. «Andamento» impilava **tre riquadri con la
+stessa identica struttura** — giornaliero, mensile, annuale — ripetendo venti etichette tre
+volte: 4.492px, sessantasette numeri in colonna, cinquantatré elementi cliccabili. Uno sopra
+l'altro non si confrontano nemmeno: per confrontarli dovresti vederli insieme, e insieme non
+ci stanno.
+
+Adesso è **lo stesso riquadro con tre posizioni**: `Oggi · Mese · Anno`. La scelta si ricorda.
+Sopra c'è una testata comune (`testataPeriodo`) con **il** numero — uno solo, grande davvero —
+e sotto le due righe che dicono cosa ne resta. Le quattro caselle che ripetevano incasso,
+spese e saldo sono sparite: le diceva già la testata.
+
+Nulla è stato tolto. Le spiegazioni lunghe (l'accantonamento, com'è fatta la quota
+giornaliera) stanno dietro una riga che si apre, e le due sezioni più pesanti di «Spese e
+tasse» — il budget dei costi fissi (1.224px) e il conguaglio (1.543px) — sono pieghevoli, con
+lo stato ricordato in `localStorage` (`taxi_apri_*`): **piegare invece di cancellare**.
+
+### La corsa in due tocchi
+
+Il 95% delle corse è *oggi, contanti o POS, tot euro*. Prima erano sei passaggi: apri l'app,
+scheda, scorri ~700px, «+ Nuova Corsa», quattro campi, salva.
+
+Adesso il metodo di pagamento **è** il pulsante di conferma:
+
+```
+Quanto hai incassato?   [  18,50  ]
+[ 💵 Contanti ]  [ 💳 POS ]     ← ognuno salva
+```
+
+Scrivi l'importo, tocchi il metodo, è salvata — e il campo torna vuoto col cursore dentro,
+pronto per la successiva. Il messaggio conferma anche il totale della giornata. Invio da
+tastiera usa l'ultimo metodo. Data, categoria e turno li mette il programma, e il blocco dei
+giorni di riposo vale qui come nel modulo completo.
+
+Il modulo completo non è sparito: sta sotto, dietro «Altro metodo, tratta o data diversa»,
+per la convenzione, la tratta scritta, la data di ieri. Accanto c'è «+ Segna una spesa», così
+il giro quotidiano sta tutto in una schermata.
+
+### Le altre pulizie
+
+- **«Mese (ignorato)»** era uno stato interno finito a video: un menu disattivato che dice
+  «ignorato» fa pensare di aver sbagliato qualcosa. Tolto; al suo posto una riga che dice
+  perché («stai guardando un giorno solo, quindi il mese non serve»).
+- **I filtri** stavano sopra il registro e lo spingevano ~400px più giù. Adesso sono in fondo
+  e chiusi, e si aprono da soli solo se un filtro c'è davvero — il giorno non conta, ha le
+  sue frecce in cima e in uso normale c'è sempre.
+- **I riquadri dei metodi** si mostrano solo se hanno qualcosa dentro: cinque riquadri di cui
+  tre a 0,00 € sono tre righe di niente.
+- **«Modifica» e «Elimina» su ogni riga**: una giornata da otto corse mostrava sedici
+  pulsanti, metà dei quali cancellano. Adesso si tocca la riga e si apre, e «Elimina» sta
+  lì dentro, dove stai già modificando quella corsa.
+- **I nomi**: se una parola non la diresti a un collega al posteggio, non va scritta.
+  «Bilancio & Statistiche» → «Come va il 2026». «Registro Uscite» → «Registro spese».
+  «Spese & Deducibilità Fiscale» → «Spese e tasse». «Parco Auto» → «Le mie auto».
+  «Report Finanziario & Stampa PDF» → «Per il commercialista». «Cloud & Sync» → «Backup e
+  impostazioni». «Metodo Incasso» → «Come ha pagato?». «Importo (€)» → «Quanto?».
+  «Azzera filtri» → «Mostra tutto». «Salva e chiudi» → «Salva e basta».
+
+### Le misure, prima e dopo
+
+| Schermata | v72 | v74 |
+|---|---|---|
+| Andamento | 4.202px · 67 numeri · 53 comandi | **1.752px · 29 numeri · 7 comandi** |
+| Spese e tasse | 4.673px | **2.732px** |
+| Oggi | 1.657px | **1.426px** (con la corsa lampo dentro) |
+| Voci di menu | 9 | **3** (+ un indice) |
+
+Verificato: a 375 e 390px non taglia e non sborda niente; a 320px restano i tagli che c'erano
+già prima. Tutte le prove passano, più tre nuove: `testNav` (le tre destinazioni e l'indice),
+`testLampo` (la corsa in due tocchi), `testVociNuovo` (il budget dietro il pieghevole).
+
+## Comandi grandi e la virgola al posto giusto (versione 73)
+
+Primo passo di una revisione dell'esperienza d'uso. Qui non si sposta niente di
+posto: si sistema quello che era misurabilmente sotto misura. Le misure sono state
+prese sulla versione 72, con un telefono da 375px e un mese di lavoro dentro.
+
+**Ventidue comandi erano più piccoli del minimo.** «Elimina» era alto 25px, le frecce
+del giorno e la × erano 36×36. Il minimo è 44px — è la misura di Apple (Human Interface
+Guidelines) ed è anche il criterio WCAG 2.5.5. Con il telefono nel supporto, mezzo guanto
+e gli occhiali da presbite, 25px non si centrano: o non succede niente, o si tocca quello
+sbagliato, e lì accanto c'è «Elimina». Adesso sono **zero**. La regola sta nel foglio di
+stile una volta sola (`button, select, summary, input { min-height: 44px }`) invece che
+classe per classe, così vale anche per i comandi che verranno dopo e nessuno può nascere
+piccolo per distrazione. I comandi quadrati chiedono il minimo anche in larghezza con la
+classe `.tasto-icona`.
+
+**Il tastierino non aveva la virgola.** Era il guaio più serio, ed era invisibile finché
+non si guardava. I campi degli importi erano `type="number"`: su iPhone quel tipo apre un
+tastierino **senza virgola decimale**. Chi scriveva `18,50` si ritrovava `1850`, o il
+campo vuoto. Adesso sono `type="text" inputmode="decimal"`, che apre il tastierino giusto,
+e a leggerli c'è `numeroScritto()` — che l'app aveva già e capisce sia la virgola sia il
+punto, separatore delle migliaia compreso:
+
+| scritto | salvato |
+|---|---|
+| `18,50` | 18,50 |
+| `18.50` | 18,50 |
+| `1.234,56` | 1.234,56 |
+
+Riguarda dieci campi: i due importi (corsa e spesa), quello della riga che si apre per
+modificare un movimento, le ore del turno, i tre valori delle vetture e i quattro della
+scheda fiscale. I chilometri e l'anno restano interi, con `inputmode="numeric"`. Tutti i
+punti che leggevano quei campi con `parseFloat` sono passati a `numeroScritto`: **un
+campo che accetta la virgola e un lettore che non la sa leggere sarebbe stato peggio di
+prima.**
+
+Di conseguenza anche le ore a video si scrivono all'italiana (`oreScritte`): prima il
+campo diceva `12,0` e due centimetri più in là la scheda diceva `12.0 h`.
+
+**Quarantadue campi, nessuno collegato alla sua etichetta.** Le etichette c'erano come
+testo ma nessuna era legata al campo con `for`: chi usa VoiceOver sentiva «campo di
+testo», e basta. Ora lo sono tutte e 42, più `aria-label` sui menu a tendina e sui campi
+data che un'etichetta a video non ce l'hanno (i filtri, il selettore dell'anno, le righe
+di modifica). È anche un miglioramento per tutti: un `<label for>` rende cliccabile
+l'etichetta, e allarga il bersaglio gratis.
+
+**Il messaggio di conferma non lo annunciava nessuno.** `showToast()` è l'unica risposta
+che l'app dà quando salvi una corsa. Adesso il riquadro è `role="status"` con
+`aria-live="polite"`: viene letto ad alta voce senza interrompere quello che si sta
+leggendo. Trentaquattro caratteri.
+
+**Centoventidue scritte sotto i 12px** (`text-[10px]` e `text-[11px]`) sono salite a 12.
+Sotto quella soglia non si legge con gli occhiali da presbite. Verificato: a 375 e 390px
+non taglia niente e non sborda niente; a 320px restano i tagli che c'erano **già prima**
+— nessuno nuovo.
+
+Il prezzo onesto: bersagli più grandi e scritte più grandi occupano più spazio. La
+schermata Giornate passa da 1.657 a 1.892px, la Dashboard da 4.202 a 4.492. È il passo
+successivo della revisione — un riquadro solo con l'interruttore Oggi/Mese/Anno al posto
+dei tre riepiloghi impilati — a restituire quello spazio con gli interessi.
+
+## Le copie automatiche (versione 72)
+
+Il backup da scaricare va bene finché uno si ricorda di farlo. Quello che serviva era
+una copia che si facesse da sola, e che ci fosse anche il giorno in cui uno si accorge
+di aver combinato un guaio il giorno prima.
+
+Adesso l'app tiene **tre copie complete a rotazione** nella cartella privata su
+Firestore, in `artifacts/{appId}/users/{uid}/istantanee/{0,1,2}`. L'appuntamento è ogni
+notte alle 2:00: quella nuova prende il posto di quella di tre notti fa, così sotto mano
+restano sempre gli ultimi tre giorni.
+
+**Il limite da dire in chiaro:** un'app che sta nel telefono non può svegliarsi alle due
+di notte a telefono spento — nessuna app web può. L'appuntamento delle 2:00 è l'ora a
+cui la copia *scade*, non l'ora in cui parte il telefono: lo scatto avviene la prima
+volta che si riapre l'app dopo quell'ora (`controllaIstantanea`, chiamata all'accensione
+del Cloud e a ogni ritorno sull'app). Chi apre l'app tutti i giorni ha tutti i giorni la
+sua copia; chi non la apre per una settimana, al rientro ne trova una sola, fatta lì per
+lì. E serve l'accesso con Google: senza Cloud non c'è nessun posto dove metterla.
+
+Come è fatta:
+
+- `datiDaSalvare()` è lo stesso pacchetto del backup da scaricare — movimenti, turni,
+  scadenze, vetture, voci di costo fisso, impostazioni fiscali — così i due non possono
+  divergere.
+- `slotIstantanea(quando)` conta i giorni interi e fa il resto per tre: ogni notte tocca
+  uno slot diverso, ogni tre notti si ricomincia.
+- `ultimoScatto()` è l'ultimo appuntamento passato (oggi alle due se le due sono
+  passate, ieri alle due se è ancora notte fonda). Si confronta con
+  `taxi_ultima_istantanea` in `localStorage`: se la copia è più vecchia dell'appuntamento
+  si scatta, altrimenti no.
+- Due freni che contano: non si scatta se il Cloud non è acceso, e **non si scatta se
+  movimenti e turni sono entrambi vuoti** — i dati dal Cloud arrivano qualche secondo
+  dopo l'accesso, e senza quel freno la prima copia della giornata sarebbe un archivio
+  vuoto sopra una copia buona. Per lo stesso motivo il controllo all'avvio parte sei
+  secondi dopo l'accensione del Cloud.
+- Se la scrittura non riesce (rete assente, Cloud lento) non si segna niente: la copia si
+  rifà alla prossima apertura.
+- Un documento Firestore non può superare il megabyte e tre anni di corse lo superano:
+  il documento dell'istantanea tiene solo la scheda (quando, quanti movimenti, quanti
+  turni, quanti pezzi) e il contenuto sta in `parti/{n}` da 600.000 caratteri l'uno.
+  Se la copia nuova è più corta di quella vecchia i pezzi che avanzano vengono
+  cancellati, altrimenti resterebbero lì a occupare posto e a sporcare la rilettura.
+
+In `Cloud & Backup` c'è il riquadro **Copie automatiche**: le tre copie con data, ora e
+quanti movimenti e turni contengono, la più recente segnata in verde, un `Ripristina`
+per ciascuna e un `Fai una copia adesso` per chi non vuole aspettare la notte.
+Il ripristino passa da `applicaBackup()`, lo stesso del file: **unisce**, non cancella —
+quello che c'è resta, quello che manca torna, e i movimenti con lo stesso identificativo
+tornano come erano nella copia.
+
+## Turni & Corse
+
+Due viste: **Giornate** e **Calendario**. Quella scelta resta: riaprendo l'app si torna
+dov'eri, come per la scheda.
+
+### Due schede, due cose
+
+**Giornate** sono le corse; **Calendario** sono i turni. Fino alla versione 63 stavano
+insieme e la scheda era lunga il doppio: il turno della giornata, il modulo per registrarlo
+e il promemoria dei km si mescolavano all'elenco degli incassi.
+
+#### Giornate — le corse
+
+L'ordine segue quello che si fa:
+
+1. il **giorno** con le frecce ‹ › — il comando che si usa ogni volta;
+2. i due **riepiloghi** — incasso, corse, media a corsa; turni, ore, km e **quanto rende
+   un'ora** (`€/h`: l'incasso del periodo diviso le ore dei turni). Segue il filtro metodo
+   come il riquadro verde, così i due numeri parlano sempre della stessa selezione, e
+   sparisce quando nel periodo non ci sono turni — senza ore non c'è niente da dividere;
+3. **+ Nuova Corsa**, subito dopo i numeri che ha appena fatto crescere, con l'avviso della
+   giornata di riposo quando quella data non accetta incassi;
+4. il **pannello dei filtri**: metodo di pagamento, mese, «Azzera filtri» e la ripartizione
+   per metodo;
+5. il **registro**, in fondo: una riga per giornata, che si apre e mostra le corse di quel
+   giorno, ognuna modificabile ed eliminabile sul posto.
+
+La testata di ogni giornata riporta il turno — tipo, ore, km, e l'etichetta **SENZA KM**
+quando mancano — ma solo come informazione: il turno si tocca nel calendario.
+
+#### Calendario — i turni
+
+In cima **+ Registra Turno** con il suo modulo, e il promemoria «N turni senza km» con
+**Vai al primo**, che porta il calendario sul mese giusto, apre il pannello di quella
+giornata e mette i km in modifica. Sotto la griglia del mese; toccando un giorno si apre il
+pannello con i tipi di turno, le giornate non lavorate, il riquadro di modifica di ore e km,
+«Sposta ad altro giorno», «Elimina» e «Apri nelle giornate».
+
+Il modulo del turno e il riquadro di modifica sono due funzioni a sé (`moduloTurnoHTML`,
+`bloccoTurnoHTML`) proprio perché servono da due punti diversi.
+
+### Niente corse nelle giornate di riposo
+
+Se il filtro giorno è su una giornata segnata come non lavorata — festivo, recupero festivo,
+malattia, sciopero — il pulsante «+ Nuova Corsa» è spento e al suo posto compare la
+spiegazione, con **Apri nel calendario** per andare a cambiare il tipo di giornata se quel
+giorno hai lavorato davvero. Il modulo eventualmente già aperto si chiude.
+
+Il blocco non sta solo nel pulsante: `addCorsa` controlla la **data scritta nel modulo**,
+che può essere diversa da quella del filtro, e rifiuta il salvataggio dicendo quale tipo di
+giornata è di mezzo. La via d'uscita è sempre la stessa — cambiare il tipo di giornata —
+così non ci si trova con un incasso in un giorno che l'app conta come riposo.
+
+Vale anche il contrario: segnando come non lavorata una giornata che ha già degli incassi,
+l'app chiede conferma dicendo quanto c'è registrato. Le corse non vengono toccate.
+
+### I numeri nelle caselle del calendario
+
+Ogni giornata lavorata mostra le ore, l'incasso totale in verde e,
+sotto, la quota incassata **a POS** in blu. Sono solo le entrate con metodo `POS`: una
+spesa pagata col bancomat non c'entra e non viene contata. Sopra la griglia c'è il totale
+POS del mese, e toccando un giorno il pannello ripete incasso e POS per esteso. Quando in
+una giornata non c'è POS la riga semplicemente non compare.
+
+Il POS è scritto **con i centesimi**, perché è il numero che si confronta con l'estratto
+conto e lì i centesimi contano; il totale della giornata resta arrotondato, che è una
+lettura a colpo d'occhio. Nella casella il POS non porta il simbolo dell'euro: con i
+centesimi «120,00 €» non ci starebbe, e su un telefono stretto verrebbe tagliato a metà.
+A dire quali sono i due numeri ci pensa la legenda sotto la griglia — **● incassato** in
+verde, **● di cui a POS** in blu.
+
+Gli incassi del mese vengono contati **una volta sola**, in un passaggio, invece di
+rileggere tutto l'archivio in ogni casella: con qualche anno di corse alle spalle la
+differenza si sente.
+
+## Parco auto
+
+Nella scheda **Parco Auto** si registrano le vetture avute, quella in uso e quelle future:
+marca e modello, targa, anno, alimentazione, telaio, data e km e costo di acquisto, e
+quando esce dal parco anche data, km e valore di realizzo (vendita, permuta, rottamazione,
+incidente, fine leasing).
+
+Da lì l'app calcola da sola, senza chiedere altri dati:
+
+- **Km percorsi** — per le vetture uscite dai km dichiarati, per quella in uso dal
+  contachilometri più alto registrato nei turni di quel periodo.
+- **Valore perso** — costo di acquisto meno valore di realizzo. Per l'auto in uso il conto
+  si fa solo se indichi quanto vale oggi, ed è segnalato come stima.
+- **Spese del periodo** — prese dai movimenti già registrati, per data di possesso:
+  carburante, manutenzione, lavaggio, assicurazione, bollo, pedaggi, multe. Restano fuori
+  radio taxi, commercialista e ristoro, che ci sarebbero con qualsiasi vettura, e i costi
+  fissi, dove sta il finanziamento della licenza. Fuori anche le rate di un eventuale
+  finanziamento dell'auto: quanto è costata la vettura è già nel valore perso, e sommarci
+  le rate la conterebbe due volte.
+- **Costo al chilometro**, diviso fra la vettura in sé e le spese di gestione, con il
+  confronto fra le auto già uscite, dalla più economica.
+
+Due avvertenze incorporate: se due vetture risultano possedute negli stessi giorni l'app
+lo segnala, perché le spese di quei giorni verrebbero contate su entrambe; e nei turni
+l'avviso «contachilometri all'indietro» non compare più quando fra i due turni c'è
+l'acquisto di un'auto nuova, dove ripartire da capo è normale.
+
+## Scadenze ricorrenti
+
+Revisione, bollo, RCA, verifica del tassametro: tornano sempre uguali a distanza regolare.
+Nel riquadro «Aggiungi una scadenza» c'è la spunta **Scadenza ricorrente**, con la cadenza
+da scegliere: ogni 3 mesi, 6 mesi, ogni anno, 2, 3, 5 o 10 anni.
+
+Funziona in modo diverso dalle spese ricorrenti, e apposta:
+
+- le **spese** ricorrenti generano davvero tanti movimenti, uno per ogni rata, perché ogni
+  rata è un'uscita che deve entrare nei conti;
+- le **scadenze** no. Tutto sta nel calendario dell'anno (qui sotto): lì compaiono le date
+  che ogni scadenza tocca in quell'anno, e lì si spuntano.
+
+Quando la scadenza è stata fatta — revisione passata, bollo pagato — si spunta e sparisce
+dall'elenco. L'app **non sposta mai una data da sola**: una scadenza passata e non spuntata
+deve restare lì e diventare rossa, altrimenti sparirebbe proprio quando serve vederla.
+
+La data successiva si conta sempre dalla data di partenza, non da quella corretta il mese
+prima: una scadenza del 31 resta del 31 anche dopo essere passata da febbraio. Se una
+ricorrente è rimasta indietro di anni, «Fatta» salta avanti quanto serve invece di
+proporre un'altra data già passata.
+
+La cadenza è un campo in più sulla scadenza (`cadenza`): le scadenze scritte prima di
+questa versione restano valide e semplicemente non ce l'hanno.
+
+## Il calendario delle scadenze
+
+Sopra l'elenco c'è il **Calendario dell'anno**: una riga per ogni data che le scadenze
+toccano in quell'anno. L'INPS, che torna ogni 3 mesi, ci compare quattro volte; il bollo e
+la revisione una volta. Con le frecce `‹ ›` si sfoglia avanti e indietro senza cambiare
+l'anno di esercizio di tutta l'app: il **2027 c'è già**, con le stesse voci del 2026 alle
+date corrispondenti, e a gennaio non c'è niente da ricopiare — c'è solo da verificarlo.
+
+Ogni riga ha due comandi:
+
+- il **quadratino verde** spunta quella data come fatta, **e la riga sparisce**: quello che
+  serve avere davanti è quello che resta da fare. Le fatte non sono perse — l'intestazione
+  dice «*N* fatte» ed è un pulsante che le rimette in vista (la scelta viene ricordata).
+  Dietro le quinte la scadenza si rimette sulla prima data ancora da fare, senza saltare le
+  rate arretrate: se spunti febbraio e maggio non l'hai pagato, la prossima è maggio, non
+  agosto. Ritogliendo la spunta si torna indietro.
+- la **casella della data** sposta *solo quella occorrenza*. L'INPS teorico cade il 16
+  agosto ma quell'anno si paga il 20: si cambia lì, e la serie resta intatta — l'anno dopo
+  riparte dal 16.
+- **Elimina** toglie la scadenza intera, con tutte le sue date: la conferma lo dice.
+
+Quello che cambia resta scritto sulla scadenza, sotto `occorrenze`, con la data teorica
+come chiave: `{"2026-08-16": {"data": "2026-08-20"}}`. La prima data della serie è in
+`ancora` e non si tocca più: tutte le altre si contano da lì, così una scadenza del 31
+resta del 31 anche dopo essere passata da febbraio.
+
+### Le scadenze segnate una volta sola
+
+Le ricorrenti si ripresentano da sole. Quelle **non ricorrenti** no: se nel 2025 avevi la
+tassa rifiuti e nel 2026 non c'è, il calendario mostra in fondo un riquadro giallo *«Nel
+2025 avevi anche queste»* con la data già spostata avanti di un anno. Si spunta quello che
+serve, si correggono le date e si tocca **Aggiungi le selezionate**. Il confronto è sul
+nome, quindi una voce già rimessa a mano non viene riproposta due volte.
+
+## Costi fissi: budget, non movimenti
+
+I costi fissi non sono spese che si registrano: sono **quanto costa lavorare**, prima
+ancora di uscire di casa. La licenza, il radio taxi, il commercialista, le assicurazioni.
+In `Spese & Fisco` se ne tiene l'elenco — nome, importo, unità e periodo di validità — e
+l'app ne ricava una **quota che matura ogni giorno**.
+
+Il budget non scrive nessun movimento. Serve a una cosa sola: sapere quanto devi incassare
+oggi perché la giornata sia davvero in attivo.
+
+- **Mese** per una rata che arriva sempre uguale (il finanziamento della licenza): si
+  divide per i giorni di quel mese, così febbraio e marzo tornano tutti e due alla rata
+  intera.
+- **Anno** per una cifra che ti aspetti in dodici mesi (6.500 € di carburante): si divide
+  per i giorni dell'anno, 366 quando è bisestile.
+- **Giorno** per un costo già ridotto a giornata (le polizze).
+- **Dal** e **Al** dicono da quando a quando vale: una polizza che parte il 15 marzo non
+  pesa a gennaio, e su marzo conta solo per i 17 giorni coperti. Vuoti, la voce vale
+  sempre, anno dopo anno.
+
+L'elenco è permanente: si compila una volta e non va riscritto ogni gennaio. Un elenco
+vuoto arrivato dal Cloud non lo cancella.
+
+A budget ci può stare anche una spesa che cambia da un mese all'altro, come il carburante:
+si mette quello che si prevede di spendere in un anno, ogni giornata ne porta la sua quota
+e il conguaglio dice a fine anno quanto ci si è presi. Quello che non è a budget l'app lo
+spalma da sola, facendo la media di quello che è stato registrato nel mese. INPS e IRPEF
+restano fuori: sono già stimate.
+
+## Una sola voce «Carburante»
+
+Nel **Registro Uscite** la tipologia si ricava da quello che viene prima del trattino o
+della parentesi: «Manutenzione - Tagliando» diventa «Manutenzione». Col carburante non
+bastava, perché negli anni l'hai scritto in modi diversi — «Carburante», «Carburante /
+Diesel», «Diesel», «Carburante - Q8 corso Francia» — e nel menu delle tipologie comparivano
+come voci separate, ognuna con il suo totale parziale.
+
+Adesso `tipoSpesa` chiede prima a `categoriaBase`: se è carburante, la tipologia è
+**«Carburante»** e basta. Nel menu fa una riga sola con il totale vero, e selezionandola il
+filtro prende tutti i rifornimenti insieme, comunque siano scritti. Le altre categorie
+continuano a dividersi per tipologia com'erano.
+
+## Ogni spesa: cosa hai comprato, e come l'hai pagato
+
+In **ogni categoria** le tipologie servono — un tagliando non è un treno di gomme — e
+restano. Sotto, staccato da una riga e dall'etichetta **PER PAGAMENTO**, si aggiunge il
+riepilogo di quanto è andato in contanti e quanto è passato dal conto (POS, fattura, app):
+
+| Manutenzione (5) | 1.684,00 € |
+| --- | --- |
+| Gomme ×2 | 784,00 € |
+| Tagliando ×2 | 600,00 € |
+| Carrozzeria ×1 | 300,00 € |
+| **per pagamento** | |
+| POS / Fattura ×3 | 1.204,00 € |
+| Contanti ×2 | 480,00 € |
+
+La coda compare **solo se in quella categoria ci sono tutti e due i modi**: se è tutta in
+contanti sarebbe la stessa cifra scritta una seconda volta, e non serve a niente.
+
+L'unica categoria fatta diversamente è il **carburante**, che ha solo le due righe del
+pagamento: lì le tipologie non distinguono niente (vedi qui sotto).
+
+## Il carburante si divide per come l'hai pagato
+
+Nel dettaglio delle **spese per categoria** — in Dashboard, nel riepilogo mensile e nel
+Report — ogni categoria si apre nelle sue tipologie, cioè quello che viene dopo il trattino
+o la parentesi. Per il carburante non funzionava: «Carburante / Diesel», «Carburante /
+Diesel (Icad app)», «Carburante / Diesel (Fattura singola agip corso)», «Q8 fattura
+236311km»… nove righe quasi uguali per dire la stessa cosa.
+
+Il carburante fa eccezione e si divide in **due sole voci, per come è stato pagato**:
+
+| | |
+| --- | --- |
+| Contanti | quello pagato al distributore di tasca |
+| POS / Fattura | tutto il resto: POS, carta, fattura, app — quello che passa dal conto |
+
+È `raggruppaCarburantePerPagamento`, che entra in gioco dentro `raggruppaPerTipologia`
+quando le voci del gruppo sono di categoria `Carburante` (basta guardare la prima: un gruppo
+contiene sempre una sola categoria di base). Una spesa **senza metodo di pagamento**
+registrato finisce in «POS / Fattura», che è il comportamento della funzione
+`famigliaMetodo` quando il campo è vuoto.
+
+Le altre categorie restano divise per tipologia come prima: lì le diciture distinguono
+davvero — un tagliando non è un treno di gomme.
+
+## Le note sulle spese
+
+Ogni spesa ha una **categoria** e, a parte, delle **note**. La categoria è quella che
+decide tutto: la tipologia nei riepiloghi, il costo al chilometro delle vetture e
+l'abbinamento con il budget. Le note sono testo libero — targa, fornitore, numero di
+fattura, quello che serve — e non entrano in nessun conto: ci si può scrivere dentro
+trattini, barre e punteggiatura senza che nulla cambi.
+
+Nel registro compaiono sotto la categoria, in piccolo, e finiscono in una colonna a parte
+del CSV per il commercialista. Scegliendo «Altro (scrivi tu)» compare un campo apposta per
+il nome della spesa, che diventa la categoria.
+
+I movimenti registrati con le versioni precedenti, dove la nota era attaccata alla
+categoria (`Carburante - Q8 corso Francia`), restano come sono e continuano a funzionare:
+l'abbinamento con il budget guarda la parte prima del trattino. Volendo si separano a mano,
+riga per riga, con «Modifica».
+
+## Spese ricorrenti
+
+Nel modulo «Nuova Spesa» c'è **Spesa ricorrente**: si scrive la spesa una volta, si sceglie
+ogni quanto torna — settimana, due settimane, mese, due, tre o sei mesi, anno — e fino a
+quando, e l'app crea la serie. Prima di scrivere niente mostra quanti movimenti nascono,
+da che data a che data e quanto fanno in tutto, e chiede conferma.
+
+Sono movimenti veri, uno per ogni scadenza: si modificano e si eliminano come tutti gli
+altri, e contano nei totali uno per uno. Nel registro portano il segno «ricorrente» e un
+pulsante **Serie** che li toglie tutti insieme.
+
+Le date si calcolano dalla prima, non a catena: una rata del 31 diventa il 28 (o il 29) a
+febbraio e torna al 31 il mese dopo. Il limite è di 400 movimenti per serie.
+
+Una serie creata in anticipo mette in archivio dei movimenti con data futura. Nei totali
+dell'anno e nella stima delle tasse ci sono da subito; nel conguaglio invece no, perché
+quei soldi dal conto non sono ancora usciti — il pannello lo dice, con quanti sono e quanto
+valgono.
+
+## Le spese vere e il conguaglio
+
+Quando una spesa a budget esce davvero dal conto la si registra come una spesa qualsiasi,
+nel giorno in cui è stata pagata. **Il conguaglio l'abbina alla voce dal nome**, non dal
+prefisso, quindi vanno bene tutte e due le forme:
+
+- `Carburante - Q8 corso Francia` — le spese che hanno già una categoria loro si registrano
+  lì, così restano nel costo al chilometro delle vetture e nelle caselle fiscali;
+- `Costi fissi - Finanziamento licenza` — le spese di sola gestione, che una categoria loro
+  non ce l'hanno. Nel modulo «Nuova Spesa» compaiono in un gruppo a parte, così il
+  movimento nasce già con il nome giusto.
+
+Il **conguaglio** confronta le due cose voce per voce. La colonna del budget è quella
+dell'**anno intero**, quello che hai ipotizzato: 6.500 € di carburante restano 6.500 € anche
+a marzo. Sotto, in piccolo, quanto ne è maturato a oggi.
+
+In cima, «a che punto sei»: una barra con quello che hai speso e una riga nera che segna a
+che punto è l'anno. Barra più corta della riga vuol dire che sei sotto le previsioni, più
+lunga che stai spendendo più in fretta di quanto avevi messo a budget. Nella tabella, una
+voce che ha già speso più di quanto sia maturato ha il numero in rosso.
+
+L'abbinamento fra movimento e voce si fa sul **nome**, e passa anche dalla categoria a cui
+l'app riconduce la spesa: una voce di budget «Carburante» ritrova i movimenti scritti
+«Carburante / Diesel - Q8» come quelli scritti «Carburante - Eni».
+
+Una differenza non è per forza un errore: a metà anno è normale aver speso meno del budget
+di tutto l'anno, e una polizza pagata in un colpo solo a gennaio risulta in anticipo. Se
+invece una voce resta a zero mese dopo mese, quella spesa non è mai stata registrata. Il
+conguaglio confronta i due numeri, non li corregge: nei totali dell'anno e nella stima delle
+tasse conta solo quello che è stato speso davvero.
+
+## Quanto costa una giornata
+
+Il riepilogo giornaliero della Dashboard mette insieme le due cose:
+
+- il **budget** di quella giornata;
+- la **media delle spese fuori budget** del mese, perché un tagliando serve per tutto il
+  mese, non solo per il giorno in cui l'hai pagato.
+
+Da lì escono il **pareggio della giornata** — quanto bisogna incassare per coprire tutto —
+e l'**incasso reale**, cioè quello che resta davvero. Sotto, la stessa quota calcolata sui
+soli **giorni lavorati**: nei riposi le spese corrono lo stesso, ma non c'è nessun incasso
+a coprirle.
+
+Le spese fuori budget si conoscono solo fino a oggi, quindi in un mese ancora in corso se ne
+fa la media sui giorni già passati: dividerle per trentuno le farebbe sembrare la metà di
+quello che sono.
+
+È una lettura, non un movimento: nei totali di giorno, mese e anno ogni spesa conta una
+volta sola, e nel registro resta dov'era.
+
+## Quanto è già del fisco
+
+L'IRPEF **non** è un costo fisso: è una percentuale sull'utile, e a utile zero non se ne
+paga. Metterla a budget sposterebbe il pareggio nel posto sbagliato — in una giornata
+storta l'app addebiterebbe una tassa che non è dovuta. I contributi INPS **sul minimale**
+invece sì: quelli si pagano anche stando fermi, e vanno a budget come il resto.
+
+Perciò, sotto il pareggio, il riquadro della giornata spacca in due quello che c'è
+**sopra**:
+
+| | |
+| --- | --- |
+| Da mettere da parte | la fetta del margine che è già del fisco |
+| Tuoi | quello che resta davvero |
+
+La percentuale non è quella media dell'anno, è quella **marginale**: quanto costa in tasse
+l'euro guadagnato in più, allo scaglione dove ti trovi. Si ricava chiedendo due volte la
+stima delle tasse — una sull'utile dell'anno, una su mille euro in più — e guardando la
+differenza. A metà anno l'utile registrato viene annualizzato, altrimenti lo scaglione
+risulterebbe più basso del vero; se ci sono movimenti con data futura si tiene il più alto
+fra la proiezione e il totale scritto, così non falsano il conto.
+
+In `Cloud & Sync → Impostazioni Fiscali` c'è il campo **Accantonamento sul margine (%)**:
+lasciato **vuoto** lo calcola l'app come sopra, scrivendoci un numero si usa quello. Nel
+riquadro c'è sempre scritto quale dei due sta usando.
+
+## Costi fissi scritti come movimenti (versioni precedenti)
+
+Fino alla versione 36 l'app scriveva i costi fissi come movimenti veri, uno al mese o
+addirittura uno al giorno. Quelle righe restano in archivio — per gli anni già passati sono
+l'unica traccia di quelle spese — e nel registro compaiono raccolte in una riga sola, che
+si apre con «Mostrali».
+
+In `Cloud & Sync`, «Costi fissi scritti come movimenti» le elenca separando quelle generate
+dall'app da quelle registrate a mano, e permette di togliere le prime. Con **Anno su cui
+lavorare** si fa pulizia su un anno solo, senza toccare gli altri: per gli anni già chiusi
+conviene lasciare tutto com'è. Attenzione: togliendole i totali di quell'anno calano e la
+stima delle tasse cambia. Ha senso farlo solo registrando al loro posto i pagamenti veri.
+
+## L'icona dell'app
+
+Tutte le icone nascono da una sola immagine, `icona-sorgente.jpg`: il taxi bianco di tre
+quarti davanti alla Mole, con la Mole e le montagne sullo sfondo.
+
+L'immagine originale ha il quadrato con il bordo dorato e gli angoli arrotondati dentro una
+cornice chiara. Le icone vere non li vogliono: iPhone e Android arrotondano da soli, e un
+bordo disegnato dentro l'icona finisce tagliato male. Perciò lo strumento ritaglia il
+quadrato (angolo 157,157, lato 709 pixel) e **stringe di un altro 5,5%** per buttare via
+bordo e angoli: quello che resta riempie il quadrato da parte a parte.
+
+Sopra il ritaglio lo strumento disegna il **baffo tricolore**: una lama curva
+appoggiata in basso, appuntita alle due estremita' e divisa in tre parti uguali fra verde,
+bianco e rosso. E' disegnata in frazioni del lato, non in pixel fissi, percio' viene uguale
+a 512 come a 32. Le tre righe da toccare per spostarla o ingrossarla stanno nella funzione
+`baffo`: `punta sinistra`, `punta destra`, `curva di sotto` e `curva di sopra`.
+
+Da questo ritaglio escono sei file:
+
+| File | Dove si vede |
+| --- | --- |
+| `icon-512.png`, `icon-192.png` | Android e schermata Home |
+| `icon-512-maskable.png` | Android quando ritaglia l'icona a cerchio: l'auto sta nel 78% centrale, il contorno è la stessa immagine sfocata, così non si vede nessun bordo |
+| `apple-touch-icon-180.png` | Schermata Home di iPhone e iPad |
+| `favicon-32.png`, `favicon-16.png`, `favicon.ico` | Linguetta del browser |
+
+Le due favicon sono **più strette sull'auto**: a 16 e 32 pixel l'inquadratura larga
+diventerebbe una macchia verde, mentre così si riconosce almeno la sagoma bianca.
+
+Per rifarle (serve `node` e Playwright installato):
+
+```
+node strumenti/icone.mjs
+```
+
+Per cambiare icona basta sostituire `icona-sorgente.jpg` con un'altra immagine quadrata e
+ricontrollare in cima allo strumento le due righe `bordoX / bordoY / bordoLato` e `rientro`:
+se la nuova immagine non ha cornice attorno, si mettono `0, 0, <lato>` e rientro `0`.
+
+## Rifare il foglio di stile
+
+La grafica sta **dentro `index.html`**, in un `<style>` in cima. Prima arrivava da
+`cdn.tailwindcss.com`: su un telefono nuovo, o con la cache svuotata, se quel sito non
+rispondeva l'app si apriva senza colori e senza colonne. Adesso non dipende da nessuno.
+
+Il rovescio della medaglia: **una classe Tailwind nuova non funziona finché il foglio non
+viene rifatto.** Se aggiungi una classe che prima non c'era — poniamo `bg-teal-200` — devi
+rigenerare, altrimenti quella riga di CSS non esiste e non si vede niente.
+
+```
+npm install tailwindcss@3
+npx tailwindcss -c tailwind.config.js -i tailwind.in.css -o /tmp/tw.css --minify
+```
+
+Poi si sostituisce il contenuto del `<style>` in cima a `index.html` con quello di
+`/tmp/tw.css`. Tailwind legge `index.html`, trova le classi anche dentro le stringhe del
+JavaScript e tiene solo quelle: ne esce una trentina di kilobyte invece dei due megabyte
+del pacchetto intero.
+
+## Gli orari del turno si vedono sempre
+
+I turni predefiniti hanno gli orari **nel nome** — «L'una (13:00 - 1:00)» — ma
+«Personalizzato» no: l'orario scelto a mano stava solo nei campi `inizio` e `fine` del
+turno, e quando l'elenco dei turni è diventato la scheda Giornate quei due campi non li
+mostrava più nessuno. Chi lavorava a orario libero non vedeva più a che ora aveva
+attaccato.
+
+Adesso il nome e gli orari si mostrano sempre separati: `nomeTurno` toglie la parentesi dal
+nome e `orariTurno` prende gli orari dal turno registrato. Si legge **«Personalizzato ·
+05:45 - 15:15 · 9.5 h»** e **«L'una · 13:00 - 01:00 · 12 h»** — senza ripetizioni, e con gli
+orari veri anche quando sono stati corretti dopo averli salvati.
+
+Vale nella testata di ogni giornata, nell'intestazione del pannello del calendario e nel
+riquadro del turno.
+
+## Verifica generale (versione 70)
+
+Una passata di controllo su tutta l'app, con quattro bug veri trovati e sistemati e
+un'ottimizzazione.
+
+**Il ripristino da backup perdeva le impostazioni fiscali.** Il file le conteneva
+(`impostazioniFiscali`), ma nessuno le rimetteva a posto: su un telefono nuovo aliquota
+INPS, addizionali, soglia del forfettario e accantonamento tornavano ai valori di fabbrica
+senza dire niente, e le stime delle tasse cambiavano di conseguenza. Ora vengono
+ripristinate, validate una per una, e il messaggio finale lo dice.
+
+**Benzina, GPL e metano finivano fra le «altre spese».** Il totale «Carburante» del Report e
+della Dashboard usava un elenco di parole a parte che conosceva solo «carburante» e
+«diesel», mentre il dettaglio per categoria usava `categoriaBase`, che conosce anche
+benzina, GPL e metano: i due numeri non tornavano. Adesso decide `categoriaBase` in
+tutti e due i posti.
+
+**L'accantonamento impazziva a gennaio.** La proiezione dell'utile annualizzava i giorni
+trascorsi: il 3 gennaio con 500 € di utile diceva 60.833 € e mandava l'aliquota marginale al
+50,6%. Ora nei primi due mesi si appoggia all'**utile vero dell'anno prima**, e se non c'è
+un anno prima non moltiplica mai per più di dodici.
+
+**Due turni nello stesso giorno** — l'app li permette, chiedendo conferma — comparivano come
+uno solo nel registro mentre ore e km li contavano entrambi. Adesso la testata della
+giornata li somma («2 turni · 12.0 h»), l'etichetta *senza km* guarda tutti i turni del
+giorno, e il pannello del calendario avverte che ce n'è più di uno.
+
+**La Dashboard si ridisegna in un terzo del tempo.** Il grafico del mese chiamava
+`aggrega()` una volta per colonna — trentuno riletture complete di movimenti e turni, con
+tanto di ordinamenti e raggruppamenti per categoria — e quello dell'anno altre dodici. Ora
+c'è `totaliPerChiave`, che fa un giro solo e raccoglie per giorno o per mese. Su un archivio
+di prova da tre anni (10.656 corse, 1.008 turni) il ridisegno passa da **34 a 13
+millisecondi**, e `serieMensile` da 10 a 1.
+
+## Pubblicare un aggiornamento
+
+Due numeri da aumentare insieme a ogni modifica:
+
+- `VERSIONE` in `sw.js` (`taximanager-v44` → `taximanager-v45`): è da qui che il telefono
+  capisce che deve riscaricare i file;
+- `VERSIONE_APP` in `index.html`: è il numero mostrato nella barra laterale e in
+  `Cloud & Sync`, e serve a vedere in un colpo d'occhio quale copia sta girando davvero
+  sul dispositivo.
+
+Quando la nuova versione è pronta l'app lo dice, e in `Cloud & Sync` c'è **Aggiorna
+adesso**: chiede al telefono di ricontrollare e mette in uso la copia nuova senza chiudere
+l'app. Il controllo viene chiesto anche a ogni ritorno sull'app, perché sull'icona in
+schermata Home iOS lo farebbe di rado per conto suo.
+
+Se il numero nella barra laterale non è quello che ti aspetti, il telefono sta usando una
+copia vecchia tenuta in cache: quello è il primo posto dove guardare quando «le modifiche
+non si vedono».

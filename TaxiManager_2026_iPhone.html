@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#facc15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TaxiManager">
+<title>TaxiManager 2026</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f9fafb;color:#1f2937}
+.app{min-height:100vh}.side{background:#facc15;padding:16px;position:sticky;top:0;z-index:5}.brand{font-size:24px;font-weight:900;margin-bottom:12px}
+nav{display:flex;gap:8px;overflow:auto}button{border:0;border-radius:12px;padding:12px 14px;font-weight:800;font-size:15px;white-space:nowrap}nav button.active{background:#111827;color:#facc15}nav button{background:transparent;color:#111827}
+main{padding:18px;max-width:1100px;margin:auto}.title{font-size:28px;font-weight:900;margin:4px 0 5px}.muted{color:#6b7280;margin:0 0 20px}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{background:white;border-radius:18px;padding:18px;box-shadow:0 2px 10px #0000000d}.label{font-size:12px;color:#6b7280;font-weight:800;text-transform:uppercase}.value{font-size:24px;font-weight:900;margin-top:6px}.net{background:#111827;color:white}.net .label{color:#facc15}
+.panel{background:white;border-radius:18px;padding:18px;margin-top:18px;box-shadow:0 2px 10px #0000000d}.row{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form label{font-size:13px;font-weight:800}.form input,.form select{width:100%;margin-top:5px;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px;background:white}.primary{background:#111827;color:white}.yellow{background:#facc15;color:#111827}
+.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:650px}th,td{text-align:left;padding:12px;border-bottom:1px solid #f3f4f6}th{font-size:12px;color:#6b7280;text-transform:uppercase}.in{color:#16a34a;font-weight:900}.out{color:#dc2626;font-weight:900}
+.bar{height:10px;background:#e5e7eb;border-radius:99px;overflow:hidden}.fill{height:100%;background:#facc15;border-radius:99px}.cat{margin:20px 0}.small{font-size:12px;color:#6b7280}
+@media(min-width:800px){.app{display:grid;grid-template-columns:250px 1fr}.side{min-height:100vh;position:sticky;top:0}nav{flex-direction:column}.cards{grid-template-columns:repeat(4,1fr)}.form{grid-template-columns:repeat(5,1fr)}}
+@media(max-width:500px){main{padding:14px}.cards{grid-template-columns:1fr 1fr}.card{padding:14px}.value{font-size:20px}.title{font-size:25px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side"><div class="brand">🚕 TaxiManager</div><nav>
+<button id="b-dashboard" class="active" onclick="show('dashboard')">📊 Dashboard</button>
+<button id="b-registro" onclick="show('registro')">🧾 Registro Corse</button>
+<button id="b-categorie" onclick="show('categorie')">💶 Spese & Fisco</button>
+</nav></aside>
+<main id="main"></main>
+</div>
+<script>
+const monthly=[
+['Gennaio',3400,1100],['Febbraio',3450,1050],['Marzo',3900,1250],
+['Aprile',3750,1180],['Maggio',4200,1300],['Giugno',4800,1450]
+];
+let records=[
+{id:1,data:'2026-08-17',tipo:'ENTRATA',categoria:'Corsa CTT -> Stazione',metodo:'POS',importo:30},
+{id:2,data:'2026-08-17',tipo:'ENTRATA',categoria:'Corsa Centro -> Ospedale',metodo:'Contanti',importo:14.5},
+{id:3,data:'2026-08-17',tipo:'USCITA',categoria:'Carburante / Diesel',metodo:'POS',importo:102},
+{id:4,data:'2026-08-17',tipo:'ENTRATA',categoria:'Corsa Fiera -> Hotel',metodo:'Fattura',importo:32},
+{id:5,data:'2026-08-17',tipo:'USCITA',categoria:'Pasti / Lavoro',metodo:'Contanti',importo:15}
+];
+const cats=[
+['Carburante / Diesel',6200,28.8,'100% (con scheda/fattura)'],
+['Manutenzione & Riparazioni',2400,11.2,'100%'],
+['Tasse, INPS & Licenza',4800,22.3,'Deducibile in dichiarazione'],
+['Rata Prestito / MFD',3600,16.7,'Quota interessi deducibile'],
+['Assicurazione & Bollo',1800,8.4,'100%']
+];
+let stats={entrate:50060,uscite:15650,tasse:5140,netto:29270};
+const euro=n=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(n);
+function show(tab){
+ document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+ document.getElementById('b-'+tab).classList.add('active');
+ if(tab==='dashboard') dashboard(); else if(tab==='registro') registro(); else categorie();
+}
+function dashboard(){
+ main.innerHTML=`<h1 class="title">Bilancio Annuale 2026</h1><p class="muted">Riepilogo generale di entrate, spese e stima tasse.</p>
+ <div class="cards">
+ <div class="card"><div class="label">Entrate Lorde</div><div class="value">${euro(stats.entrate)}</div></div>
+ <div class="card"><div class="label">Uscite / Spese</div><div class="value">${euro(stats.uscite)}</div></div>
+ <div class="card"><div class="label">Stima Tasse</div><div class="value">${euro(stats.tasse)}</div></div>
+ <div class="card net"><div class="label">Guadagno Netto</div><div class="value">${euro(stats.netto)}</div></div></div>
+ <section class="panel"><h2>Andamento Mensile</h2>${monthly.map(x=>`<div style="margin:18px 0"><b>${x[0]}</b><div class="small">Entrate ${euro(x[1])}</div><div class="bar"><div class="fill" style="width:${Math.min(100,x[1]/50)}%"></div></div><div class="small">Spese ${euro(x[2])}</div><div class="bar"><div class="fill" style="width:${Math.min(100,x[2]/50)}%"></div></div></div>`).join('')}</section>`;
+}
+function registro(){
+ main.innerHTML=`<div class="row"><div><h1 class="title">Registro Corse & Spese</h1><p class="muted">Aggiungi e visualizza i movimenti quotidiani.</p></div></div>
+ <section class="panel"><h2>Nuovo Movimento</h2><form class="form" onsubmit="addRecord(event)">
+ <label>Data<input id="date" type="date" required></label>
+ <label>Tipo<select id="tipo"><option>ENTRATA</option><option>USCITA</option></select></label>
+ <label>Descrizione<input id="cat" required placeholder="Es. Corsa Stazione / Diesel"></label>
+ <label>Importo (€)<input id="amount" type="number" step="0.01" required placeholder="0.00"></label>
+ <label>Metodo<select id="metodo"><option>POS</option><option>Contanti</option><option>Fattura</option></select></label>
+ <button class="yellow" type="submit">Salva nel Registro</button></form></section>
+ <section class="panel tablewrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Descrizione</th><th>Metodo</th><th>Importo</th></tr></thead><tbody>
+ ${records.map(r=>`<tr><td>${r.data}</td><td>${r.tipo}</td><td>${r.categoria}</td><td>${r.metodo}</td><td class="${r.tipo==='ENTRATA'?'in':'out'}">${r.tipo==='ENTRATA'?'+':'-'}${euro(r.importo)}</td></tr>`).join('')}
+ </tbody></table></section>`;
+}
+function addRecord(e){
+ e.preventDefault();let a=+amount.value,t=tipo.value;
+ records.unshift({id:Date.now(),data:date.value,tipo:t,categoria:cat.value,metodo:metodo.value,importo:a});
+ if(t==='ENTRATA'){stats.entrate+=a;stats.netto+=a}else{stats.uscite+=a;stats.netto-=a}
+ registro();
+}
+function categorie(){
+ main.innerHTML=`<h1 class="title">Dettaglio Categorie Spesa</h1><p class="muted">Monitoraggio uscite per categoria e regole di deducibilità.</p>
+ <section class="panel"><h2>Incidenza sul Totale Spese</h2>${cats.map(c=>`<div class="cat"><div class="row"><div><b>${c[0]}</b><div class="small">${c[3]}</div></div><b>${euro(c[1])}<br><span class="small">${c[2]}%</span></b></div><div class="bar"><div class="fill" style="width:${c[2]}%"></div></div></div>`).join('')}</section>
+ <section class="panel"><h2>Memo Fiscale</h2><p>Conserva sempre le fatture elettroniche per garantire la deducibilità indicata nel progetto.</p><p>Le spese per pasti e ristorazione sono indicate nel progetto al 75%, con limite del 2% dei ricavi annui.</p><p>La manutenzione è indicata nel progetto come deducibile nel limite del 5% del valore dei beni ammortizzabili.</p></section>`;
+}
+show('dashboard');
+</script>
+</body>
+</html>
