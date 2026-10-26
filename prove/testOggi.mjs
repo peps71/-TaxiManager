@@ -78,7 +78,8 @@ const TROVA = `(() => {
   const s = getComputedStyle(t);
   return { testo: t.textContent.trim(), x: r.x, y: r.y, w: r.width, h: r.height,
            visibile: r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none',
-           colore: s.color, sfondoCarta: getComputedStyle(t.closest('.eroe')).backgroundColor,
+           colore: s.color, sfondo: s.backgroundColor,
+           sfondoCarta: getComputedStyle(t.closest('.eroe')).backgroundColor,
            titolo: t.getAttribute('title') || '', tipo: t.getAttribute('type') || '' };
 })()`;
 
@@ -108,7 +109,20 @@ if (tasto) {
   // regola che vale per ogni tasto dell'app.
   ok(tasto.h >= 44, 'e si prende con il dito', `alto ${Math.round(tasto.h)} punti`);
   ok(tasto.titolo.length > 0, 'ha la sua spiegazione', tasto.titolo);
+  ok(tasto.sfondo !== 'rgba(0, 0, 0, 0)' && tasto.sfondo !== 'transparent',
+     'e ha un fondo pieno: si vede da lontano', tasto.sfondo);
 }
+// Su un telefono da 390 punti la pastiglia deve stare sulla riga della data,
+// non andarsene a capo da sola: ci sta per un punto, e questa misura serve a
+// non farselo mangiare da un ritocco futuro. Piu' stretto va a capo, ed e'
+// giusto cosi': meglio una riga in piu' che la data tagliata.
+const allineato = await p.evaluate(`(() => {
+  const t = Array.from(document.querySelectorAll('button')).find(x => (x.getAttribute('onclick') || '').indexOf('vaiAOggiGiornate') === 0);
+  const data = t.parentElement.parentElement.children[0].getBoundingClientRect();
+  const r = t.getBoundingClientRect();
+  return Math.abs(r.top - data.top) < 4;
+})()`);
+ok(allineato, 'a 390 punti sta sulla riga della data');
 await p.evaluate(() => {
   const t = Array.from(document.querySelectorAll('button'))
     .find(x => (x.getAttribute('onclick') || '').indexOf('vaiAOggiGiornate') === 0);
@@ -257,10 +271,17 @@ for (const tema of ['chiaro', 'scuro']) {
   const v = await q.evaluate(TROVA);
   ok(!!v, `tema ${tema}: il tasto c'e'`);
   if (v) {
-    const sopra = lum(mescola(v.colore, v.sfondoCarta));
-    const sotto = lum(v.sfondoCarta);
+    // Il tasto ha un fondo suo: la scritta si misura su quello, non sulla
+    // scheda. E il fondo si deve staccare dalla scheda, altrimenti la
+    // pastiglia non si vede proprio - era il difetto della v168.
+    const fondo = mescola(v.sfondo, v.sfondoCarta);
+    const sopra = lum(mescola(v.colore, fondo));
+    const sotto = lum(fondo);
     const rapporto = (Math.max(sopra, sotto) + 0.05) / (Math.min(sopra, sotto) + 0.05);
     ok(rapporto >= 4.5, `tema ${tema}: la scritta si legge`, rapporto.toFixed(2) + ':1');
+    const carta = lum(v.sfondoCarta);
+    const stacco = (Math.max(sotto, carta) + 0.05) / (Math.min(sotto, carta) + 0.05);
+    ok(stacco >= 3, `tema ${tema}: la pastiglia si stacca dalla scheda`, stacco.toFixed(2) + ':1');
   }
   // La cornice del fuoco da tastiera: dentro la scheda scura deve essere chiara.
   const fuoco = await q.evaluate(`(() => {

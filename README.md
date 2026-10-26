@@ -99,6 +99,31 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il tasto «Oggi» si vedeva poco (versione 169)
+
+Nella 168 il tasto aveva il vestito del tasto `Ultimo` del riepilogo giornaliero:
+una scritta grigia sottolineata, 11 punti, bianco al 55%. Sullo schermo vero
+spariva fra le righe di servizio della scheda — «incassato · 17 corse», «1 turno ·
+10,5 h». Un tasto che non si vede non esiste.
+
+Adesso è una pastiglia **gialla piena**, scritta nera, stesso angolo arrotondato e
+stessa altezza delle frecce `‹ ›`: lì dentro il giallo è il colore delle cose che si
+premono — le frecce, il numero che conta, la striscia in cima all'app. Il contrasto
+della scritta passa da 6,2:1 a 11,6:1, e la pastiglia stacca dalla scheda di 12,2:1
+al chiaro e 8,5:1 al buio.
+
+### Due punti di troppo
+
+Riempire il tasto lo ha allargato da 45 a 50 punti, e su un telefono da 390 la riga
+della testata — frecce, data, «Oggi», × — ne avanzava **uno solo**: il gruppo di
+destra se ne andava a capo da solo, lasciando la pastiglia orfana su una riga sua.
+Gli spazi dentro quel gruppo sono scesi da 8 a 6 punti, e adesso ci sta. Più stretto
+di così va a capo lo stesso, ed è giusto: meglio una riga in più che la data tagliata.
+
+La prova lo misura (`a 390 punti sta sulla riga della data`), così un ritocco futuro
+non si rimangia quei due punti senza accorgersene. In tutto `prove/testOggi.mjs` fa
+57 misure.
+
 ## Un tasto «Oggi» nella scheda Giornate (versione 168)
 
 Si controlla un giorno qualsiasi del mese con le frecce `‹ ›`, e poi per tornare alla
