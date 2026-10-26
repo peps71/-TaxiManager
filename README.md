@@ -99,6 +99,63 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Un tasto «Oggi» nella scheda Giornate (versione 168)
+
+Si controlla un giorno qualsiasi del mese con le frecce `‹ ›`, e poi per tornare alla
+giornata di oggi tocca contare i giorni a rovescio o aprire il calendario di sistema.
+Adesso nella testata compare un tasto **Oggi** che ci riporta in un colpo.
+
+### Dove sta, e perché non accanto alle frecce
+
+La riga della testata è stata guadagnata punto per punto: a 320 punti di larghezza ci
+stanno due frecce da 44 e la data, e nient'altro. Un tasto in più lì dentro avrebbe
+ripetuto il difetto della versione 157, dove «mercoledì 28» arrivava tagliato.
+
+Il tasto sta quindi nel **gruppo di destra**, lo stesso dove già stanno la pastiglia
+«in turno» e la × che toglie il filtro: da quella parte della riga il gruppo va a capo
+tutto intero quando non ci sta, invece di stringere la data. Il vestito è quello del
+tasto `Ultimo` del riepilogo giornaliero — una scritta sottolineata da 11 punti, alta 44
+come ogni tasto dell'app.
+
+### Compare solo quando serve
+
+L'app si apre già sulla giornata di oggi: un tasto che porta dove sei già è solo rumore
+in una riga piena. Compare quando il giorno guardato **non** è oggi — comprese le
+«tutte le giornate», quando il filtro giorno è stato tolto — e si toglie di mezzo da solo
+appena ci si arriva.
+
+### Il caso che si vedrebbe solo a gennaio
+
+Il filtro giorno della scheda Giornate si spegne da solo quando il giorno non appartiene
+all'anno di esercizio scelto: altrimenti l'elenco sembrerebbe vuoto senza motivo. Con
+l'anno scorso selezionato, un tasto che si limitasse a mettere il filtro su oggi lo
+avrebbe visto spegnere un istante dopo — e sembrerebbe un tasto rotto.
+
+`vaiAOggiGiornate()` torna quindi prima all'anno corrente, chiamando la `cambiaAnno()` che
+già sa tutto quello che il cambio d'anno deve azzerare, e solo dopo mette il giorno. Il
+filtro per mese invece si lascia come sta: il giorno gli passa davanti, e chi poi toglie
+il giorno ritrova il mese che aveva scelto, esattamente come fanno da sempre le frecce.
+
+### Le prove
+
+`prove/testOggi.mjs`, 53 misure. Le giornate si seminano **attorno a oggi**, non su una
+data fissa: una prova che vale soltanto nell'ottobre 2026 non è una prova.
+
+- Sulla giornata di oggi il tasto non c'è; tre frecce indietro e compare.
+- Premendolo si torna a oggi, il giorno si ricorda anche alla riapertura, la testata
+  mostra la data giusta e il tasto si toglie da solo.
+- Senza filtro giorno il tasto c'è e funziona; con un mese selezionato porta a oggi e il
+  mese resta quello.
+- Con l'anno scorso selezionato riporta all'anno corrente **e** il filtro resta su oggi.
+- A 320, 390, 768 e 1280 punti: pagina che non sborda, niente testo tagliato nella
+  scheda, tasto dentro la scheda, alto 44, e la testata in due righe al massimo. La
+  misura si fa nella riga più piena che si possa avere — giorno diverso da oggi (tasto
+  «Oggi» e ×) **più** la pastiglia «in turno» — e quella riga esiste solo col turno di
+  notte: cominciato ieri alle 23, ancora in corso stamattina, guardando la giornata di
+  ieri. Per vederla la prova ferma l'orologio del browser alle sette e mezza.
+- Chiaro e scuro: contrasto della scritta 6,2:1 e 9,3:1, e la cornice del fuoco da
+  tastiera che si stacca dalla scheda scura (18,7:1 e 13,1:1).
+
 ## La navigazione da tastiera, e perché il redesign non si è fatto (versione 167)
 
 Richiesta: un redesign completo, con design system, nuova identità visiva e revisione di

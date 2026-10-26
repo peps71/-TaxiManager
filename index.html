@@ -1955,7 +1955,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 167;
+        const VERSIONE_APP = 168;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -8205,6 +8205,7 @@
                                  della riga va a capo da solo quando non ci sta,
                                  invece di stringere la data. -->
                             <span class="shrink-0 flex items-center gap-2">
+                                ${giorno === oggiISO() ? '' : `<button onclick="vaiAOggiGiornate()" title="Torna alla giornata di oggi" class="px-2 text-[11px] font-bold text-white/55 hover:text-white underline underline-offset-2 shrink-0">Oggi</button>`}
                                 ${eo.vivo ? `
                                     <span class="shrink-0 flex items-center gap-1.5 bg-yellow-400/12 px-2.5 py-1.5 rounded-full">
                                         <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
@@ -11960,6 +11961,20 @@
         function pulisciGiornoGiornate() {
             ricordaGiornoGiornate('');
             renderContent();
+        }
+
+        // Il tasto «Oggi» della testata: da un giorno qualsiasi del mese riporta
+        // alla giornata di oggi. Se stai guardando un anno di esercizio diverso,
+        // oggi non appartiene a quell'anno e giornoGiornate() spegnerebbe il
+        // filtro un istante dopo averlo messo: prima si torna all'anno corrente,
+        // con cambiaAnno() che sa tutto quello che il cambio d'anno deve azzerare.
+        // Il filtro per mese si lascia come sta: il giorno gli passa davanti, e
+        // chi poi toglie il giorno ritrova il mese che aveva scelto - le frecce
+        // ‹ › si comportano da sempre cosi'.
+        function vaiAOggiGiornate() {
+            const oggi = oggiISO();
+            if (oggi.slice(0, 4) !== annoAttivo()) cambiaAnno(oggi.slice(0, 4));
+            applyFilterGiornoGiornate(oggi);
         }
 
         function applyFilterMeseGiornate(val) {
