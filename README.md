@@ -99,6 +99,116 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La manutenzione programmata, che si conta in chilometri (versione 170)
+
+Il libretto d'uso e manutenzione non parla di date: dice ogni quanti chilometri va
+rifatto ogni intervento. Su un taxi che ne fa quarantamila l'anno sono traguardi che
+arrivano in fretta e arrivano in mezzo al lavoro — se non lo ricorda qualcosa, il
+tagliando lo scopri in officina con diecimila chilometri di ritardo.
+
+Il contachilometri l'app ce l'aveva già: è quello dei turni, lo stesso che la scheda
+del Parco Auto mostra da sempre. Mancava solo il traguardo.
+
+### Gli interventi stanno sulla vettura
+
+Nel Parco Auto, dentro la scheda della vettura in uso, c'è il riquadro **Manutenzione
+programmata**: ogni intervento con il suo intervallo, l'ultima volta che è stato fatto,
+il prossimo traguardo e quanto manca. Gli interventi di partenza sono i tre del libretto
+della vettura di adesso:
+
+| Intervento | Si rifà ogni | Ultima volta |
+| --- | --- | --- |
+| Tagliando olio e filtri | 30.000 km | 212.282 km |
+| Service DSC (cambio automatico) | 70.000 km | 212.282 km |
+| Cinghia distribuzione e pompa acqua | 130.000 km | 113.000 km |
+
+Si modificano uno per uno — nome, intervallo, chilometri dell'ultima volta — e se ne
+aggiungono altri. **Una vettura nuova nasce con gli stessi tre interventi ma senza i
+chilometri dell'ultima volta**: quelli dipendono da quell'auto, usata o nuova che sia,
+e li sa solo chi l'ha comprata. Finché non glieli dai l'intervento dice «da impostare»
+e non avvisa di niente.
+
+I tre numeri di partenza non vengono scritti sul disco da nessuna migrazione: la vettura
+che c'era già li riceve ogni volta che servono, e diventano roba scritta solo al primo
+salvataggio o alla prima modifica. Così non esiste un aggiornamento che possa partire
+due volte, e una copia vecchia che arrivasse dal Cloud non cancella niente.
+
+### L'avviso: a inizio turno, e basta
+
+Un avviso che sta lì sempre si smette di leggerlo in tre giorni. Questo si fa vivo
+**quando il turno di oggi è registrato** — cioè all'inizio del turno — e torna a ogni
+turno finché l'intervento non è fatto. In un giorno di riposo non parte. «Più tardi» lo
+mette via per quel turno soltanto.
+
+Avvisa **al raggiungimento del chilometraggio**, non prima: nessun preavviso. Il primo
+turno in cui il contachilometri ha passato il traguardo, l'avviso c'è.
+
+Compare in cima a «Oggi» e ad «Andamento», e se i traguardi passati sono due dice tutti
+e due, ognuno con il suo tasto.
+
+### Dall'avviso alla spesa, e il conto riparte
+
+Il tasto **Registra l'intervento** apre il Registro spese con il modulo già pronto:
+categoria `Manutenzione`, tipo di intervento quello giusto, contachilometri già scritto.
+Resta da mettere l'importo.
+
+Sotto `Manutenzione` il modulo ha adesso un secondo menu — **Tipo di intervento** — con
+le voci della manutenzione programmata di quella vettura. La spesa si salva come
+`Manutenzione - Tagliando olio e filtri`: per i conti resta una spesa di manutenzione
+(costo al chilometro, caselle fiscali, budget: niente cambia), e i riepiloghi la
+raggruppano da soli sotto il nome dell'intervento.
+
+**Un solo posto dove è segnato che è fatto: la spesa.** Il conto alla rovescia non ha
+una memoria sua — riparte dall'ultimo intervento registrato fra le uscite, ai chilometri
+scritti sulla spesa. Così una spesa corretta o cancellata si porta dietro anche il conto,
+e non restano due verità diverse. Una spesa di manutenzione generica, o un pieno, non
+azzerano niente.
+
+Un intervento programmato non si può salvare come spesa ricorrente: dieci interventi
+tutti allo stesso contachilometri, e il conto non saprebbe più a quale dar retta.
+
+### Le prove
+
+`prove/testManutenzione.mjs`, 116 misure. Le giornate e il contachilometri si seminano
+attorno a oggi, non su una data fissa.
+
+- I tre interventi del libretto con i loro intervalli e i chilometri di partenza, **senza
+  che niente venga scritto sulla vettura**.
+- Il conto alla rovescia: contachilometri a 233.000, prossimo tagliando a 242.282,
+  mancano 9.282.
+- L'avviso: zitto senza il turno di oggi, presente col turno registrato, via con «Più
+  tardi», di nuovo al turno dopo, zitto in un giorno di riposo. E con due traguardi
+  passati insieme — il caso vero — li dice tutti e due, con un tasto per ciascuno.
+- Dall'avviso al modulo: si apre il Registro spese con categoria, intervento e
+  contachilometri già a posto.
+- Registrata la spesa: nome, contrassegno, chilometri e importo giusti; `categoriaBase`
+  resta `Manutenzione` e la sottocategoria è l'intervento; il conto riparte a 273.100 e
+  l'avviso non ne parla più.
+- Quello che **non** deve azzerare niente: una manutenzione generica, un pieno, e il
+  menu che si spegne cambiando categoria.
+- Il Parco Auto: riquadro, modifica, aggiunta, cancellazione, e l'elenco che finisce
+  scritto sulla vettura.
+- I chilometri di partenza che restano dopo aver salvato la vettura, e la vettura nuova
+  che nasce senza.
+- Il giro del backup — la lezione della v161: gli interventi e la spesa escono e
+  rientrano interi.
+- Il disegno a 320, 390, 768 e 1280 punti su «Oggi», «Parco Auto» e il modulo della
+  spesa: niente che sbordi, niente di tagliato, tasti da 44 punti. E il contrasto nei
+  due temi: 17,7:1 e 15,2:1 sul nome dell'intervento, 7,6:1 e 6,9:1 sui chilometri.
+
+### Due difetti che non c'entravano, trovati per strada
+
+`prove/sbordo.mjs` misurava il Parco Auto da sempre, ma senza nessuna vettura in
+archivio: mostrava «nessuna vettura», e la scheda con i conti non l'aveva mai vista
+nessuno. Adesso la prova semina una vettura e i turni con il contachilometri vero — e la
+prima cosa che ha trovato è che a 320 punti la scritta **CONTACHILOMETRI** usciva dalla
+sua casella: quindici lettere senza un punto dove andare a capo. Adesso ce l'ha, e non
+si vede quando lo spazio basta.
+
+La riga dei chilometri dell'avviso era `text-gray-500`, 3,68:1 su bianco: sotto la soglia
+di leggibilità, proprio sulla riga che dice quanto manca. È passata a `text-gray-600`,
+7,56:1.
+
 ## Il tasto «Oggi» si vedeva poco (versione 169)
 
 Nella 168 il tasto aveva il vestito del tasto `Ultimo` del riepilogo giornaliero:

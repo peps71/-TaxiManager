@@ -24,11 +24,24 @@ for (const w of [320, 375, 390, 768, 820, 1024, 1280]) {
     const rec = [], tur = [];
     for (let g = 1; g <= 28; g++) {
       const d = `2026-10-${String(g).padStart(2,'0')}`;
-      tur.push({ id:'t'+g, data:d, turno:'Le otto', inizio:'08:00', fine:'20:00', ore:12, lavorato:true, kmTot:180 });
+      // Con il contachilometri vero: senza, meta' del Parco Auto non si
+      // disegna - niente km percorsi, niente costo al chilometro, niente
+      // conto alla rovescia della manutenzione - e quello che non si
+      // disegna non si puo' nemmeno misurare.
+      tur.push({ id:'t'+g, data:d, turno:'Le otto', inizio:'08:00', fine:'20:00', ore:12, lavorato:true,
+                 kmInizio: 242000 + (g-1)*180, kmFine: 242000 + g*180, kmTot:180 });
       for (let c = 0; c < 6; c++) rec.push({ id:`e${g}_${c}`, data:d, tipo:'ENTRATA', categoria:'Corsa', metodo:['Contanti','POS','Satispay','App/Nexi','Conto','Contanti'][c], importo: 28.75+c*7, ora:'1'+c+':00' });
       rec.push({ id:`u${g}`, data:d, tipo:'USCITA', categoria:'Carburante', metodo:'Carta Carburante', importo: 55, fattura:true });
     }
     window.dailyRecords = rec; window.shifts = tur; window.annoScelto = '2026';
+    // UNA VETTURA, PERCHE' SENZA LA SCHEDA DEL PARCO AUTO E' VUOTA
+    // La schermata si misurava da quando esiste, ma senza vetture mostrava
+    // solo «nessuna vettura»: la scheda con i conti, e da adesso il riquadro
+    // della manutenzione programmata, non le ha mai viste nessuno.
+    window.veicoli = [{ id:'ve1', modello:'Skoda Octavia Wagon 2.0 TDI', targa:'GP711XX',
+                        anno:'2019', alimentazione:'Diesel', dataAcquisto:'2024-01-10',
+                        kmAcquisto:180000, prezzoAcquisto:28000, uscita:'in-uso',
+                        dataUscita:'', valoreStimato:12000, note:'' }];
 
     // UN LOGO, PERCHE' SENZA NON SI PROVAVA MEZZA TESTATA
     // Il logo e' arrivato nella v161 e questa prova non lo metteva mai: con

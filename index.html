@@ -1955,7 +1955,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 169;
+        const VERSIONE_APP = 170;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -2159,6 +2159,13 @@
         window.kmFineDraft = null;
         // Categoria di spesa aperta nel riepilogo mensile (null = tutte chiuse)
         window.catSpesaAperta = null;
+        // Il turno per cui l'avviso della manutenzione e' stato messo da parte:
+        // al turno dopo ricompare, perche' l'intervento e' ancora da fare.
+        window.manutenzioneRimandata = localStorage.getItem('taxi_manutenzione_rimandata') || '';
+        // L'intervento scelto dall'avviso, che il modulo della spesa trova gia' pronto
+        window.manutenzioneDaRegistrare = '';
+        // L'intervento aperto in modifica nel Parco Auto ('idVettura:slug')
+        window.manutenzioneInModifica = null;
         // Scadenze (revisione, RCA, bollo, tassametro, licenza...): locali e sincronizzate sul Cloud.
         window.scadenze = leggiLocale('taxi_scadenze', []);
         // Le note: quello che e' successo, con la sua data. Non sono movimenti e
@@ -2864,18 +2871,31 @@
         // budget che non ne hanno una loro. Stava scritta due volte, nel modulo
         // completo e nella spesa lampo, e le due copie erano gia' divergenti -
         // una passava le categorie da esc(), l'altra no.
-        function opzioniCategoriaSpesa(conAltro) {
-            const scelta = window.ultimaCategoriaUscita || 'Carburante';
+        function opzioniCategoriaSpesa(conAltro, forzata) {
+            const scelta = forzata || window.ultimaCategoriaUscita || 'Carburante';
             const base = CATEGORIE_USCITA
                 .map(c => `<option value="${esc(c)}" ${scelta === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
             const voci = vociBudgetNelMenu();
             const fissi = !voci.length ? '' : `<optgroup label="Costi fissi (vanno nel conguaglio)">
                     ${voci.map(v => {
                         const val = `Costi fissi - ${String(v.nome).trim()}`;
-                        return `<option value="${esc(val)}" ${window.ultimaCategoriaUscita === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
+                        return `<option value="${esc(val)}" ${scelta === val ? 'selected' : ''}>${esc(v.nome)}</option>`;
                     }).join('')}
                 </optgroup>`;
             return base + fissi + (conAltro ? '<option value="__altro__">Altro (scrivi tu)</option>' : '');
+        }
+
+        // Il secondo menu, quello che compare solo sotto «Manutenzione»: dice
+        // di che intervento si tratta. Non e' una nota libera - e' la voce che
+        // il Parco Auto riconosce, ed e' quella che azzera il conto alla
+        // rovescia dei chilometri.
+        function opzioniSottoManutenzione(scelto) {
+            const voci = manutenzioniDi(veicoloInUso())
+                .filter(m => String(m.nome || '').trim())
+                .map(m => `<option value="${esc(m.slug)}" ${String(scelto) === String(m.slug) ? 'selected' : ''}>${esc(m.nome)}</option>`)
+                .join('');
+            return `<option value="">Altra manutenzione</option>`
+                + (voci ? `<optgroup label="Manutenzione programmata">${voci}</optgroup>` : '');
         }
 
         // Opzioni del menu metodo, condivise da form di inserimento e modifica in riga
@@ -4447,6 +4467,151 @@
             scriviLocale('taxi_veicoli', window.veicoli || []);
         }
 
+        // ============================================================
+        //  LA MANUTENZIONE PROGRAMMATA SI CONTA IN CHILOMETRI
+        //  Il libretto d'uso e manutenzione non parla di date: dice ogni
+        //  quanti chilometri va fatto ogni intervento. Il tagliando ogni
+        //  30.000, il service del cambio automatico ogni 70.000, cinghia di
+        //  distribuzione e pompa acqua ogni 130.000. Su un taxi che ne fa
+        //  quarantamila l'anno sono traguardi che arrivano in fretta e
+        //  arrivano in mezzo al lavoro: se non lo ricorda qualcosa, il
+        //  tagliando lo scopri in officina con diecimila chilometri di
+        //  ritardo.
+        //  Il contachilometri l'app ce l'ha gia': e' quello dei turni, lo
+        //  stesso che la scheda del Parco Auto mostra. Qui si mette solo il
+        //  traguardo e si guarda la differenza.
+        //  UN SOLO POSTO DOVE SEGNARE CHE E' FATTO: la spesa. Il conto alla
+        //  rovescia non ha una memoria sua - riparte dall'ultimo intervento
+        //  registrato fra le uscite. Cosi' una spesa corretta o cancellata si
+        //  porta dietro anche il conto, e non restano due verita' diverse.
+        // ============================================================
+
+        // Gli interventi che ogni vettura si porta dietro. Gli intervalli sono
+        // quelli del libretto della vettura in uso: su un'altra auto possono
+        // essere altri, e infatti si cambiano vettura per vettura.
+        const MANUTENZIONI_STANDARD = [
+            { slug: 'tagliando',     nome: 'Tagliando olio e filtri',             ogniKm: 30000 },
+            { slug: 'dsc',           nome: 'Service DSC (cambio automatico)',     ogniKm: 70000 },
+            { slug: 'distribuzione', nome: 'Cinghia distribuzione e pompa acqua', ogniKm: 130000 }
+        ];
+
+        // Il punto di partenza del conto alla rovescia sulla vettura con cui si
+        // lavora adesso: i chilometri degli ultimi interventi gia' fatti prima
+        // che l'app li seguisse. Valgono solo finche' nessuno tocca l'elenco:
+        // alla prima modifica - o alla prima vettura nuova - l'elenco diventa
+        // roba della vettura e questi numeri non c'entrano piu'.
+        const PARTENZA_MANUTENZIONI = { tagliando: 212282, dsc: 212282, distribuzione: 113000 };
+
+        // Quanto prima avvisare: niente. L'avviso compare il primo turno in cui
+        // il contachilometri ha passato il traguardo, non uno prima.
+        const PREAVVISO_MANUTENZIONE_KM = 0;
+
+        function veicoloInUso() {
+            return (window.veicoli || []).find(inUso) || null;
+        }
+
+        function modelloManutenzioni(partenze) {
+            return MANUTENZIONI_STANDARD.map(m => Object.assign({}, m, {
+                kmBase: partenze && Number.isFinite(partenze[m.slug]) ? partenze[m.slug] : null
+            }));
+        }
+
+        // L'elenco di una vettura. Una vettura nata prima di questa versione non
+        // ce l'ha scritto: le si da' il modello standard, e a quella in uso
+        // anche i chilometri di partenza. Niente si scrive su disco finche' non
+        // lo tocchi: cosi' non c'e' una migrazione che possa partire due volte,
+        // e una copia vecchia che arrivasse dal Cloud non cancella niente.
+        function manutenzioniDi(v) {
+            if (!v) return [];
+            if (Array.isArray(v.manutenzioni)) return v.manutenzioni;
+            return modelloManutenzioni(inUso(v) ? PARTENZA_MANUTENZIONI : null);
+        }
+
+        function manutenzioneDaSlug(slug, v) {
+            const auto = v || veicoloInUso();
+            return manutenzioniDi(auto).find(m => String(m.slug) === String(slug)) || null;
+        }
+
+        // Una spesa parla di questo intervento? Prima si guarda il contrassegno
+        // scritto dal modulo, che non cambia mai. Le spese segnate a mano prima
+        // di questa versione quel contrassegno non ce l'hanno: per quelle vale
+        // il nome della sottocategoria.
+        function combaciaManutenzione(r, m) {
+            if (r.manutenzione) return String(r.manutenzione) === String(m.slug);
+            if (categoriaBase(r.categoria) !== 'Manutenzione') return false;
+            const nome = String(m.nome || '').trim();
+            return !!nome && chiaveNome(sottocategoria(r.categoria)) === chiaveNome(nome);
+        }
+
+        // A che chilometro e' stato fatto: quello scritto sulla spesa, oppure -
+        // per una spesa segnata di fretta - il contachilometri di quel giorno.
+        function kmDelMovimento(r, v) {
+            const scritto = numeroOpzionale(r.km);
+            if (scritto !== null && scritto > 0) return scritto;
+            return kmMassimoNelPeriodo(v.dataAcquisto || '', r.data);
+        }
+
+        function ultimaManutenzioneFatta(v, m) {
+            const da = v.dataAcquisto || '';
+            const a = v.dataUscita || oggiISO();
+            let ultima = null;
+            movimentiFra(da, a).forEach(r => {
+                if (r.tipo !== 'USCITA' || !combaciaManutenzione(r, m)) return;
+                const km = kmDelMovimento(r, v);
+                if (km === null) return;
+                if (!ultima || km > ultima.km) ultima = { km, data: r.data };
+            });
+            return ultima;
+        }
+
+        // Lo stato di tutti gli interventi di una vettura: dove sono arrivati,
+        // dov'e' il traguardo, quanto manca.
+        function statoManutenzioni(v) {
+            if (!v) return [];
+            return memo('manutenzioni:' + v.id, () => statoManutenzioniCalcola(v));
+        }
+
+        function statoManutenzioniCalcola(v) {
+            // Il contachilometri, e nient'altro: statsVeicolo() lo saprebbe,
+            // ma per dirlo rifa' anche il giro di tutte le spese del periodo,
+            // e questo conto gira a ogni disegno della schermata «Oggi».
+            const kmUsc = numeroOpzionale(v.kmUscita);
+            const kmOra = kmUsc !== null
+                ? kmUsc
+                : kmMassimoNelPeriodo(v.dataAcquisto || '', v.dataUscita || oggiISO());
+            return manutenzioniDi(v).map(m => {
+                const ogni = numeroOpzionale(m.ogniKm);
+                const base = numeroOpzionale(m.kmBase);
+                const fatta = ultimaManutenzioneFatta(v, m);
+                const daSpesa = !!fatta && (base === null || fatta.km > base);
+                const ultimoKm = daSpesa ? fatta.km : base;
+                const prossimo = (ultimoKm === null || !ogni) ? null : ultimoKm + ogni;
+                const mancano = (prossimo === null || kmOra === null) ? null : prossimo - kmOra;
+                return Object.assign({}, m, {
+                    ogniKm: ogni, kmBase: base, kmOra, ultimoKm, prossimo, mancano,
+                    ultimaData: daSpesa ? fatta.data : '',
+                    daSpesa,
+                    daImpostare: ultimoKm === null || !ogni,
+                    scaduto: mancano !== null && mancano <= PREAVVISO_MANUTENZIONE_KM
+                });
+            });
+        }
+
+        function manutenzioniScadute() {
+            return statoManutenzioni(veicoloInUso()).filter(m => m.scaduto);
+        }
+
+        function scriviManutenzioni(v, lista) {
+            v.manutenzioni = lista;
+            window.veicoli = (window.veicoli || []).map(x => String(x.id) === String(v.id) ? v : x);
+            salvaVeicoli();
+            if (window.saveVeicoloToCloud) window.saveVeicoloToCloud(v);
+        }
+
+        function veicoloPerId(id) {
+            return (window.veicoli || []).find(x => String(x.id) === String(id)) || null;
+        }
+
         // Converte in cifra un numero scritto a mano. Accetta l'euro, gli spazi,
         // la virgola decimale e il punto delle migliaia: "6.500" e' seimilacinque-
         // cento, "10.50" e' dieci e cinquanta. Si distinguono dai gruppi di tre
@@ -4725,6 +4890,16 @@
                 note: leggi('vc-note')
             });
 
+            // Gli interventi del libretto diventano roba scritta della vettura
+            // al primo salvataggio. Per una vettura che c'era gia' si fotografa
+            // l'elenco che l'app le stava gia' mostrando - compresi i
+            // chilometri di partenza - altrimenti salvare la targa azzererebbe
+            // il conto alla rovescia. Una vettura nuova parte senza: i
+            // chilometri dell'ultimo intervento li sa solo chi l'ha comprata.
+            if (!Array.isArray(veicolo.manutenzioni)) {
+                veicolo.manutenzioni = esistente ? manutenzioniDi(esistente) : modelloManutenzioni(null);
+            }
+
             window.veicoli = window.veicoli || [];
             if (esistente) {
                 window.veicoli = window.veicoli.map(x => String(x.id) === String(veicolo.id) ? veicolo : x);
@@ -4906,7 +5081,7 @@
                             ${boxDato('Km percorsi', km(s.kmPercorsi))}
                             ${boxDato(s.anni !== null && s.anni < 1 ? 'Km all\'anno (stima)' : 'Km all\'anno',
                                       s.kmAnno !== null ? km(s.kmAnno) : '—')}
-                            ${boxDato('Contachilometri', km(s.kmFinali))}
+                            ${boxDato('Conta&shy;chilometri', km(s.kmFinali))}
                             ${boxDato(inUso(v) ? 'Costo di acquisto' : 'Acquisto → uscita',
                                       s.prezzoAcq === null ? '—' : (inUso(v)
                                         ? formatCurrency(s.prezzoAcq)
@@ -4959,9 +5134,153 @@
                             </div>
                         </div>
 
+                        ${inUso(v) ? bloccoManutenzioni(v) : ''}
+
                         ${v.note ? `<p class="text-xs text-gray-500 border-t border-gray-100 pt-3">${esc(v.note)}</p>` : ''}
                     </div>
                 </div>`;
+        }
+
+        // ============================================================
+        //  IL RIQUADRO DELLA MANUTENZIONE NELLA SCHEDA DELLA VETTURA
+        //  Sta solo sulla vettura in uso: su una venduta il prossimo
+        //  tagliando non e' piu' affare di nessuno.
+        // ============================================================
+        function bloccoManutenzioni(v) {
+            const righe = statoManutenzioni(v);
+            return `
+                <div class="border-t border-gray-100 pt-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <p class="text-xs font-black uppercase tracking-wider text-gray-400">Manutenzione programmata</p>
+                        <button onclick="aggiungiManutenzione('${escJs(v.id)}')" class="text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1.5 rounded no-print">+ Intervento</button>
+                    </div>
+                    ${righe.length
+                        ? `<div class="space-y-2">${righe.map(m => rigaManutenzione(v, m)).join('')}</div>`
+                        : `<p class="text-xs text-gray-400">Nessun intervento programmato. Aggiungine uno con l'intervallo che dice il libretto.</p>`}
+                    <p class="text-xs text-gray-400 mt-2">
+                        Il conto alla rovescia riparte da solo quando registri la spesa dell'intervento,
+                        scegliendo il tipo fra le sottocategorie di «Manutenzione». I chilometri sono
+                        quelli del contachilometri dei turni.
+                    </p>
+                </div>`;
+        }
+
+        function rigaManutenzione(v, m) {
+            const chiave = String(v.id) + ':' + String(m.slug);
+            const km = (n) => (n === null || n === undefined) ? '—' : numeroIT(Math.round(n)) + ' km';
+
+            if (String(window.manutenzioneInModifica || '') === chiave) {
+                const id = (pre) => pre + '-' + String(m.slug);
+                return `
+                <div class="bg-gray-50 rounded-xl p-3 border border-gray-200 space-y-3 no-print">
+                    <div>
+                        <label for="${esc(id('man-nome'))}" class="block text-xs font-bold text-gray-700 mb-1">Intervento</label>
+                        <input type="text" id="${esc(id('man-nome'))}" value="${esc(m.nome || '')}" placeholder="Es. Tagliando olio e filtri" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium" />
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="${esc(id('man-ogni'))}" class="block text-xs font-bold text-gray-700 mb-1">Si rifà ogni (km)</label>
+                            <input type="number" inputmode="numeric" id="${esc(id('man-ogni'))}" value="${m.ogniKm === null ? '' : m.ogniKm}" placeholder="Es. 30000" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium" />
+                        </div>
+                        <div>
+                            <label for="${esc(id('man-ultimo'))}" class="block text-xs font-bold text-gray-700 mb-1">Ultima volta a (km)</label>
+                            <input type="number" inputmode="numeric" id="${esc(id('man-ultimo'))}" value="${m.kmBase === null ? '' : m.kmBase}" placeholder="Es. 212282" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium" />
+                            <p class="text-xs text-gray-400 mt-1">
+                                ${m.daSpesa
+                                    ? `C'è una spesa registrata più avanti (${km(m.ultimoKm)}): è quella che conta.`
+                                    : 'Serve solo la prima volta: dopo lo dice la spesa registrata.'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="salvaRigaManutenzione('${escJs(v.id)}', '${escJs(m.slug)}')" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 text-xs font-bold px-4 py-2.5 rounded-xl">Salva</button>
+                        <button onclick="annullaModificaManutenzione('${escJs(v.id)}', '${escJs(m.slug)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-4 py-2.5 rounded-xl">Annulla</button>
+                        <button onclick="eliminaManutenzione('${escJs(v.id)}', '${escJs(m.slug)}')" class="text-red-500 hover:text-red-700 text-xs font-bold bg-red-50 hover:bg-red-100 px-3 py-2.5 rounded-xl ml-auto">Elimina</button>
+                    </div>
+                </div>`;
+            }
+
+            const stato = m.daImpostare
+                ? `<span class="text-xs font-bold text-gray-400">da impostare</span>`
+                : m.mancano === null
+                    ? `<span class="text-xs font-bold text-gray-400">servono i km dei turni</span>`
+                    : m.scaduto
+                        ? `<span class="text-xs font-black text-red-700">${m.mancano === 0 ? 'da fare adesso' : km(-m.mancano) + ' oltre'}</span>`
+                        : `<span class="text-xs font-black text-gray-900">mancano ${km(m.mancano)}</span>`;
+
+            return `
+                <div class="riquadro-tinto ${m.scaduto ? 'tinta-rossa' : 'tinta-verde'} rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="text-sm font-black text-gray-900">${esc(m.nome || 'Intervento senza nome')}</p>
+                        <p class="text-xs text-gray-600">
+                            ${m.ogniKm ? 'ogni ' + km(m.ogniKm) : 'intervallo da indicare'}
+                            ${m.ultimoKm !== null ? ' · ultima volta a ' + km(m.ultimoKm) : ''}
+                            ${m.prossimo !== null ? ' · prossima a ' + km(m.prossimo) : ''}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        ${stato}
+                        <button onclick="apriModificaManutenzione('${escJs(v.id)}', '${escJs(m.slug)}')" class="text-gray-600 bg-gray-100 hover:bg-gray-200 text-xs font-bold px-3 py-1.5 rounded no-print">Modifica</button>
+                    </div>
+                </div>`;
+        }
+
+        function apriModificaManutenzione(idVeicolo, slug) {
+            const chiave = String(idVeicolo) + ':' + String(slug);
+            window.manutenzioneInModifica = window.manutenzioneInModifica === chiave ? null : chiave;
+            renderContent();
+        }
+
+        // Un intervento nuovo nasce vuoto e gia' aperto in modifica. Se lo
+        // lasci senza nome e premi Annulla sparisce: non resta una riga vuota
+        // nell'elenco di nessuno.
+        function aggiungiManutenzione(idVeicolo) {
+            const v = veicoloPerId(idVeicolo);
+            if (!v) return;
+            const slug = 'man' + nuovoId();
+            scriviManutenzioni(v, manutenzioniDi(v).concat([{ slug, nome: '', ogniKm: null, kmBase: null }]));
+            window.manutenzioneInModifica = String(idVeicolo) + ':' + slug;
+            renderContent();
+        }
+
+        function annullaModificaManutenzione(idVeicolo, slug) {
+            const v = veicoloPerId(idVeicolo);
+            const voce = v ? manutenzioneDaSlug(slug, v) : null;
+            if (v && voce && !String(voce.nome || '').trim()) {
+                scriviManutenzioni(v, manutenzioniDi(v).filter(m => String(m.slug) !== String(slug)));
+            }
+            window.manutenzioneInModifica = null;
+            renderContent();
+        }
+
+        function salvaRigaManutenzione(idVeicolo, slug) {
+            const v = veicoloPerId(idVeicolo);
+            if (!v) return;
+            const leggi = (pre) => (document.getElementById(pre + '-' + slug) || {}).value;
+            const nome = String(leggi('man-nome') || '').trim();
+            const ogni = numeroOpzionale(leggi('man-ogni'));
+            const base = numeroOpzionale(leggi('man-ultimo'));
+            if (!nome) { showToast('Dai un nome all\'intervento.'); return; }
+            if (ogni === null || ogni <= 0) { showToast('Indica ogni quanti chilometri va rifatto.'); return; }
+            if (base !== null && base < 0) { showToast('I chilometri non possono essere negativi.'); return; }
+            scriviManutenzioni(v, manutenzioniDi(v).map(m => String(m.slug) === String(slug)
+                ? Object.assign({}, m, { nome, ogniKm: Math.round(ogni), kmBase: base === null ? null : Math.round(base) })
+                : m));
+            window.manutenzioneInModifica = null;
+            showToast('Intervento aggiornato.');
+            renderContent();
+        }
+
+        function eliminaManutenzione(idVeicolo, slug) {
+            const v = veicoloPerId(idVeicolo);
+            const voce = v ? manutenzioneDaSlug(slug, v) : null;
+            if (!v || !voce) return;
+            const nome = String(voce.nome || '').trim();
+            if (nome && !confirm(`Tolgo «${nome}» dalla manutenzione programmata di ${v.modello}?\nLe spese già registrate restano dove sono.`)) return;
+            scriviManutenzioni(v, manutenzioniDi(v).filter(m => String(m.slug) !== String(slug)));
+            window.manutenzioneInModifica = null;
+            showToast('Intervento tolto.');
+            renderContent();
         }
 
         function getReportStats(monthFilter) {
@@ -5156,6 +5475,7 @@
             window.editKmId = null;
             window.editRecordId = null;
             window.veicoloInModifica = null;
+            window.manutenzioneInModifica = null;
             try { localStorage.setItem('taxi_tab', tabId); } catch (e) { /* spazio esaurito: pazienza */ }
             const main = document.getElementById('main-container');
             if (main) main.scrollTop = 0;
@@ -8163,6 +8483,7 @@
             return `
                 <div class="fade-in space-y-5 max-w-7xl mx-auto">
                     ${avvisoProfilo()}
+                    ${avvisoManutenzione()}
 
                     <!-- ============================================================
                          LA SCHEDA DELLA GIORNATA
@@ -8757,6 +9078,71 @@
         }
 
         // ============================================================
+        //  L'AVVISO DELLA MANUTENZIONE: A INIZIO TURNO, E BASTA
+        //  Un avviso che sta li' sempre si smette di leggerlo in tre giorni.
+        //  Questo si fa vivo quando il turno comincia - cioe' quando il turno
+        //  di oggi e' registrato - e torna a ogni turno finche' l'intervento
+        //  non e' fatto. «Piu' tardi» lo mette via per questo turno soltanto:
+        //  domani ricomincia.
+        // ============================================================
+        function avvisoManutenzione() {
+            const scadute = manutenzioniScadute();
+            if (!scadute.length) return '';
+            const turno = turnoDiOggi();
+            if (!turno) return '';
+            if (String(window.manutenzioneRimandata || '') === String(turno.id)) return '';
+            const km = (n) => numeroIT(Math.round(n)) + ' km';
+            const quanto = (m) => m.mancano === 0
+                ? 'traguardo raggiunto'
+                : `${km(-m.mancano)} oltre il traguardo`;
+            return `
+                <div class="riquadro-tinto tinta-rossa chiama rounded-2xl p-4 no-print">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <p class="font-black text-red-800">${scadute.length === 1 ? 'Manutenzione da fare' : 'Manutenzioni da fare'}</p>
+                            <p class="text-xs text-red-700">Il contachilometri segna ${km(scadute[0].kmOra)}.</p>
+                        </div>
+                        <button onclick="rimandaManutenzione()" class="text-xs font-black text-red-700 hover:text-gray-900 underline underline-offset-2 shrink-0">Più tardi</button>
+                    </div>
+                    <div class="mt-3 space-y-2">
+                        ${scadute.map(m => `
+                            <div class="bg-white rounded-xl p-3 border border-red-200 flex flex-wrap items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <p class="text-sm font-black text-gray-900">${esc(m.nome)}</p>
+                                    <p class="text-xs text-gray-600">traguardo ${km(m.prossimo)} · ${quanto(m)}</p>
+                                </div>
+                                <button onclick="apriSpesaManutenzione('${escJs(m.slug)}')" class="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2.5 rounded-xl shrink-0">Registra l'intervento</button>
+                            </div>`).join('')}
+                    </div>
+                </div>`;
+        }
+
+        // Il turno di oggi: e' lui che fa comparire l'avviso. Finche' il turno
+        // non e' registrato l'avviso sta zitto - non e' ancora cominciato niente.
+        function turnoDiOggi() {
+            const oggi = oggiISO();
+            return (window.shifts || []).find(t => t.data === oggi && !isRiposo(t)) || null;
+        }
+
+        function rimandaManutenzione() {
+            const turno = turnoDiOggi();
+            window.manutenzioneRimandata = turno ? String(turno.id) : '';
+            try { localStorage.setItem('taxi_manutenzione_rimandata', window.manutenzioneRimandata); }
+            catch (err) { /* spazio esaurito: pazienza */ }
+            renderContent();
+        }
+
+        // Dall'avviso al modulo della spesa, con il tipo di intervento gia'
+        // scelto e il contachilometri gia' scritto: quello che resta da fare e'
+        // l'importo. Registrata la spesa, il conto alla rovescia riparte da li'.
+        function apriSpesaManutenzione(slug) {
+            window.manutenzioneDaRegistrare = String(slug || '');
+            window.showUscitaForm = true;
+            switchTab('uscite');
+            portaInVista('uscita-imp');
+        }
+
+        // ============================================================
         //  MUOVERSI DENTRO «GESTIONE»
         //  Entrando in una sezione non c'era modo di tornare all'indice se non
         //  ritrovando «Gestione» nella barra in basso - che resta accesa, ma
@@ -8915,6 +9301,7 @@
                         ${pillolaAnno('dash')}
                     </header>
 
+                    ${avvisoManutenzione()}
                     ${avvisoScadenze()}
 
                     <!-- Un periodo per volta: l'interruttore e' nella testata -->
@@ -11092,6 +11479,13 @@
         // segnare il pieno bisognava cambiare scheda, e il pieno si fa tutti i
         // giorni: e' lavoro di turno, non contabilita' da scrivania.
         function moduloUscitaHTML(dataProposta) {
+            // Arrivando dall'avviso il modulo si apre gia' pronto: categoria
+            // Manutenzione, l'intervento giusto e il contachilometri di adesso.
+            const slugScelto = String(window.manutenzioneDaRegistrare || '');
+            const auto = veicoloInUso();
+            const kmOra = auto ? statsVeicolo(auto).kmFinali : null;
+            const catScelta = slugScelto ? 'Manutenzione' : (window.ultimaCategoriaUscita || 'Carburante');
+            const manuta = catScelta === 'Manutenzione';
             return `
             <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-red-500 slide-in">
                 <div class="flex items-center gap-2 mb-4">
@@ -11106,12 +11500,22 @@
                     <div>
                         <label for="uscita-cat-select" class="block text-xs font-bold text-gray-700 mb-1">Categoria</label>
                         <select id="uscita-cat-select" onchange="onUscitaCatChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium">
-                            ${opzioniCategoriaSpesa(true)}
+                            ${opzioniCategoriaSpesa(true, slugScelto ? 'Manutenzione' : '')}
                         </select>
                     </div>
                     <div id="uscita-altro-box" class="hidden">
                         <label for="uscita-altro" class="block text-xs font-bold text-gray-700 mb-1">Nome della spesa</label>
                         <input type="text" id="uscita-altro" placeholder="Es. Revisione tassametro" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium" />
+                    </div>
+                    <div id="uscita-sotto-box" class="${manuta ? '' : 'hidden'}">
+                        <label for="uscita-sotto" class="block text-xs font-bold text-gray-700 mb-1">Tipo di intervento</label>
+                        <select id="uscita-sotto" onchange="onUscitaSottoChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium">
+                            ${opzioniSottoManutenzione(slugScelto)}
+                        </select>
+                    </div>
+                    <div id="uscita-km-box" class="${slugScelto ? '' : 'hidden'}">
+                        <label for="uscita-km" class="block text-xs font-bold text-gray-700 mb-1">Conta&shy;chilometri <span class="text-gray-400 font-normal">dell'intervento</span></label>
+                        <input type="number" inputmode="numeric" id="uscita-km" value="${slugScelto && kmOra !== null ? Math.round(kmOra) : ''}" placeholder="Es. 243100" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-red-400 font-medium" />
                     </div>
                     <div>
                         <label for="uscita-nota" class="block text-xs font-bold text-gray-700 mb-1">Note <span class="text-gray-400 font-normal">facoltative</span></label>
@@ -11232,6 +11636,9 @@
 
         function toggleUscitaForm() {
             window.showUscitaForm = !window.showUscitaForm;
+            // Chiudendo il modulo si dimentica anche l'intervento che l'avviso
+            // aveva preparato: riaprendolo a mano si riparte puliti.
+            if (!window.showUscitaForm) window.manutenzioneDaRegistrare = '';
             renderContent();
         }
 
@@ -11388,10 +11795,34 @@
         function onUscitaCatChange(val) {
             const box = document.getElementById('uscita-altro-box');
             const campo = document.getElementById('uscita-altro');
-            if (!box) return;
             const altro = val === '__altro__';
-            box.classList.toggle('hidden', !altro);
-            if (altro && campo) campo.focus();
+            if (box) {
+                box.classList.toggle('hidden', !altro);
+                if (altro && campo) campo.focus();
+            }
+            // Il tipo di intervento ha senso solo sotto Manutenzione. Cambiando
+            // categoria si spegne anche la scelta, altrimenti una spesa di
+            // carburante si porterebbe dietro il tagliando e il conto alla
+            // rovescia dei chilometri ripartirebbe per sbaglio.
+            const boxSotto = document.getElementById('uscita-sotto-box');
+            const sotto = document.getElementById('uscita-sotto');
+            const manuta = val === 'Manutenzione';
+            if (boxSotto) boxSotto.classList.toggle('hidden', !manuta);
+            if (!manuta && sotto) sotto.value = '';
+            onUscitaSottoChange(sotto ? sotto.value : '');
+        }
+
+        function onUscitaSottoChange(val) {
+            const box = document.getElementById('uscita-km-box');
+            if (box) box.classList.toggle('hidden', !val);
+            const campo = document.getElementById('uscita-km');
+            // Il contachilometri si propone da solo, ma solo se e' vuoto: se
+            // l'hai corretto a mano quella correzione resta.
+            if (val && campo && !String(campo.value).trim()) {
+                const auto = veicoloInUso();
+                const km = auto ? statsVeicolo(auto).kmFinali : null;
+                if (km !== null) campo.value = Math.round(km);
+            }
         }
 
         async function addUscita(e) {
@@ -11415,6 +11846,26 @@
                 categoria = selCat;
             }
 
+            // MANUTENZIONE PROGRAMMATA
+            // La voce scelta diventa la sottocategoria della spesa
+            // («Manutenzione - Tagliando olio e filtri»): da li' i riepiloghi
+            // la raggruppano da soli. Il contrassegno sul movimento e i
+            // chilometri sono quello che fa ripartire il conto alla rovescia
+            // nel Parco Auto - non c'e' un secondo posto dove segnarlo.
+            let interventoSlug = '';
+            let interventoKm = null;
+            if (categoria === 'Manutenzione') {
+                const sel = document.getElementById('uscita-sotto');
+                const scelto = sel ? String(sel.value || '') : '';
+                const voce = scelto ? manutenzioneDaSlug(scelto) : null;
+                if (voce) {
+                    interventoSlug = scelto;
+                    categoria = 'Manutenzione - ' + voce.nome;
+                    interventoKm = numeroOpzionale((document.getElementById('uscita-km') || {}).value);
+                    if (interventoKm !== null && interventoKm <= 0) interventoKm = null;
+                }
+            }
+
             if (!data || !categoria || isNaN(importo)) return;
             if (importo < 0) { showToast('L\'importo non può essere negativo.'); return; }
 
@@ -11423,8 +11874,20 @@
             const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo, ora: oraDiAdesso() };
             if (nota) record.nota = nota;
             if (conFattura) record.fattura = true;
+            if (interventoSlug) {
+                record.manutenzione = interventoSlug;
+                if (interventoKm !== null) record.km = interventoKm;
+            }
 
             const ripeti = datiRipetizione();
+            // Un intervento programmato si fa una volta, a un chilometraggio
+            // preciso: ripeterlo ogni mese scriverebbe dieci interventi tutti
+            // allo stesso contachilometri, e il conto alla rovescia non
+            // saprebbe piu' a quale dar retta.
+            if (ripeti && interventoSlug) {
+                showToast('Un intervento programmato si registra una volta sola: togli la spesa ricorrente.');
+                return;
+            }
             if (ripeti) {
                 if (!ripeti.date.length) { showToast('La data finale viene prima della prima spesa.'); return; }
                 if (!(await generaSerieSpese(record, ripeti))) return;
@@ -11445,8 +11908,16 @@
                 try { localStorage.setItem('taxi_ultima_categoria_uscita', selCat); } catch (err) { /* spazio esaurito: pazienza */ }
             }
 
+            window.manutenzioneDaRegistrare = '';
             window.showUscitaForm = continua;
-            if (!ripeti) showToast(continua ? 'Spesa salvata. Pronta per la prossima.' : 'Spesa salvata e sincronizzata.');
+            if (interventoSlug) {
+                const dopo = statoManutenzioni(veicoloInUso()).find(m => String(m.slug) === interventoSlug);
+                showToast(dopo && dopo.prossimo !== null
+                    ? `Intervento registrato. Il prossimo a ${numeroIT(Math.round(dopo.prossimo))} km.`
+                    : 'Intervento registrato.');
+            } else if (!ripeti) {
+                showToast(continua ? 'Spesa salvata. Pronta per la prossima.' : 'Spesa salvata e sincronizzata.');
+            }
             renderContent();
             if (continua) {
                 setTimeout(() => {
