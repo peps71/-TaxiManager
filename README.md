@@ -99,6 +99,47 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## «Ultima volta a (km)» faceva vedere il numero sbagliato (versione 172)
+
+Fatto il tagliando, la spesa si registra con il contachilometri del giorno. Se quella
+cifra è sbagliata — 243.372 battuto al posto di 234.372 — si riapre «Modifica»
+nell'intervento per correggerla. E lì dentro, fino alla 171, compariva il numero **di
+partenza** (212.282, l'ultima volta prima che l'app guardasse), con una nota che diceva
+«c'è una spesa registrata più avanti: è quella che conta».
+
+Cioè: chi apriva proprio per correggere una cifra si trovava davanti un numero vecchio, e
+correggendolo non cambiava niente — perché quel campo scriveva sul numero di partenza,
+che una volta registrata la spesa non conta più.
+
+Adesso **«Ultima volta a (km)» è sempre il numero che conta**. Appena c'è una spesa
+registrata il campo mostra i chilometri scritti su quella spesa, lo dice sotto
+(«Sono i chilometri scritti sulla spesa del 27/10/2026: correggendoli qui si corregge
+quella spesa») e salvando corregge la spesa, non altro. Il numero di partenza resta dov'è
+e torna buono solo se quella spesa viene cancellata.
+
+### Un secondo difetto, nascosto nel primo
+
+L'ultimo intervento era «quello con il contachilometri più alto». Sembra la stessa cosa
+di «il più recente» e non lo è: la correzione di una cifra sbagliata è quasi sempre un
+numero **più basso** di quello sbagliato, e con la regola del più alto non avrebbe mai
+preso — la spesa si sarebbe corretta e il conto alla rovescia sarebbe rimasto fermo sul
+numero sbagliato. Adesso vince la data; a parità di data, il contachilometri più alto.
+
+Per lo stesso motivo una spesa registrata vale sempre più del numero di partenza, anche
+quando il contachilometri scritto sopra è più basso: una spesa è un intervento vero con
+la sua data, il numero di partenza è «prima che l'app guardasse».
+
+### Le prove
+
+`prove/testManutenzione.mjs` sale a 127 misure. Le nuove rifanno il giro per intero sul
+caso vero — spesa registrata a 243.372, correzione a 234.372:
+
+- aprendo «Modifica» il campo mostra 243.372, non 212.282, e dice da quale spesa arriva;
+- salvando, la spesa diventa 234.372 — in memoria e sul disco — e il resto della spesa
+  (categoria, importo) resta com'era;
+- il conto alla rovescia segue il numero corretto e il traguardo si sposta a 264.372;
+- il numero di partenza non viene toccato, e cancellata la spesa torna buono lui.
+
 ## Il riquadro nero attorno al campo dell'incasso (versione 171)
 
 Toccando il campo dell'incasso per scriverci dentro usciva un rettangolo nero di tre

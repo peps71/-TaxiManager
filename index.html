@@ -1978,7 +1978,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 171;
+        const VERSIONE_APP = 172;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4574,6 +4574,13 @@
             return kmMassimoNelPeriodo(v.dataAcquisto || '', r.data);
         }
 
+        // L'ultimo intervento di questo tipo: il piu' RECENTE per data, non
+        // quello con il contachilometri piu' alto. Sembra la stessa cosa e non
+        // lo e': correggendo una cifra sbagliata - 243.372 battuto al posto di
+        // 234.372 - il numero giusto e' piu' basso di quello sbagliato, e con
+        // la regola del piu' alto la correzione non avrebbe mai preso. A parita
+        // di data vince il contachilometri piu' alto, che e' il solo caso in
+        // cui due interventi dello stesso giorno si possono ordinare.
         function ultimaManutenzioneFatta(v, m) {
             const da = v.dataAcquisto || '';
             const a = v.dataUscita || oggiISO();
@@ -4582,7 +4589,10 @@
                 if (r.tipo !== 'USCITA' || !combaciaManutenzione(r, m)) return;
                 const km = kmDelMovimento(r, v);
                 if (km === null) return;
-                if (!ultima || km > ultima.km) ultima = { km, data: r.data };
+                const piuRecente = !ultima
+                    || String(r.data) > String(ultima.data)
+                    || (String(r.data) === String(ultima.data) && km > ultima.km);
+                if (piuRecente) ultima = { km, data: r.data, id: r.id };
             });
             return ultima;
         }
@@ -4605,14 +4615,20 @@
             return manutenzioniDi(v).map(m => {
                 const ogni = numeroOpzionale(m.ogniKm);
                 const base = numeroOpzionale(m.kmBase);
+                // Una spesa registrata racconta un intervento vero, con la sua
+                // data: viene dopo il numero di partenza, che e' «l'ultima
+                // volta prima che l'app guardasse». Quindi vince sempre, anche
+                // quando il contachilometri scritto sopra e' piu' basso -
+                // perche' puo' essere una cifra appena corretta.
                 const fatta = ultimaManutenzioneFatta(v, m);
-                const daSpesa = !!fatta && (base === null || fatta.km > base);
+                const daSpesa = !!fatta;
                 const ultimoKm = daSpesa ? fatta.km : base;
                 const prossimo = (ultimoKm === null || !ogni) ? null : ultimoKm + ogni;
                 const mancano = (prossimo === null || kmOra === null) ? null : prossimo - kmOra;
                 return Object.assign({}, m, {
                     ogniKm: ogni, kmBase: base, kmOra, ultimoKm, prossimo, mancano,
                     ultimaData: daSpesa ? fatta.data : '',
+                    spesaId: daSpesa ? fatta.id : null,
                     daSpesa,
                     daImpostare: ultimoKm === null || !ogni,
                     scaduto: mancano !== null && mancano <= PREAVVISO_MANUTENZIONE_KM
@@ -5207,11 +5223,11 @@
                         </div>
                         <div>
                             <label for="${esc(id('man-ultimo'))}" class="block text-xs font-bold text-gray-700 mb-1">Ultima volta a (km)</label>
-                            <input type="number" inputmode="numeric" id="${esc(id('man-ultimo'))}" value="${m.kmBase === null ? '' : m.kmBase}" placeholder="Es. 212282" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium" />
+                            <input type="number" inputmode="numeric" id="${esc(id('man-ultimo'))}" value="${m.ultimoKm === null ? '' : m.ultimoKm}" placeholder="Es. 212282" class="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-yellow-400 font-medium" />
                             <p class="text-xs text-gray-400 mt-1">
                                 ${m.daSpesa
-                                    ? `C'è una spesa registrata più avanti (${km(m.ultimoKm)}): è quella che conta.`
-                                    : 'Serve solo la prima volta: dopo lo dice la spesa registrata.'}
+                                    ? `Sono i chilometri scritti sulla spesa del ${esc(ggMmAaaa(m.ultimaData))}: correggendoli qui si corregge quella spesa.`
+                                    : 'Serve solo la prima volta: dopo lo dice la spesa che registri.'}
                             </p>
                         </div>
                     </div>
@@ -5276,21 +5292,51 @@
             renderContent();
         }
 
-        function salvaRigaManutenzione(idVeicolo, slug) {
+        // «Ultima volta a (km)» e' sempre il numero che conta, non quello di
+        // partenza: appena c'e' una spesa registrata, quel campo mostra - e
+        // corregge - i chilometri scritti SULLA SPESA. Prima faceva vedere il
+        // numero di partenza con una nota che diceva «ce n'e' uno piu' avanti»:
+        // chi apriva proprio per correggere una cifra sbagliata si trovava
+        // davanti il numero vecchio, e correggendolo non cambiava niente.
+        // Il numero di partenza resta dov'e', sotto: torna buono solo se quella
+        // spesa viene cancellata.
+        async function salvaRigaManutenzione(idVeicolo, slug) {
             const v = veicoloPerId(idVeicolo);
             if (!v) return;
+            const stato = statoManutenzioni(v).find(m => String(m.slug) === String(slug));
             const leggi = (pre) => (document.getElementById(pre + '-' + slug) || {}).value;
             const nome = String(leggi('man-nome') || '').trim();
             const ogni = numeroOpzionale(leggi('man-ogni'));
-            const base = numeroOpzionale(leggi('man-ultimo'));
+            const ultimo = numeroOpzionale(leggi('man-ultimo'));
             if (!nome) { showToast('Dai un nome all\'intervento.'); return; }
             if (ogni === null || ogni <= 0) { showToast('Indica ogni quanti chilometri va rifatto.'); return; }
-            if (base !== null && base < 0) { showToast('I chilometri non possono essere negativi.'); return; }
+            if (ultimo !== null && ultimo < 0) { showToast('I chilometri non possono essere negativi.'); return; }
+
+            const suUnaSpesa = !!(stato && stato.daSpesa && stato.spesaId);
+            if (suUnaSpesa && (ultimo === null || ultimo <= 0)) {
+                showToast('Scrivi i chilometri a cui è stato fatto l\'intervento.');
+                return;
+            }
+
             scriviManutenzioni(v, manutenzioniDi(v).map(m => String(m.slug) === String(slug)
-                ? Object.assign({}, m, { nome, ogniKm: Math.round(ogni), kmBase: base === null ? null : Math.round(base) })
+                ? Object.assign({}, m, {
+                    nome,
+                    ogniKm: Math.round(ogni),
+                    kmBase: suUnaSpesa
+                        ? (m.kmBase === undefined ? null : m.kmBase)
+                        : (ultimo === null ? null : Math.round(ultimo))
+                  })
                 : m));
+
+            if (suUnaSpesa) {
+                const rec = movimentoPerId(stato.spesaId);
+                if (rec && Math.round(ultimo) !== numeroOpzionale(rec.km)) {
+                    await persistiRecord(Object.assign({}, rec, { km: Math.round(ultimo) }));
+                }
+            }
+
             window.manutenzioneInModifica = null;
-            showToast('Intervento aggiornato.');
+            showToast(suUnaSpesa ? 'Intervento e spesa aggiornati.' : 'Intervento aggiornato.');
             renderContent();
         }
 

@@ -501,6 +501,68 @@ for (const tema of ['chiaro', 'scuro']) {
   await q.close();
 }
 
+// ------------------------------------------------------------------
+console.log('\n11. CORREGGERE I CHILOMETRI DI UN INTERVENTO GIA\' REGISTRATO');
+// ------------------------------------------------------------------
+// Fatto il tagliando si registra la spesa, e nel modulo si batte il
+// contachilometri. Se quella cifra e' sbagliata - 243.372 al posto di
+// 234.372 - si riapre «Modifica» per correggerla, e li' dentro ci si deve
+// trovare il numero di adesso, non quello di partenza di due anni fa.
+p = await apri(243400);
+await p.evaluate(() => {
+  window.dailyRecords = [{ id: 'r1', data: window.__oggi, tipo: 'USCITA',
+    categoria: 'Manutenzione - Tagliando olio e filtri', metodo: 'Contanti',
+    importo: 180, manutenzione: 'tagliando', km: 243372 }];
+  window.versioneDati = (window.versioneDati || 0) + 1;
+  switchTab('auto');
+});
+await p.waitForTimeout(300);
+const conSpesa = await p.evaluate(stato);
+const t11 = conSpesa.find(m => m.slug === 'tagliando');
+ok(t11.ultimoKm === 243372, 'il conto parte dalla spesa registrata', String(t11.ultimoKm));
+ok(t11.kmBase === 212282, 'e il numero di partenza resta dov\'è', String(t11.kmBase));
+
+await p.evaluate(() => { apriModificaManutenzione('v1', 'tagliando'); });
+await p.waitForTimeout(250);
+const campo = await p.evaluate(() => {
+  const el = document.getElementById('man-ultimo-tagliando');
+  const nota = el.parentElement.querySelector('p');
+  return { valore: el.value, nota: (nota ? nota.textContent : '').replace(/\s+/g, ' ').trim() };
+});
+ok(campo.valore === '243372', 'aprendo «Modifica» il campo mostra i chilometri di adesso', campo.valore);
+ok(/spesa del \d\d\/\d\d\/\d{4}/.test(campo.nota), 'e dice che sono quelli della spesa', campo.nota.slice(0, 60));
+
+// la correzione: il numero giusto e' PIU' BASSO di quello sbagliato
+await p.evaluate(() => {
+  document.getElementById('man-ultimo-tagliando').value = '234372';
+  salvaRigaManutenzione('v1', 'tagliando');
+});
+await p.waitForTimeout(400);
+const corretto = await p.evaluate(() => ({
+  stato: window.statoManutenzioni(window.veicoloInUso()).find(m => m.slug === 'tagliando'),
+  spesa: (window.dailyRecords || [])[0],
+  suDisco: (JSON.parse(localStorage.getItem('taxi_records') || '[]')[0] || {}).km
+}));
+ok(corretto.spesa.km === 234372, 'salvando si corregge la spesa', String(corretto.spesa.km));
+ok(corretto.suDisco === 234372, 'e la correzione è anche sul disco', String(corretto.suDisco));
+ok(corretto.stato.ultimoKm === 234372, 'il conto segue il numero corretto', String(corretto.stato.ultimoKm));
+ok(corretto.stato.prossimo === 264372, 'e il traguardo si sposta a 264.372 km', String(corretto.stato.prossimo));
+ok(corretto.stato.kmBase === 212282, 'il numero di partenza non è stato toccato', String(corretto.stato.kmBase));
+ok(corretto.spesa.categoria === 'Manutenzione - Tagliando olio e filtri' && corretto.spesa.importo === 180,
+   'e il resto della spesa è rimasto com\'era');
+
+// cancellata la spesa, il numero di partenza torna buono
+await p.evaluate(() => {
+  window.dailyRecords = [];
+  window.versioneDati = (window.versioneDati || 0) + 1;
+  renderContent();
+});
+await p.waitForTimeout(250);
+const senzaSpesa = await p.evaluate(stato);
+ok(senzaSpesa.find(m => m.slug === 'tagliando').ultimoKm === 212282,
+   'cancellata la spesa, torna buono il numero di partenza');
+await p.close();
+
 await b.close();
 console.log(guai ? `\n${guai} cose da sistemare` : '\nTutto in ordine');
 process.exit(guai ? 1 : 0);
