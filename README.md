@@ -99,6 +99,45 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il riquadro nero attorno al campo dell'incasso (versione 171)
+
+Toccando il campo dell'incasso per scriverci dentro usciva un rettangolo nero di tre
+punti attorno al campo. È l'anello del fuoco della v167, e sulla tastiera ha tutto il
+senso del mondo: chi gira l'app col tasto Tab non ha nessun altro modo di sapere dove è
+finito. Col dito no — il cursore lampeggia già dentro al campo, la riga verde sotto dice
+che è quello attivo, e in mezzo a una corsa un rettangolo nero è solo una cosa in più da
+guardare mentre si batte un numero.
+
+### Perché i browser lo accendono lo stesso
+
+`:focus-visible` nasce apposta per distinguere il dito dalla tastiera, e sui **tasti**
+funziona: toccandoli l'anello non compare, e non è mai comparso. Sui **campi in cui si
+scrive** no: lì `:focus-visible` combacia sempre, anche per un tocco, perché subito dopo
+si digita. È da manuale, e sulla maggior parte dei siti non si nota perché l'anello è
+discreto; su un campo grande come quello dell'incasso, con tre punti di nero, si notava
+eccome.
+
+La differenza la fa adesso l'app: un ascoltatore su `pointerdown` segna che si è arrivati
+col dito (o col mouse), e il `Tab` toglie quel segno. L'anello si spegne solo nel primo
+caso, e solo su campi di testo, aree di testo, menu a tendina e il campo data invisibile.
+`pointerdown` arriva **prima** che il campo prenda il fuoco, quindi l'anello non fa
+nemmeno in tempo a comparire. Le frecce non riaccendono niente: dentro un campo muovono
+il cursore, non il fuoco, e riaccendere l'anello mentre si corregge un numero sarebbe lo
+stesso fastidio di prima.
+
+### Le prove
+
+`prove/testTastiera.mjs` passa da sette misure a quindici. Le sette di prima restano come
+stavano — col Tab si gira per l'app, 36 comandi raggiunti, tutti con l'anello da 3 punti,
+il più debole a 12,2:1 di contrasto di giorno e 11,2:1 al buio — e le otto nuove toccano
+lo schermo per davvero, da telefono:
+
+- toccando il campo dell'incasso ci si scrive dentro e **il riquadro nero non esce**;
+- ma la riga sotto il campo diventa verde: spento un segnale, un altro c'è;
+- col Tab l'anello torna subito, e tornando col dito si rispegne;
+- nel modulo della spesa l'importo si scrive senza riquadro nero, con l'alone colorato
+  che quel campo ha sempre avuto.
+
 ## La manutenzione programmata, che si conta in chilometri (versione 170)
 
 Il libretto d'uso e manutenzione non parla di date: dice ogni quanti chilometri va

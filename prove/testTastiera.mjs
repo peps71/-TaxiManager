@@ -145,6 +145,86 @@ ok(dopoIlDito.nessunFuoco || !dopoIlDito.combacia,
    dopoIlDito.nessunFuoco ? 'nessun elemento a fuoco' : `:focus-visible ${dopoIlDito.combacia}`);
 await p.close();
 
+// ------------------------------------------------------------------
+// E NEMMENO DENTRO UN CAMPO IN CUI SI SCRIVE
+// Sui tasti l'anello col dito non compare gia' da se': i browser il
+// «:focus-visible» non lo fanno scattare per un clic. Sui campi di testo si',
+// sempre - perche' subito dopo si digita - e il risultato era un riquadro
+// nero attorno al campo dell'incasso ogni volta che lo si toccava per
+// scriverci dentro. Qui si tocca per davvero e si guarda.
+// ------------------------------------------------------------------
+console.log('\n--- IL CAMPO DELL\'INCASSO, TOCCATO COL DITO ---');
+const q = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT',
+                            hasTouch: true, isMobile: true });
+q.on('dialog', d => d.accept());
+await q.goto(APP);
+await q.evaluate(() => localStorage.clear());
+await q.goto(APP);
+await q.waitForFunction(() => typeof window.switchTab === 'function');
+await q.evaluate(AIUTI);
+await q.evaluate(() => { window.__semina(); switchTab('giornata'); renderContent(); });
+await q.waitForTimeout(300);
+
+await q.tap('#corsa-lampo');
+await q.waitForTimeout(200);
+const colDito = await q.evaluate(() => {
+  const e = document.getElementById('corsa-lampo');
+  const st = getComputedStyle(e);
+  const riga = getComputedStyle(e.parentElement);
+  return {
+    aFuoco: document.activeElement === e,
+    spessore: parseFloat(st.outlineWidth), stile: st.outlineStyle,
+    rigaColore: riga.borderBottomColor, rigaSpessore: parseFloat(riga.borderBottomWidth)
+  };
+});
+ok(colDito.aFuoco, 'toccando il campo ci si scrive dentro');
+ok(colDito.spessore === 0 || colDito.stile === 'none', 'e il riquadro nero non esce',
+   `${colDito.spessore}px ${colDito.stile}`);
+// Spento l'anello, qualcosa deve comunque dire che quel campo e' quello
+// attivo: la riga verde sotto. Senza, si sarebbe solo tolto un segnale.
+const verde = (colDito.rigaColore.match(/\d+/g) || []).map(Number);
+ok(colDito.rigaSpessore >= 2 && verde[1] > verde[0] && verde[1] > verde[2],
+   'ma la riga sotto il campo diventa verde', `${colDito.rigaColore} ${colDito.rigaSpessore}px`);
+
+// col Tab l'anello torna
+await q.keyboard.press('Tab');
+await q.waitForTimeout(200);
+const colTab = await q.evaluate(() => {
+  const e = document.activeElement;
+  const st = getComputedStyle(e);
+  return { chi: e.tagName.toLowerCase(), spessore: parseFloat(st.outlineWidth), stile: st.outlineStyle };
+});
+ok(colTab.spessore >= 2 && colTab.stile === 'solid', 'col Tab l\'anello torna subito',
+   `${colTab.chi}: ${colTab.spessore}px ${colTab.stile}`);
+
+// e toccando di nuovo si rispegne
+await q.tap('#corsa-lampo');
+await q.waitForTimeout(200);
+const ancora = await q.evaluate(() => {
+  const st = getComputedStyle(document.getElementById('corsa-lampo'));
+  return { spessore: parseFloat(st.outlineWidth), stile: st.outlineStyle };
+});
+ok(ancora.spessore === 0 || ancora.stile === 'none', 'e tornando col dito si rispegne',
+   `${ancora.spessore}px ${ancora.stile}`);
+
+// lo stesso nel modulo della spesa, dove i campi hanno l'alone loro
+await q.evaluate(() => { switchTab('uscite'); window.showUscitaForm = true; renderContent(); });
+await q.waitForTimeout(300);
+await q.tap('#uscita-imp');
+await q.waitForTimeout(200);
+const spesa = await q.evaluate(() => {
+  const e = document.getElementById('uscita-imp');
+  const st = getComputedStyle(e);
+  return { aFuoco: document.activeElement === e, spessore: parseFloat(st.outlineWidth),
+           stile: st.outlineStyle, alone: st.boxShadow };
+});
+ok(spesa.aFuoco, 'nel modulo della spesa si scrive l\'importo');
+ok(spesa.spessore === 0 || spesa.stile === 'none', 'senza riquadro nero',
+   `${spesa.spessore}px ${spesa.stile}`);
+ok(spesa.alone && spesa.alone !== 'none', 'ma con l\'alone colorato che il campo ha sempre avuto',
+   String(spesa.alone).slice(0, 48));
+await q.close();
+
 await b.close();
 console.log(`\n  ${guai === 0 ? 'tutto a posto' : guai + ' controlli falliti'}`);
 process.exit(guai ? 1 : 0);

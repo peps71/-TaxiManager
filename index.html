@@ -290,6 +290,29 @@
             border-radius: 0.5rem;
         }
 
+        /* COL DITO L'ANELLO NON SERVE, E DA' FASTIDIO
+           Toccando il campo dell'incasso per scriverci dentro usciva un
+           riquadro nero attorno al campo. E' l'anello della v167, e sulla
+           tastiera ha tutto il senso del mondo: chi gira l'app col Tab non ha
+           nessun altro modo di sapere dove e' finito.
+           Col dito no. Il cursore lampeggia gia' dentro al campo, la riga
+           verde sotto dice che e' quello attivo, e in mezzo a una corsa un
+           rettangolo nero di tre punti e' solo una cosa in piu' da guardare
+           mentre si batte un numero.
+           I browser l'anello sui campi di testo lo accendono sempre, anche
+           quando ci si arriva col dito: «:focus-visible» su un campo in cui
+           si scrive combacia comunque, perche' subito dopo si digita. La
+           differenza la fa l'app, tenendo da conto come ci si e' arrivati -
+           vedi l'ascoltatore del pointerdown in fondo alla pagina.
+           Riguarda solo i campi in cui si scrive e il campo data: sui tasti
+           l'anello col dito non compare gia' adesso, e li' non cambia niente. */
+        :root[data-dito] input:focus-visible,
+        :root[data-dito] textarea:focus-visible,
+        :root[data-dito] select:focus-visible,
+        :root[data-dito] :has(> .data-coperta:focus) {
+            outline: none;
+        }
+
         /* ============================================================
            QUANDO IL DITO PREME, QUALCOSA SI MUOVE
            Fino alla v157 nell'app non c'era un solo punto che reagisse al
@@ -1955,7 +1978,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 170;
+        const VERSIONE_APP = 171;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -15197,6 +15220,24 @@
         // non fa niente e non costa niente (passive: non trattiene lo
         // scorrimento): serve solo a dire a Safari che qui il tocco conta.
         document.addEventListener('touchstart', function () {}, { passive: true });
+
+        // COME SI E' ARRIVATI SUL CAMPO: COL DITO O COL TASTO TAB
+        // L'anello del fuoco serve alla tastiera e da' fastidio al dito (vedi
+        // la regola «:root[data-dito]» nel foglio di stile). Qui si segna
+        // quale dei due e' stato l'ultimo.
+        // Il pointerdown arriva PRIMA che il campo prenda il fuoco: cosi'
+        // l'anello non fa nemmeno in tempo a comparire. In cattura, perche'
+        // un modulo che ferma l'evento per conto suo non deve poter spegnere
+        // questo conto.
+        // Si riaccende col Tab e basta: le frecce, dentro un campo di testo,
+        // muovono il cursore e non il fuoco - riaccendere l'anello mentre si
+        // corregge un numero sarebbe lo stesso fastidio di prima.
+        document.addEventListener('pointerdown', function () {
+            document.documentElement.setAttribute('data-dito', 'si');
+        }, { passive: true, capture: true });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Tab') document.documentElement.removeAttribute('data-dito');
+        }, { capture: true });
 
         window.onload = function() {
             renderNav();

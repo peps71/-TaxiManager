@@ -2,7 +2,7 @@
    Cambia il numero di VERSIONE ogni volta che aggiorni l'app:
    è così che il telefono capisce che deve scaricare la versione nuova. */
 
-const VERSIONE = 'taximanager-v170';
+const VERSIONE = 'taximanager-v171';
 
 // File dell'app da tenere sempre disponibili offline
 const FILE_APP = [
