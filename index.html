@@ -1978,7 +1978,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 172;
+        const VERSIONE_APP = 173;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -2182,6 +2182,10 @@
         window.kmFineDraft = null;
         // Categoria di spesa aperta nel riepilogo mensile (null = tutte chiuse)
         window.catSpesaAperta = null;
+        // La giornata in cui il registro e' stato sbloccato a mano. E' una data,
+        // non un interruttore: domani quella data non e' piu' oggi e il registro
+        // si richiude da solo, senza nessun orologio da guardare.
+        window.sbloccoGiornata = localStorage.getItem('taxi_sblocco_giornata') || '';
         // Il turno per cui l'avviso della manutenzione e' stato messo da parte:
         // al turno dopo ricompare, perche' l'intervento e' ancora da fare.
         window.manutenzioneRimandata = localStorage.getItem('taxi_manutenzione_rimandata') || '';
@@ -8544,11 +8548,17 @@
                     </div>
                 </details>`;
 
-            return { corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo };
+            // Senza filtro giorno si sta guardando tutto l'anno, ma quello che
+            // si registra va su oggi: e' quella la giornata che il registro
+            // apre o chiude.
+            const giornoReg = giorno || oggiISO();
+            const aperto = registroAperto(giornoReg);
+
+            return { aperto, corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, giornoReg, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo };
         }
 
         function renderSezioneGiornate() {
-            const { corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo } = datiSezioneGiornate();
+            const { aperto, corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, giornoReg, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo } = datiSezioneGiornate();
             return `
                 <div class="fade-in space-y-5 max-w-7xl mx-auto">
                     ${avvisoProfilo()}
@@ -8651,6 +8661,8 @@
                         </div>
                     </div>
 
+                    ${strisciaSbloccata(giornoReg)}
+
                     ${riposoDelGiorno ? `
                         <div class="riquadro-tinto tinta-gialla rounded-xl p-4">
                             <p class="text-sm font-black text-gray-900">${esc(riposoDelGiorno.turno)}: qui non si registrano corse</p>
@@ -8661,17 +8673,17 @@
                             </p>
                             <button onclick="apriNelCalendario('${giorno}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Apri nel calendario</button>
                         </div>
-                        ${window.mostraSpesaLampo ? '' : `
+                        ${!aperto ? riquadroTurnoChiuso(giornoReg) : (window.mostraSpesaLampo ? '' : `
                         <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                             Aggiungi spesa
                         </button>
-                        <p class="text-xs text-gray-400">Le corse no, ma le spese sì: in un giorno di riposo l'auto costa come sempre.</p>`}
-                    ` : (window.mostraSpesaLampo ? '' : corsaLampoHTML(metodo))}
+                        <p class="text-xs text-gray-400">Le corse no, ma le spese sì: in un giorno di riposo l'auto costa come sempre.</p>`)}
+                    ` : (!aperto ? riquadroTurnoChiuso(giornoReg) : (window.mostraSpesaLampo ? '' : corsaLampoHTML(metodo)))}
 
-                    ${window.showCorsaForm && !riposoDelGiorno ? moduloCorsa(giorno, metodo) : ''}
+                    ${window.showCorsaForm && !riposoDelGiorno && aperto ? moduloCorsa(giorno, metodo) : ''}
 
-                    ${window.mostraSpesaLampo ? spesaLampoHTML(giorno, metodo) : ''}
+                    ${window.mostraSpesaLampo && aperto ? spesaLampoHTML(giorno, metodo) : ''}
 
                     ${pannelloFiltri()}
 
@@ -9207,6 +9219,11 @@
         function apriSpesaManutenzione(slug) {
             window.manutenzioneDaRegistrare = String(slug || '');
             window.showUscitaForm = true;
+            // Premere questo tasto e' gia' dire «voglio registrarlo»: se il
+            // turno nel frattempo si e' chiuso, la giornata si sblocca da se'.
+            // Mandare in una schermata dove il modulo non c'e' sarebbe un
+            // tasto che non fa niente.
+            if (!registroAperto()) sbloccaGiornata(oggiISO());
             switchTab('uscite');
             portaInVista('uscita-imp');
         }
@@ -9465,12 +9482,15 @@
                             <h2 class="titolo-schermata font-black text-gray-900 tracking-tight">Registro spese</h2>
                             <p class="text-gray-500 text-[13px] font-medium mt-0.5">Carburante, manutenzione e ogni altra uscita.</p>
                         </div>
-                        <button onclick="toggleUscitaForm()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm">
-                            ${window.showUscitaForm ? 'Annulla' : '+ Nuova Spesa'}
-                        </button>
+                        ${registroAperto() ? `
+                            <button onclick="toggleUscitaForm()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm">
+                                ${window.showUscitaForm ? 'Annulla' : '+ Nuova Spesa'}
+                            </button>` : ''}
                     </header>
 
-                    ${window.showUscitaForm ? moduloUscitaHTML() : ''}
+                    ${registroAperto() ? strisciaSbloccata(oggiISO()) : riquadroTurnoChiuso(oggiISO())}
+
+                    ${window.showUscitaForm && registroAperto() ? moduloUscitaHTML() : ''}
 
                     <!-- Barra Filtri e Totale -->
                     <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-4">
@@ -11337,6 +11357,105 @@
             if (!iso) return null;
             const t = (window.shifts || []).find(x => String(x.data) === String(iso));
             return isRiposo(t) ? t : null;
+        }
+
+        // ============================================================
+        //  IL REGISTRO SI APRE COL TURNO E SI CHIUDE CON LUI
+        //  Una corsa registrata quando il turno e' gia' finito quasi sempre
+        //  e' un tocco per sbaglio: il telefono sta in tasca, l'app resta
+        //  aperta sulla schermata di prima, e un dito sul vetro vale quanto
+        //  una corsa vera. In fondo al mese quella corsa non si distingue
+        //  piu' dalle altre.
+        //  Quindi: corse e spese si registrano mentre un turno e' in corso.
+        //  Fuori dal turno il registro e' fermo, e si apre a mano - un tasto
+        //  solo, che sblocca QUELLA giornata e si richiude da se' a
+        //  mezzanotte, perche' e' il giorno a fare da chiave.
+        //  Il modulo del turno non si blocca mai: e' la via per riaprire.
+        // ============================================================
+
+        // Il turno in corso adesso, qualunque giorno porti scritto. Un turno di
+        // notte cominciato ieri alle 23 e' ancora quello di adesso: guardare
+        // solo i turni di oggi lo avrebbe lasciato fuori, e il registro
+        // sarebbe rimasto chiuso proprio mentre si lavora.
+        function turnoVivoAdesso() {
+            return memo('turnoVivo', () => {
+                const ieri = spostaGiorno(oggiISO(), -1);
+                return turnoInCorso((window.shifts || []).filter(t => String(t.data || '') >= ieri));
+            });
+        }
+
+        function giornataSbloccata() {
+            return String(window.sbloccoGiornata || '');
+        }
+
+        // Il registro accetta roba nuova in questa giornata?
+        function registroAperto(giorno) {
+            const g = String(giorno || oggiISO());
+            if (giornataSbloccata() === g) return true;
+            const vivo = turnoVivoAdesso();
+            if (!vivo) return false;
+            // Il turno in corso apre la sua giornata e quella di oggi: con un
+            // turno a cavallo di mezzanotte sono due giorni diversi, e una
+            // corsa delle due di notte puo' stare su tutti e due.
+            return g === oggiISO() || String(vivo.data) === g;
+        }
+
+        // Il modulo del turno vive nel Calendario, che e' l'altra meta' della
+        // schermata Giornate: accenderlo e restare qui vorrebbe dire premere un
+        // tasto e non vedere succedere niente.
+        function vaiARegistrareIlTurno() {
+            ricordaVista('calendario');
+            window.showShiftForm = true;
+            window.showCorsaForm = false;
+            switchTab('giornata');
+            portaInVista('sh-data');
+        }
+
+        function sbloccaGiornata(giorno) {
+            window.sbloccoGiornata = String(giorno || oggiISO());
+            try { localStorage.setItem('taxi_sblocco_giornata', window.sbloccoGiornata); }
+            catch (err) { /* spazio esaurito: pazienza */ }
+            renderContent();
+        }
+
+        function richiudiGiornata() {
+            window.sbloccoGiornata = '';
+            try { localStorage.removeItem('taxi_sblocco_giornata'); }
+            catch (err) { /* spazio esaurito: pazienza */ }
+            renderContent();
+        }
+
+        // Il riquadro che prende il posto dei tasti quando il registro e' fermo.
+        function riquadroTurnoChiuso(giorno) {
+            const g = String(giorno || oggiISO());
+            const suOggi = g === oggiISO();
+            const turnoDelGiorno = (window.shifts || []).some(t => String(t.data) === g && !isRiposo(t));
+            return `
+                <div class="riquadro-tinto tinta-gialla chiama rounded-xl p-4 no-print">
+                    <p class="text-sm font-black text-gray-900">${turnoDelGiorno ? 'Turno chiuso' : 'Turno non ancora aperto'}: il registro è fermo</p>
+                    <p class="text-xs text-gray-600 mt-1 leading-relaxed">
+                        ${turnoDelGiorno
+                            ? 'Corse e spese si registrano mentre il turno è in corso. Questo è finito.'
+                            : (suOggi
+                                ? 'Corse e spese si registrano mentre il turno è in corso. Registra il turno e il registro si apre da sé.'
+                                : 'In questa giornata non c\'è nessun turno in corso.')}
+                        Se devi segnare qualcosa lo stesso, sblocca la giornata: resta aperta fino a mezzanotte.
+                    </p>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        ${!turnoDelGiorno && suOggi ? `<button onclick="vaiARegistrareIlTurno()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2.5 px-4 rounded-xl text-sm">Registra il turno</button>` : ''}
+                        <button onclick="sbloccaGiornata('${escJs(g)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 px-4 rounded-xl text-sm">Sblocca la giornata</button>
+                    </div>
+                </div>`;
+        }
+
+        // La riga che ricorda che si sta scrivendo a registro sbloccato.
+        function strisciaSbloccata(giorno) {
+            if (giornataSbloccata() !== String(giorno || oggiISO())) return '';
+            return `
+                <div class="riquadro-tinto tinta-arancio rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 no-print">
+                    <p class="text-xs font-bold text-gray-700">Giornata sbloccata: il registro accetta corse e spese fino a mezzanotte.</p>
+                    <button onclick="richiudiGiornata()" class="text-xs font-black text-gray-600 hover:text-gray-900 underline underline-offset-2 shrink-0">Richiudi</button>
+                </div>`;
         }
 
         // Dal registro corse al calendario, aperto su quella giornata: e' da li'

@@ -55,6 +55,7 @@ titolo "ore del turno";           giro testOreTurno.mjs
 titolo "navigazione da tastiera"; giro testTastiera.mjs
 titolo "il tasto Oggi";           giro testOggi.mjs
 titolo "manutenzione programmata"; giro testManutenzione.mjs
+titolo "registro a turno chiuso"; giro testTurnoChiuso.mjs
 titolo "disegni accodati";        giro testDisegni.mjs
 titolo "si installa come app";    giro installabile.mjs
 titolo "service worker";          giro testSW.mjs

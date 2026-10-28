@@ -99,6 +99,68 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il registro si apre col turno e si chiude con lui (versione 173)
+
+Una corsa registrata a turno finito quasi sempre è un tocco per sbaglio: il telefono in
+tasca, l'app rimasta aperta sulla schermata di prima, e un dito sul vetro vale quanto una
+corsa vera. In fondo al mese quella corsa non si distingue più dalle altre.
+
+Adesso **corse e spese si registrano mentre un turno è in corso**. Fuori dal turno, al
+posto del campo dell'incasso e del tasto della spesa c'è un riquadro che lo dice — «Turno
+chiuso: il registro è fermo», oppure «Turno non ancora aperto» se il turno di oggi non è
+stato ancora registrato — con i tasti per uscirne.
+
+### Come si riapre
+
+Due strade, tutt'e due dentro quel riquadro:
+
+- **Registra il turno**, quando semplicemente non l'hai ancora aperto. Porta dritto al
+  modulo del turno, che vive nel Calendario: accenderlo restando in «Giornate» sarebbe
+  stato un tasto che non fa niente — e infatti la prima versione faceva proprio così,
+  finché la prova non l'ha bocciata.
+- **Sblocca la giornata**, quando devi segnare qualcosa lo stesso. Da quel momento una
+  riga arancione ricorda che stai scrivendo a registro sbloccato, con un «Richiudi» per
+  rimetterlo a posto subito.
+
+Lo sblocco **è una data, non un interruttore**: vale per quella giornata e basta, quindi
+a mezzanotte si richiude da sé senza nessun orologio da guardare. Vale anche per i giorni
+passati: se sfogli una giornata di un mese fa, per aggiungerci qualcosa la sblocchi come
+le altre.
+
+### Quello che non si blocca
+
+- **Il modulo del turno**, mai: è la via per riaprire il registro.
+- **Quello che è già registrato**: una corsa o una spesa si corregge e si cancella anche
+  a turno chiuso. Il blocco è sull'inserire, non sul rimettere a posto.
+- **Il turno di notte**: cominciato ieri alle 23 e ancora in corso stamattina, tiene
+  aperte tutt'e due le giornate — quella del turno e oggi. Guardare solo i turni che
+  portano la data di oggi avrebbe chiuso il registro proprio mentre si lavora.
+- **«Registra l'intervento»** dell'avviso manutenzione: premerlo è già dire «voglio
+  registrarlo», quindi sblocca la giornata da sé. Mandare in una schermata dove il modulo
+  non c'è sarebbe un tasto che non fa niente.
+
+Il giorno di riposo tiene la sua regola di sempre: le corse non si registrano comunque,
+nemmeno a registro sbloccato.
+
+### Le prove
+
+`prove/testTurnoChiuso.mjs`, 64 misure. I turni si costruiscono attorno all'orologio di
+adesso: una prova che vale solo alle dieci di mattina non è una prova.
+
+- Senza turno e a turno finito il registro è fermo, con il riquadro al posto dei tasti;
+  col turno in corso la corsa si registra davvero.
+- «Sblocca la giornata» apre, la riga arancione compare, «Richiudi» rimette a posto, e lo
+  sblocco di ieri oggi non vale più.
+- Il turno di notte datato ieri tiene aperte tutt'e due le giornate (la prova ferma
+  l'orologio del browser alle sette e mezza per poterlo vedere).
+- Nel Registro spese sparisce anche il tasto «+ Nuova Spesa», e torna sbloccando.
+- L'avviso della manutenzione apre la porta da sé e il modulo arriva con l'intervento già
+  scelto.
+- Il giorno di riposo: niente corse nemmeno sbloccato.
+- Quello che è già registrato si apre, si corregge e si cancella.
+- Il disegno a 320, 390, 768 e 1280 punti, tasti da 44, e il contrasto nei due temi
+  (17,7:1 e 15,2:1 sul titolo).
+
 ## «Ultima volta a (km)» faceva vedere il numero sbagliato (versione 172)
 
 Fatto il tagliando, la spesa si registra con il contachilometri del giorno. Se quella

@@ -47,6 +47,12 @@ await p.waitForFunction(() => typeof window.switchTab === 'function');
 await p.evaluate(() => {
   window.dailyRecords = []; window.shifts = [];
   window.annoScelto = String(new Date().getFullYear());
+  // Dalla v173 il registro si apre col turno, e senza moduli non c'e' niente
+  // da annullare. Qui i turni non c'entrano - si provano le vie d'uscita - e
+  // tenerne uno in archivio sballerebbe i conti di questa prova, che guarda
+  // proprio quanti movimenti e quanti turni restano. Si passa dall'altra
+  // porta: la giornata sbloccata a mano.
+  window.sbloccoGiornata = oggiISO();
   switchTab('giornata'); renderContent();
 });
 
