@@ -1978,7 +1978,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 173;
+        const VERSIONE_APP = 174;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -8864,14 +8864,14 @@
 
             const ore = calcolaOreTurno(iso, preset.inizio, preset.fine, preset.pausaInizio, preset.pausaFine);
             // I km restano da compilare: si aggiungono dall'elenco turni quando si sanno
-            window.saveShiftToCloud({
+            window.saveShiftToCloud(conPausaDelPreset({
                 id: nuovoId(),
                 data: iso, inizio: preset.inizio, fine: preset.fine,
                 turno: preset.label,
                 lavorato: true,
                 kmInizio: null, kmFine: null,
                 ore, kmTot: null
-            });
+            }, preset));
             window.giornoCalendarioAperto = null;
             showToast(`${preset.label} registrato per il ${ggMm(iso)}.`);
             renderContent();
@@ -11338,6 +11338,48 @@
             return !!t && t.lavorato === false;
         }
 
+        // ============================================================
+        //  LA PAUSA DELLO SPEZZATO ANDAVA SCRITTA SUL TURNO
+        //  Il modello dello Spezzato la pausa ce l'ha - 13:00-15:00 - e al
+        //  salvataggio serviva per calcolare le dodici ore. Poi pero' il turno
+        //  finiva in archivio senza: data, inizio, fine, ore, km. La pausa
+        //  restava nel modello.
+        //  Finche' le ore servivano solo a fare le somme non si vedeva. Dalla
+        //  v166, pero', il turno si chiude quando le ore lavorate raggiungono
+        //  quelle dichiarate - e senza la pausa da togliere il conto correva
+        //  due ore avanti: lo Spezzato si chiudeva da solo alle 19:30 invece
+        //  che alle 21:30, e per tutto il pomeriggio il €/h era calcolato su
+        //  due ore di lavoro che non c'erano state.
+        //  Adesso la pausa si scrive sul turno. Per i turni gia' registrati -
+        //  compreso quello di oggi - si va a ripescarla dal modello, ma solo
+        //  se gli orari sono ancora quelli: se li hai cambiati a mano quella
+        //  pausa non vale piu', e inventarla sarebbe peggio che non averla.
+        // ============================================================
+        function presetDiNome(nome) {
+            const n = String(nome || '').trim();
+            if (!n) return null;
+            const chiave = Object.keys(SHIFT_PRESETS).find(k => SHIFT_PRESETS[k].label === n);
+            return chiave ? SHIFT_PRESETS[chiave] : null;
+        }
+
+        function pausaDelTurno(t) {
+            if (!t) return null;
+            if (t.pausaInizio && t.pausaFine) return { inizio: t.pausaInizio, fine: t.pausaFine };
+            const preset = presetDiNome(t.turno);
+            if (!preset || !preset.pausaInizio || !preset.pausaFine) return null;
+            if (t.inizio !== preset.inizio || t.fine !== preset.fine) return null;
+            return { inizio: preset.pausaInizio, fine: preset.pausaFine };
+        }
+
+        // La pausa del modello si copia sul turno che si sta registrando.
+        function conPausaDelPreset(turno, preset) {
+            if (preset && preset.pausaInizio && preset.pausaFine) {
+                turno.pausaInizio = preset.pausaInizio;
+                turno.pausaFine = preset.pausaFine;
+            }
+            return turno;
+        }
+
         // Il nome del turno senza gli orari fra parentesi, e gli orari veri presi
         // dal turno registrato. Cosi' si vedono anche quando l'orario e' stato
         // scelto a mano («Personalizzato», che nel nome non li porta) o corretto
@@ -11527,10 +11569,10 @@
             let ore = (ora - inizio) / 3600000;
             // La pausa dello Spezzato si toglie solo quando e' gia' passata:
             // mentre la si sta facendo il conto si ferma all'inizio della pausa.
-            const preset = t.pausaInizio && t.pausaFine ? t : null;
-            if (preset) {
-                const pIni = new Date(`${t.data}T${t.pausaInizio}`);
-                let pFin = new Date(`${t.data}T${t.pausaFine}`);
+            const pausa = pausaDelTurno(t);
+            if (pausa) {
+                const pIni = new Date(`${t.data}T${pausa.inizio}`);
+                let pFin = new Date(`${t.data}T${pausa.fine}`);
                 if (pFin <= pIni) pFin.setDate(pFin.getDate() + 1);
                 if (ora >= pFin) ore -= (pFin - pIni) / 3600000;
                 else if (ora > pIni) ore = (pIni - inizio) / 3600000;
@@ -12190,14 +12232,14 @@
             }
             const ore = !isNaN(oreInserite) ? oreInserite : calcolaOreTurno(data, inizio, fine, preset.pausaInizio, preset.pausaFine);
 
-            const shift = {
+            const shift = conPausaDelPreset({
                 id: nuovoId(),
                 data, inizio, fine,
                 turno: preset.label,
                 kmInizio, kmFine,
                 ore: parseFloat(ore.toFixed(1)),
                 kmTot: (kmInizio !== null && kmFine !== null) ? kmFine - kmInizio : null
-            };
+            }, tipo === 'custom' ? null : preset);
 
             window.saveShiftToCloud(shift);
             window.showShiftForm = false;

@@ -99,6 +99,48 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La pausa dello Spezzato non era scritta da nessuna parte (versione 174)
+
+Lo Spezzato va dalle 7:30 alle 13, due ore di pausa, e riprende dalle 15 alle 21:30:
+dodici ore lavorate in quattordici di finestra. Il **modello** del turno la pausa ce
+l'aveva, e al salvataggio serviva per calcolare le dodici ore. Ma il turno finiva in
+archivio senza: data, inizio, fine, ore, km. La pausa restava nel modello.
+
+Finché le ore servivano solo a fare le somme non si vedeva. Dalla versione 166, però, il
+turno si chiude quando le ore lavorate raggiungono quelle dichiarate — e senza quelle due
+ore da togliere il conto correva avanti: **lo Spezzato si chiudeva da solo alle 19:30
+invece che alle 21:30**. Con la versione 173, che ferma il registro a turno chiuso, il
+difetto è diventato visibile: «Turno chiuso: il registro è fermo» alle 19:36, in mezzo al
+turno.
+
+E c'era un secondo effetto, più silenzioso: per tutto il pomeriggio il €/h girava su due
+ore di lavoro che non c'erano state. Alle 19:36 con 300 € incassati diceva 24,79 €/h
+invece di 29,70.
+
+### Due mosse
+
+1. **La pausa si scrive sul turno**, sia registrandolo dal modulo sia col tocco dal
+   calendario. È un dato di quella giornata, non del modello.
+2. **Per i turni già registrati** — compreso quello in corso oggi — la pausa si va a
+   ripescare dal modello, riconoscendolo dal nome del turno. Ma solo se **gli orari sono
+   ancora quelli del modello**: se li hai cambiati a mano quella pausa non vale più, e
+   inventarla sarebbe peggio che non averla.
+
+### Le prove
+
+`prove/testSpezzato.mjs`, 31 misure, che camminano lungo la giornata con l'orologio del
+browser fermato ora per ora:
+
+- alle 7:00 non è ancora cominciato, alle 7:30 comincia, alle 12:59 cinque ore e mezza;
+- **dentro la pausa il conto sta fermo** a cinque e mezza, dalle 13 alle 15;
+- alle 15:30 riparte, alle 19:36 dieci ore e sei minuti — e il turno è aperto;
+- alle 21:29 ci siamo quasi, alle 21:30 si chiude, alle 22:00 resta chiuso;
+- il €/h alle 19:36 fa 29,70 e non 24,79, e il registro delle corse resta aperto;
+- un turno nuovo porta la pausa scritta, su disco, sia dal modulo sia dal calendario;
+- quello che non cambia: «Le otto» (che pause non ne ha), un riposo, una pausa scritta a
+  mano sul turno che comanda su quella del modello, e gli orari cambiati a mano, dove la
+  pausa del modello **non** si applica.
+
 ## Il registro si apre col turno e si chiude con lui (versione 173)
 
 Una corsa registrata a turno finito quasi sempre è un tocco per sbaglio: il telefono in
