@@ -2535,52 +2535,65 @@
         };
         window.esciDalCloud = function() {};
 
+        // Anche qui ogni modifica lascia il suo segno nel registro delle
+        // modifiche in attesa (vedi LE MODIFICHE NON ANCORA CONFERMATE): un
+        // telefono gia' entrato nel Cloud che si apre senza campo deve
+        // ricordarsi cosa mandare quando il Cloud torna raggiungibile.
         window.saveRecordToCloud = function(record) {
             window.dailyRecords.unshift(record);
             window.dailyRecords.sort(perDataDecrescente);
             scriviLocale('taxi_records', window.dailyRecords);
+            segnaSospeso('taxi_records', record && record.id, 's');
         };
 
         window.saveShiftToCloud = function(shift) {
             window.shifts.unshift(shift);
             window.shifts.sort(perDataDecrescente);
             scriviLocale('taxi_shifts', window.shifts);
+            segnaSospeso('taxi_shifts', shift && shift.id, 's');
         };
 
         window.deleteRecordFromCloud = function(id) {
             window.dailyRecords = (window.dailyRecords || []).filter(r => String(r.id) !== String(id));
             scriviLocale('taxi_records', window.dailyRecords);
+            segnaSospeso('taxi_records', id, 'd');
         };
 
         window.deleteRecordsFromCloud = async function(ids) {
             const insieme = new Set((ids || []).map(String));
             window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
             scriviLocale('taxi_records', window.dailyRecords);
+            segnaSospesi('taxi_records', Array.from(insieme), 'd');
         };
 
         window.deleteShiftFromCloud = function(id) {
             window.shifts = (window.shifts || []).filter(x => String(x.id) !== String(id));
             scriviLocale('taxi_shifts', window.shifts);
+            segnaSospeso('taxi_shifts', id, 'd');
         };
 
         // Scadenze e veicoli sono gia' scritti in locale dalle rispettive
-        // salvaScadenze() / salvaVeicoli(): qui non serve altro
-        window.saveScadenzaToCloud = function() {};
-        window.deleteScadenzaFromCloud = function() {};
-        window.saveVersamentoToCloud = function() {};
-        window.deleteVersamentoFromCloud = function() {};
-        window.saveNotaToCloud = function() {};
-        window.deleteNotaFromCloud = function() {};
-        // Senza Cloud le foto restano nel magazzino del telefono: niente da
-        // caricare, e da leggere c'e' solo quello (vedi fotoDaId).
+        // salvaScadenze() / salvaVeicoli(): qui resta solo il segno
+        window.saveScadenzaToCloud = function(x) { segnaSospeso('taxi_scadenze', x && x.id, 's'); };
+        window.deleteScadenzaFromCloud = function(id) { segnaSospeso('taxi_scadenze', id, 'd'); };
+        window.saveVersamentoToCloud = function(x) { segnaSospeso('taxi_versamenti', x && x.id, 's'); };
+        window.deleteVersamentoFromCloud = function(id) { segnaSospeso('taxi_versamenti', id, 'd'); };
+        window.saveNotaToCloud = function(x) { segnaSospeso('taxi_note', x && x.id, 's'); };
+        window.deleteNotaFromCloud = function(id) { segnaSospeso('taxi_note', id, 'd'); };
+        // Profilo e impostazioni fiscali: i campi cambiati li segna chi salva
+        // (segnaCampiCambiati), perche' solo lui sa com'erano prima.
+        window.saveProfiloToCloud = function() {};
         window.saveFiscaliToCloud = function() {};
+        // Senza Cloud le foto restano nel magazzino del telefono: niente da
+        // caricare, e da leggere c'e' solo quello (vedi fotoDaId). Le foto
+        // non passano dal registro: viaggiano a parte, come prima.
         window.saveFotoToCloud = function() {};
         window.deleteFotoFromCloud = function() {};
         window.leggiFotoDalCloud = function() { return Promise.resolve(null); };
-        window.saveVeicoloToCloud = function() {};
-        window.deleteVeicoloFromCloud = function() {};
-        window.saveVoceFissaToCloud = function() {};
-        window.deleteVoceFissaFromCloud = function() {};
+        window.saveVeicoloToCloud = function(x) { segnaSospeso('taxi_veicoli', x && x.id, 's'); };
+        window.deleteVeicoloFromCloud = function(id) { segnaSospeso('taxi_veicoli', id, 'd'); };
+        window.saveVoceFissaToCloud = function(x) { segnaSospeso('taxi_voci_fisse', x && x.slug, 's'); };
+        window.deleteVoceFissaFromCloud = function(slug) { segnaSospeso('taxi_voci_fisse', slug, 'd'); };
 
         window.bulkSave = async function(newRecords, newShifts) {
             const unisci = (esistenti, nuovi) => {
@@ -2593,10 +2606,16 @@
             window.shifts = unisci(window.shifts, newShifts);
             scriviLocale('taxi_records', window.dailyRecords);
             scriviLocale('taxi_shifts', window.shifts);
+            segnaSospesi('taxi_records', (newRecords || []).map(x => x && x.id), 's');
+            segnaSospesi('taxi_shifts', (newShifts || []).map(x => x && x.id), 's');
             return { cloud: false };
         };
 
         window.wipeAllData = async function() {
+            // Prima il segno, poi l'azzeramento: gli identificativi servono
+            // per dire al Cloud cosa togliere quando tornera' raggiungibile.
+            segnaSospesi('taxi_records', (window.dailyRecords || []).map(x => x && x.id), 'd');
+            segnaSospesi('taxi_shifts', (window.shifts || []).map(x => x && x.id), 'd');
             window.dailyRecords = [];
             window.shifts = [];
             scriviLocale('taxi_records', []);
