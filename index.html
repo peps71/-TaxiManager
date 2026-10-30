@@ -2049,6 +2049,233 @@
         }
         window.scriviLocale = scriviLocale;
 
+        // ============================================================
+        //  LE MODIFICHE NON ANCORA CONFERMATE DAL CLOUD
+        //  Firestore tiene le scritture fatte senza campo solo nella memoria
+        //  della pagina: se iOS chiude l'app prima che torni la rete, se ne
+        //  vanno. E alla riapertura l'elenco del server, che quella corsa non
+        //  l'ha mai vista, prendeva il posto dell'archivio del telefono: la
+        //  corsa spariva anche da qui. Provato col Firestore finto: corsa
+        //  battuta senza campo, app chiusa, riaperta con la rete - sparita.
+        //
+        //  Adesso ogni modifica lascia un segno in un registro sul disco
+        //  ('taxi_in_sospeso'), e il segno si toglie solo quando il server
+        //  ha confermato. Il registro tiene solo l'identificativo e cosa si e'
+        //  fatto ('s' scritto, 'd' cancellato) con un numero che cresce: il
+        //  contenuto si legge dall'archivio locale al momento dell'invio, e
+        //  il numero serve a togliere il segno solo se nel frattempo non e'
+        //  cambiato. Una voce per archivio e identificativo: vince l'ultima
+        //  operazione (scritta e poi cancellata = solo cancellata).
+        //
+        //  Forma: { v:1, uid, n, dal, per: { taxi_records: { "<id>": "s41" },
+        //  ..., profilo: { "<campo>": "s43" }, fiscali: { ... } } }.
+        //  Si segna solo su un telefono che e' gia' entrato almeno una volta
+        //  (uid non nullo): senza un account non c'e' nessun Cloud che debba
+        //  ricevere qualcosa. Si legge e si scrive sempre dal disco, mai da
+        //  una copia in memoria: sul Mac due finestre aperte lo condividono.
+        //  Il backup non lo contiene: e' lo stato della spedizione, non un
+        //  dato del lavoro.
+        // ============================================================
+        const CHIAVE_SOSPESI = 'taxi_in_sospeso';
+
+        function registroVuoto() {
+            return { v: 1, uid: null, n: 0, dal: null, per: {} };
+        }
+
+        function leggiSospesi() {
+            let r = null;
+            try { r = JSON.parse(localStorage.getItem(CHIAVE_SOSPESI) || 'null'); } catch (err) { r = null; }
+            if (!r || typeof r !== 'object' || Array.isArray(r)) return registroVuoto();
+            const pulito = registroVuoto();
+            pulito.uid = typeof r.uid === 'string' && r.uid ? r.uid : null;
+            pulito.n = Number.isFinite(r.n) && r.n > 0 ? Math.floor(r.n) : 0;
+            pulito.dal = typeof r.dal === 'string' ? r.dal : null;
+            if (r.per && typeof r.per === 'object') {
+                Object.keys(r.per).forEach(k => {
+                    const voci = r.per[k];
+                    if (!voci || typeof voci !== 'object') return;
+                    const buone = {};
+                    Object.keys(voci).forEach(id => {
+                        const val = voci[id];
+                        if (typeof val === 'string' && /^[sd]\d+$/.test(val)) buone[id] = val;
+                    });
+                    if (Object.keys(buone).length) pulito.per[k] = buone;
+                });
+            }
+            return pulito;
+        }
+
+        function contaSospesi(reg) {
+            const r = reg || leggiSospesi();
+            return Object.keys(r.per).reduce((a, k) => a + Object.keys(r.per[k]).length, 0);
+        }
+
+        function scriviSospesi(reg) {
+            Object.keys(reg.per).forEach(k => { if (!Object.keys(reg.per[k]).length) delete reg.per[k]; });
+            if (!Object.keys(reg.per).length) reg.dal = null;
+            return scriviLocale(CHIAVE_SOSPESI, reg);
+        }
+
+        // Segna una o piu' modifiche. op: 's' (scritto) o 'd' (cancellato).
+        // Restituisce false solo se il disco ha rifiutato la scrittura: chi
+        // sta per spedire tanta roba (la migrazione) deve saperlo prima.
+        function segnaSospesi(chiave, ids, op) {
+            const reg = leggiSospesi();
+            if (!reg.uid) return true;          // mai entrato: nessun Cloud da aggiornare
+            const elenco = (ids || []).filter(id => id !== undefined && id !== null && String(id) !== '');
+            if (!elenco.length) return true;
+            const voci = reg.per[chiave] || (reg.per[chiave] = {});
+            elenco.forEach(id => { reg.n++; voci[String(id)] = (op === 'd' ? 'd' : 's') + reg.n; });
+            if (!reg.dal) reg.dal = new Date().toISOString();
+            return scriviSospesi(reg);
+        }
+
+        function segnaSospeso(chiave, id, op) {
+            return segnaSospesi(chiave, [id], op);
+        }
+
+        // Toglie le voci confermate, ma solo se sono ancora quelle spedite: se
+        // nel frattempo la stessa corsa e' stata cambiata di nuovo, il numero
+        // e' diverso e la voce resta, per partire col contenuto nuovo.
+        // elenco: [[chiave, id, valore], ...]
+        function togliSospesi(elenco) {
+            if (!elenco || !elenco.length) return true;
+            const reg = leggiSospesi();
+            let cambiato = false;
+            elenco.forEach(([chiave, id, valore]) => {
+                const voci = reg.per[chiave];
+                if (voci && voci[String(id)] === valore) { delete voci[String(id)]; cambiato = true; }
+            });
+            return cambiato ? scriviSospesi(reg) : true;
+        }
+
+        // Profilo e impostazioni fiscali sono un documento solo: si segnano i
+        // campi cambiati, e sul Cloud partono solo quelli (unione per campo),
+        // cosi' un campo cambiato sul Mac e uno cambiato qui non si
+        // cancellano a vicenda. prima = null: tutti i campi.
+        function segnaCampiCambiati(chiave, prima, dopo) {
+            const a = prima && typeof prima === 'object' ? prima : null;
+            const b = dopo && typeof dopo === 'object' ? dopo : {};
+            const campi = Object.keys(Object.assign({}, a || {}, b)).filter(k =>
+                b[k] !== undefined && (!a || JSON.stringify(a[k]) !== JSON.stringify(b[k])));
+            return segnaSospesi(chiave, campi, 's');
+        }
+
+        // Dove sta, in memoria, ciascun archivio che si sincronizza.
+        const MEMORIA_SOSPESI = {
+            taxi_records: 'dailyRecords', taxi_shifts: 'shifts', taxi_scadenze: 'scadenze',
+            taxi_versamenti: 'versamenti', taxi_note: 'note', taxi_veicoli: 'veicoli',
+            taxi_voci_fisse: 'vociFisse'
+        };
+        const CAMPO_ID_SOSPESI = { taxi_voci_fisse: 'slug' };
+
+        // L'archivio locale per identificativo: prima il disco (l'ultima
+        // parola, anche se l'ha scritta l'altra finestra), poi la memoria per
+        // quello che il disco non ha (disco pieno). Copie pulite, senza
+        // undefined: e' quello che va sul Cloud.
+        function mappaLocaleSospesi(chiave) {
+            const campoId = CAMPO_ID_SOSPESI[chiave] || 'id';
+            const mappa = new Map();
+            const disco = leggiLocale(chiave, []);
+            if (Array.isArray(disco)) disco.forEach(x => { if (x && typeof x === 'object') mappa.set(String(x[campoId]), x); });
+            const mem = window[MEMORIA_SOSPESI[chiave]];
+            if (Array.isArray(mem)) mem.forEach(x => {
+                if (x && typeof x === 'object' && !mappa.has(String(x[campoId]))) {
+                    try { mappa.set(String(x[campoId]), JSON.parse(JSON.stringify(x))); } catch (err) { /* pazienza */ }
+                }
+            });
+            return mappa;
+        }
+
+        // ============================================================
+        //  L'UNIONE: QUELLO CHE ARRIVA DAL CLOUD PIU' QUELLO IN ATTESA
+        //  Un posto solo, chiamato da tutti gli ascolti. Senza voci in
+        //  attesa l'elenco del Cloud passa com'e' (il comportamento di
+        //  sempre). Con delle voci: dall'elenco del Cloud si tolgono le
+        //  cancellate qui e le scritte qui, e al posto di queste ultime si
+        //  mettono le versioni del telefono.
+        //  Scelta voluta: una modifica fatta qui senza campo vince su quella
+        //  del Mac allo stesso identificativo, anche su una cancellazione
+        //  fatta di la'. Meglio una riga in piu' da togliere a mano che una
+        //  corsa persa.
+        // ============================================================
+        function unisciConSospesi(chiave, campoId, dalCloud, locale) {
+            const voci = leggiSospesi().per[chiave];
+            const ids = voci ? Object.keys(voci) : [];
+            if (!ids.length) return dalCloud;
+            const cid = campoId || 'id';
+            const qui = new Map();
+            (locale || []).forEach(x => { if (x && typeof x === 'object') qui.set(String(x[cid]), x); });
+            let dalDisco = null;     // si legge solo se serve
+            const togli = new Set();
+            const aggiungi = [];
+            ids.forEach(id => {
+                if (voci[id][0] === 'd') { togli.add(id); return; }
+                let x = qui.get(id);
+                if (!x) {
+                    if (!dalDisco) dalDisco = mappaLocaleSospesi(chiave);
+                    x = dalDisco.get(id);
+                }
+                if (x) { togli.add(id); aggiungi.push(x); }
+            });
+            return (dalCloud || []).filter(x => !togli.has(String(x && x[cid]))).concat(aggiungi);
+        }
+
+        // La stessa cosa per un documento a campi (profilo, fiscali): sopra i
+        // dati del server, i campi cambiati qui e non ancora confermati.
+        function unisciCampiSospesi(chiave, dalCloud, locale) {
+            const voci = leggiSospesi().per[chiave];
+            const risultato = Object.assign({}, dalCloud || {});
+            if (!voci || !locale) return risultato;
+            Object.keys(voci).forEach(campo => {
+                if (voci[campo][0] === 's' && locale[campo] !== undefined) risultato[campo] = locale[campo];
+            });
+            return risultato;
+        }
+
+        // Chi e' appena entrato nel Cloud: si va avanti, si adotta l'account
+        // o si chiede? Il telefono ricorda l'ultimo account (uid) anche dopo
+        // l'uscita, perche' le modifiche segnate appartengono a quello.
+        //  - stesso account: si va avanti;
+        //  - nessun account ricordato e sessione ripresa da sola: e' un
+        //    telefono che arriva dalla v175, gia' collegato - lo si adotta
+        //    senza domande (e senza segnare niente: e' gia' tutto lassu');
+        //  - un altro account, o un accesso appena fatto su un telefono mai
+        //    collegato: se qui ci sono dati si chiede, se no si adotta.
+        function decidiAccount(uidNuovo, accessoAppenaFatto, ciSonoDati) {
+            const uid = leggiSospesi().uid;
+            if (uid && uid === uidNuovo) return 'procedi';
+            if (!uid && !accessoAppenaFatto) return 'adotta';
+            return ciSonoDati ? 'chiedi' : 'adotta';
+        }
+
+        function adottaAccount(uidNuovo) {
+            const reg = leggiSospesi();
+            reg.uid = uidNuovo || null;
+            return scriviSospesi(reg);
+        }
+
+        // Tutto quello che c'e' qui, segnato da spedire: per chi ha detto si'
+        // a portare i dati del telefono nell'account appena entrato. Le voci
+        // di budget, il profilo e le impostazioni fiscali restano fuori: su un
+        // telefono nuovo sono quasi sempre i valori di partenza, e
+        // segnarli scriverebbe i valori di fabbrica sopra quelli veri
+        // dell'account.
+        function segnaTuttoIlLocale() {
+            let ok = true;
+            ['taxi_records', 'taxi_shifts', 'taxi_scadenze', 'taxi_versamenti', 'taxi_note', 'taxi_veicoli'].forEach(k => {
+                const ids = Array.from(mappaLocaleSospesi(k).keys());
+                if (!segnaSospesi(k, ids, 's')) ok = false;
+            });
+            return ok;
+        }
+
+        Object.assign(window, {
+            leggiSospesi, contaSospesi, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
+            mappaLocaleSospesi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
+            segnaTuttoIlLocale
+        });
+
         // Quanto spazio prendono le strisce aperte: si misura, non si indovina.
         // Con due strisce insieme un'altezza scritta a mano nel CSS sarebbe
         // sbagliata, e il contenuto finirebbe sotto l'intestazione.
