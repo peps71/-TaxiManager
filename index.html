@@ -1365,11 +1365,12 @@
         //  (decidiAccount); qui c'e' la domanda, PRIMA di agganciare gli
         //  ascolti - dopo, l'elenco del nuovo account avrebbe gia' preso il
         //  posto di quello del telefono.
-        //  Entrando con un altro account (o per la prima volta, su un
-        //  telefono con dei dati) si chiede: OK porta i dati del telefono
-        //  anche nel nuovo account, insieme ai suoi (il vecchio account sul
-        //  Cloud non si tocca); Annulla esce e non tocca niente. In nessuno
-        //  dei due casi si perde qualcosa.
+        //  Entrando con un altro account, su un telefono con dei dati, si
+        //  chiede: OK porta i dati del telefono anche nel nuovo account,
+        //  insieme ai suoi (il vecchio account sul Cloud non si tocca);
+        //  Annulla esce e non tocca niente. In nessuno dei due casi si
+        //  perde qualcosa. Un telefono che non ricorda nessun account entra
+        //  senza domande, come nella v175.
         // ============================================================
         let accessoAppenaFatto = false;
 
@@ -1379,9 +1380,16 @@
             const lun = (x) => (Array.isArray(x) ? x.length : 0);
             const nMov = lun(window.dailyRecords);
             const nTur = lun(window.shifts);
-            const nAltri = lun(window.scadenze) + lun(window.note) + lun(window.versamenti) + lun(window.veicoli);
-            const nAttesa = window.contaSospesi();
-            const decisione = window.decidiAccount(user.uid, appena, nMov + nTur + nAltri + nAttesa > 0);
+            // Contano i movimenti, i turni e le modifiche scritte qui e non
+            // ancora partite (di qualsiasi archivio). Non le cancellazioni:
+            // entrando con un altro account si buttano (vedi adottaAccount),
+            // e chi ha azzerato il telefono per entrare con B non deve
+            // ritrovarsi la domanda per quelle. Non le note e le scadenze
+            // gia' sul Cloud di A: lassu' restano, e l'azzeramento
+            // consigliato qui sotto tocca solo movimenti e turni - con loro
+            // nel conto la domanda tornerebbe sempre.
+            const nAttesa = window.contaSospesiDaPortare();
+            const decisione = window.decidiAccount(user.uid, appena, nMov + nTur + nAttesa > 0);
             if (decisione === 'procedi') return true;
             if (decisione === 'adotta') { window.adottaAccount(user.uid); return true; }
             const email = user.email || 'questo account';
@@ -1393,12 +1401,15 @@
                 + `OK: li porto anche in ${email}, insieme a quello che c'è già.\n`
                 + `Annulla: esco da ${email} e non tocco niente.`;
             if (confirm(domanda)) {
-                window.adottaAccount(user.uid);
-                window.segnaTuttoIlLocale();
+                // Prima il registro passa a questo account (e si libera di
+                // quello che era dell'altro), poi i candidati: vedi PORTARE I
+                // DATI DEL TELEFONO IN UN ALTRO ACCOUNT. Se il disco rifiuta,
+                // il registro resta dell'altro e si scrive direttamente.
+                if (window.adottaAccount(user.uid)) window.segnaTuttoIlLocale();
                 return true;
             }
             signOut(auth).catch(err => console.warn('Uscita non riuscita:', err));
-            if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera da Gestione e rientra.`, 'avviso');
+            if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra.`, 'avviso');
             return false;
         }
 
@@ -1590,6 +1601,7 @@
                 let locale = null;      // si legge solo se c'e' qualcosa da scrivere
                 Object.keys(voci).forEach(id => {
                     const valore = voci[id];
+                    if (valore[0] === 'c') return;   // candidato: aspetta l'elenco del server
                     if (!pronta(chiave + '|' + id + '|' + valore)) return;
                     if (valore[0] === 'd') {
                         operazioni.push({ tipo: 'd', ref: docDati(chiave, id), voci: [[chiave, id, valore]] });
@@ -1724,7 +1736,15 @@
                 },
                 (error) => console.error('Errore Sync Impostazioni fiscali:', error)));
 
+            // I candidati (vedi PORTARE I DATI DEL TELEFONO) si decidono
+            // sull'elenco del server, mai su quello della copia in memoria.
+            const candidati = (chiave, snapshot) => {
+                if (snapshot.metadata.fromCache) return;
+                if (window.risolviCandidati(chiave, snapshot.docs.map(d => d.id))) inviaPresto();
+            };
+
             annullaAscolti.push(onSnapshot(recordsCol, (snapshot) => {
+                candidati('taxi_records', snapshot);
                 // Cartella vuota al primo accesso: si carica quello che c'e' qui
                 if (snapshot.empty && !collezioniConDati['records'] && !snapshot.metadata.fromCache) {
                     migraSulCloud('taxi_records', window.dailyRecords, 'id');
@@ -1752,6 +1772,7 @@
             }, (error) => console.error("Errore Sync Movimenti:", error)));
 
             annullaAscolti.push(onSnapshot(shiftsCol, (snapshot) => {
+                candidati('taxi_shifts', snapshot);
                 if (snapshot.empty && !collezioniConDati['turni'] && !snapshot.metadata.fromCache) {
                     migraSulCloud('taxi_shifts', window.shifts, 'id');
                     return;
@@ -2143,16 +2164,26 @@
         };
 
         window.wipeAllData = async function() {
-            // Prima il segno, poi l'azzeramento: gli identificativi servono per
-            // dire al Cloud cosa togliere, anche se adesso non c'e' campo.
-            segnaSospesi('taxi_records', (window.dailyRecords || []).map(x => x && x.id), 'd');
-            segnaSospesi('taxi_shifts', (window.shifts || []).map(x => x && x.id), 'd');
+            // Dentro il Cloud: prima il segno, poi l'azzeramento - gli
+            // identificativi servono per dire al Cloud cosa togliere, anche
+            // se adesso non c'e' campo.
+            // Fuori dal Cloud si azzera solo il telefono, come nella v175: e'
+            // quello che si consiglia a chi vuole entrare con un altro
+            // account (vedi accountDeciso), e quelle cancellazioni non
+            // devono partire verso nessuno - ne' verso il nuovo account, ne'
+            // verso il vecchio, se un giorno si rientra con quello: lassu' i
+            // dati sono ancora suoi, e tornano sul telefono.
+            const dentro = isCloudActive && db && auth.currentUser;
+            if (dentro) {
+                segnaSospesi('taxi_records', (window.dailyRecords || []).map(x => x && x.id), 'd');
+                segnaSospesi('taxi_shifts', (window.shifts || []).map(x => x && x.id), 'd');
+            }
             window.dailyRecords = [];
             window.shifts = [];
             window.scriviLocale('taxi_records', []);
             window.scriviLocale('taxi_shifts', []);
 
-            if (isCloudActive && db && auth.currentUser) {
+            if (dentro) {
                 inviaSospesi({ chiavi: ['taxi_records', 'taxi_shifts'], forza: true });
                 // E quello che sta sul Cloud ma non su questo telefono (scritto
                 // da un altro dispositivo e non ancora arrivato qui)
@@ -2316,8 +2347,9 @@
             'taxi_note', 'taxi_veicoli', 'taxi_voci_fisse'];
         const DOCUMENTI_SOSPESI = ['profilo', 'fiscali'];
 
-        // Il valore di una voce: 's' scritto o 'd' cancellato, seguito dal numero.
-        const VALORE_SOSPESO = /^[sd]\d+$/;
+        // Il valore di una voce: 's' scritto, 'd' cancellato o 'c' candidato
+        // (vedi segnaTuttoIlLocale), seguito dal numero.
+        const VALORE_SOSPESO = /^[sdc]\d+$/;
 
         function leggiSospesi() {
             let r = null;
@@ -2353,9 +2385,14 @@
             return pulito;
         }
 
-        function contaSospesi(reg) {
+        // Quante modifiche aspettano di partire: scritte e cancellate. I
+        // candidati no - non sono ancora modifiche, lo diventano (o no)
+        // quando il server dice cosa ha gia'. solo: 's' o 'd' per contarne
+        // un tipo.
+        function contaSospesi(reg, solo) {
             const r = reg || leggiSospesi();
-            return Object.keys(r.per).reduce((a, k) => a + Object.keys(r.per[k]).length, 0);
+            return Object.keys(r.per).reduce((a, k) => a + Object.values(r.per[k])
+                .filter(v => (solo ? v[0] === solo : v[0] === 's' || v[0] === 'd')).length, 0);
         }
 
         function scriviSospesi(reg) {
@@ -2378,7 +2415,8 @@
             const elenco = (ids || []).filter(id => id !== undefined && id !== null && String(id) !== '');
             if (!elenco.length) return true;
             const voci = reg.per[chiave] || (reg.per[chiave] = {});
-            elenco.forEach(id => { reg.n++; voci[String(id)] = (op === 'd' ? 'd' : 's') + reg.n; });
+            const lettera = op === 'd' || op === 'c' ? op : 's';
+            elenco.forEach(id => { reg.n++; voci[String(id)] = lettera + reg.n; });
             if (!reg.dal) reg.dal = new Date().toISOString();
             const ok = scriviSospesi(reg);
             if (ok) segniRifiutati.delete(chiave); else segniRifiutati.add(chiave);
@@ -2510,6 +2548,7 @@
             const togli = new Set();
             const aggiungi = [];
             ids.forEach(id => {
+                if (voci[id][0] === 'c') return;     // candidato: decide il server
                 if (voci[id][0] === 'd') { togli.add(id); return; }
                 const x = qui.get(id);
                 if (x) { togli.add(id); aggiungi.push(x); }
@@ -2533,37 +2572,102 @@
         // o si chiede? Il telefono ricorda l'ultimo account (uid) anche dopo
         // l'uscita, perche' le modifiche segnate appartengono a quello.
         //  - stesso account: si va avanti;
-        //  - nessun account ricordato e sessione ripresa da sola: e' un
-        //    telefono che arriva dalla v175, gia' collegato - lo si adotta
-        //    senza domande (e senza segnare niente: e' gia' tutto lassu');
-        //  - un altro account, o un accesso appena fatto su un telefono mai
-        //    collegato: se qui ci sono dati si chiede, se no si adotta.
+        //  - nessun account ricordato: si adotta senza domande, sempre, come
+        //    nella v175 - il Cloud vince, e se la cartella lassu' e' vuota ci
+        //    pensa la migrazione a portarci quello che c'e' qui. E' il caso
+        //    del telefono che arriva dalla v175 e di quello mai collegato;
+        //  - un altro account: se qui ci sono dati suoi si chiede, se no si
+        //    adotta.
+        // accessoAppenaFatto non conta piu' (resta per chi la chiama).
         function decidiAccount(uidNuovo, accessoAppenaFatto, ciSonoDati) {
             const uid = leggiSospesi().uid;
             if (uid && uid === uidNuovo) return 'procedi';
-            if (!uid && !accessoAppenaFatto) return 'adotta';
+            if (!uid) return 'adotta';
             return ciSonoDati ? 'chiedi' : 'adotta';
         }
 
+        const ARCHIVI_CANDIDATI = ['taxi_records', 'taxi_shifts', 'taxi_scadenze', 'taxi_versamenti', 'taxi_note', 'taxi_veicoli'];
+
+        // Il registro passa al nuovo account. Se prima era di un ALTRO
+        // account, quello che era suo non deve partire verso questo: le
+        // cancellazioni (in B toglierebbero righe che B ha per conto suo),
+        // il profilo, le impostazioni fiscali e le voci di budget (i valori
+        // di A scritti sopra quelli di B). Le scritte dei sei archivi
+        // diventano candidati: partono solo se B non le ha gia' (vedi
+        // segnaTuttoIlLocale e risolviCandidati).
         function adottaAccount(uidNuovo) {
             const reg = leggiSospesi();
+            if (reg.uid && uidNuovo && reg.uid !== uidNuovo) {
+                Object.keys(reg.per).forEach(k => {
+                    if (!ARCHIVI_CANDIDATI.includes(k)) { delete reg.per[k]; return; }
+                    const voci = reg.per[k];
+                    Object.keys(voci).forEach(id => {
+                        if (voci[id][0] === 'd') { delete voci[id]; return; }
+                        reg.n++;
+                        voci[id] = 'c' + reg.n;
+                    });
+                });
+            }
             reg.uid = uidNuovo || null;
             return scriviSospesi(reg);
         }
 
-        // Tutto quello che c'e' qui, segnato da spedire: per chi ha detto si'
-        // a portare i dati del telefono nell'account appena entrato. Le voci
-        // di budget, il profilo e le impostazioni fiscali restano fuori: su un
-        // telefono nuovo sono quasi sempre i valori di partenza, e
-        // segnarli scriverebbe i valori di fabbrica sopra quelli veri
-        // dell'account.
+        // ============================================================
+        //  PORTARE I DATI DEL TELEFONO IN UN ALTRO ACCOUNT
+        //  Chi ha detto si' alla domanda vuole i dati del telefono anche
+        //  nell'account appena entrato, insieme ai suoi. Segnarli tutti come
+        //  scritti voleva dire riscrivere su B, con la versione del
+        //  telefono, anche le righe che B ha gia' e magari ha corretto dal
+        //  Mac. Allora si segnano come CANDIDATI ('c'): non partono, non
+        //  contano fra le modifiche in attesa, non toccano l'unione. Al
+        //  primo elenco che arriva DAVVERO dal server (non dalla copia in
+        //  memoria di Firestore) per quell'archivio, risolviCandidati li
+        //  guarda uno per uno: quelli che il server non ha diventano
+        //  scritti e partono; quelli che ha gia' si tolgono, e vince il
+        //  server. Stanno nel registro sul disco: se l'app si chiude prima
+        //  che arrivi l'elenco, alla riapertura sono ancora li'.
+        //  Le voci di budget, il profilo e le impostazioni fiscali restano
+        //  fuori: su un telefono nuovo sono quasi sempre i valori di
+        //  partenza, e portarli scriverebbe i valori di fabbrica sopra
+        //  quelli veri dell'account.
+        // ============================================================
         function segnaTuttoIlLocale() {
             let ok = true;
-            ['taxi_records', 'taxi_shifts', 'taxi_scadenze', 'taxi_versamenti', 'taxi_note', 'taxi_veicoli'].forEach(k => {
+            ARCHIVI_CANDIDATI.forEach(k => {
                 const ids = Array.from(mappaLocaleSospesi(k).keys());
-                if (!segnaSospesi(k, ids, 's')) ok = false;
+                if (!segnaSospesi(k, ids, 'c')) ok = false;
             });
             return ok;
+        }
+
+        // Le modifiche scritte qui e non ancora partite che OK porterebbe
+        // nel nuovo account: quelle dei sei archivi (profilo, fiscali e
+        // voci di budget restano fuori, vedi adottaAccount).
+        function contaSospesiDaPortare() {
+            const reg = leggiSospesi();
+            return ARCHIVI_CANDIDATI.reduce((a, k) => a + Object.values(reg.per[k] || {})
+                .filter(v => v[0] === 's' || v[0] === 'c').length, 0);
+        }
+
+        // presenti: gli identificativi dell'elenco arrivato dal server.
+        // Restituisce quante voci sono diventate da spedire.
+        function risolviCandidati(chiave, presenti) {
+            const reg = leggiSospesi();
+            const voci = reg.per[chiave];
+            if (!voci) return 0;
+            const ids = Object.keys(voci).filter(id => voci[id][0] === 'c');
+            if (!ids.length) return 0;
+            const lassu = new Set(Array.from(presenti || [], String));
+            let nuove = 0;
+            ids.forEach(id => {
+                if (lassu.has(id)) { delete voci[id]; return; }
+                reg.n++;
+                voci[id] = 's' + reg.n;
+                nuove++;
+            });
+            if (nuove && !reg.dal) reg.dal = new Date().toISOString();
+            scriviSospesi(reg);
+            return nuove;
         }
 
         // La riga della scheda Cloud: quante modifiche aspettano, da quando.
@@ -2589,7 +2693,7 @@
         Object.assign(window, {
             testoSospesi, leggiSospesi, contaSospesi, segnoRifiutato, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
             mappaLocaleSospesi, valoriLocaliCampi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
-            segnaTuttoIlLocale
+            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare
         });
 
         // Quanto spazio prendono le strisce aperte: si misura, non si indovina.
@@ -2928,10 +3032,9 @@
         };
 
         window.wipeAllData = async function() {
-            // Prima il segno, poi l'azzeramento: gli identificativi servono
-            // per dire al Cloud cosa togliere quando tornera' raggiungibile.
-            segnaSospesi('taxi_records', (window.dailyRecords || []).map(x => x && x.id), 'd');
-            segnaSospesi('taxi_shifts', (window.shifts || []).map(x => x && x.id), 'd');
+            // Senza Firebase si azzera solo il telefono, come nella v175 (vedi
+            // la versione vera nel blocco Firebase): nessun segno, e al
+            // ritorno del Cloud i dati che stanno lassu' ricompaiono.
             window.dailyRecords = [];
             window.shifts = [];
             scriviLocale('taxi_records', []);
@@ -14543,6 +14646,11 @@
             const maiVuoto = !!opz.maiVuoto;
             const conNav = opz.conNav !== false;
 
+            // I candidati si decidono sull'elenco del server (vedi PORTARE I
+            // DATI DEL TELEFONO IN UN ALTRO ACCOUNT).
+            if (!daCache && risolviCandidati(chiave, (dalCloud || []).map(x => x && x[campoId]))
+                && window.inviaSospesi) setTimeout(() => window.inviaSospesi(), 0);
+
             // Un elenco vuoto che viene dalla copia in memoria di Firestore, non
             // dal server, non dice niente: e' quello che arriva aprendo l'app
             // senza campo. Prima si entrava nella migrazione, e al ritorno
@@ -16459,7 +16567,11 @@
         }
 
         async function resetAllData() {
-            if (!confirm('Attenzione: verranno cancellati TUTTI i movimenti e i turni, anche sul Cloud. Procedere?')) return;
+            // Fuori dal Cloud l'azzeramento tocca solo il telefono (vedi
+            // wipeAllData): la domanda deve dirlo, o si crederebbe di aver
+            // svuotato anche il Cloud.
+            const dove = window.isCloudSyncing ? 'anche sul Cloud' : 'solo su questo dispositivo (quelli sul Cloud restano lì)';
+            if (!confirm(`Attenzione: verranno cancellati TUTTI i movimenti e i turni, ${dove}. Procedere?`)) return;
             if (!confirm('Conferma definitiva: l\'operazione non è reversibile. Hai gia\' scaricato un backup?')) return;
             showToast('Cancellazione in corso...');
             await window.wipeAllData();
