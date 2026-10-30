@@ -1326,7 +1326,8 @@
                 const dalCloud = [];
                 snapshot.forEach(d => dalCloud.push(Object.assign({ [campoId]: d.id }, d.data())));
                 return window.applicaSnapshotArchivio(opz, dalCloud, snapshot.empty,
-                    (x) => setDoc(docDati(opz.chiave, String(x[campoId])), x));
+                    (x) => setDoc(docDati(opz.chiave, String(x[campoId])), x),
+                    !!(snapshot.metadata && snapshot.metadata.fromCache));
             }, (error) => console.error(`Errore Sync ${etichetta}:`, error));
         }
 
@@ -1569,7 +1570,10 @@
                 doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'),
                 (d) => {
                     if (d.exists()) {
-                        window.profilo = Object.assign({}, window.profilo, d.data());
+                        // Sopra i dati del server, i campi cambiati qui e non
+                        // ancora confermati (vedi unisciCampiSospesi).
+                        window.profilo = window.unisciCampiSospesi('profilo',
+                            Object.assign({}, window.profilo, d.data()), window.profilo);
                         window.scriviLocale('taxi_profilo', window.profilo);
                     } else if (!d.metadata.fromCache && window.profiloCompilato && window.profiloCompilato()) {
                         window.saveProfiloToCloud(window.profilo);
@@ -1589,7 +1593,8 @@
                 doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali'),
                 (d) => {
                     if (d.exists()) {
-                        window.fiscalSettings = Object.assign({}, window.fiscalSettings, d.data());
+                        window.fiscalSettings = window.unisciCampiSospesi('fiscali',
+                            Object.assign({}, window.fiscalSettings, d.data()), window.fiscalSettings);
                         try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings)); }
                         catch (err) { /* lo dice gia' l'avviso sul disco */ }
                     } else if (!d.metadata.fromCache && window.saveFiscaliToCloud) {
@@ -1610,10 +1615,14 @@
                     snapshot.forEach(doc => {
                         cloudRecords.push({ id: doc.id, ...doc.data() });
                     });
-                    cloudRecords.sort(perDataDecrescente);
                     if (cloudRecords.length) collezioniConDati['records'] = true;
-                    window.dailyRecords = cloudRecords;
-                    window.scriviLocale('taxi_records', cloudRecords);
+                    // Le corse battute qui e non ancora arrivate lassu' (anche
+                    // da una sessione chiusa senza campo) non si perdono: vedi
+                    // L'UNIONE nel copione normale.
+                    const uniti = window.unisciConSospesi('taxi_records', 'id', cloudRecords, window.dailyRecords);
+                    uniti.sort(perDataDecrescente);
+                    window.dailyRecords = uniti;
+                    window.scriviLocale('taxi_records', uniti);
                     // Un dispositivo non ancora aggiornato puo' rimandare indietro
                     // le voci col vecchio nome del finanziamento
                     if (typeof controllaNomeFinanziamento === 'function') controllaNomeFinanziamento();
@@ -1632,10 +1641,11 @@
                     snapshot.forEach(doc => {
                         cloudShifts.push({ id: doc.id, ...doc.data() });
                     });
-                    cloudShifts.sort(perDataDecrescente);
                     if (cloudShifts.length) collezioniConDati['turni'] = true;
-                    window.shifts = cloudShifts;
-                    window.scriviLocale('taxi_shifts', cloudShifts);
+                    const uniti = window.unisciConSospesi('taxi_shifts', 'id', cloudShifts, window.shifts);
+                    uniti.sort(perDataDecrescente);
+                    window.shifts = uniti;
+                    window.scriviLocale('taxi_shifts', uniti);
                     // Un dispositivo non ancora aggiornato puo' rimandare indietro dei "Riposo"
                     if (typeof controllaRiposiDaConvertire === 'function') controllaRiposiDaConvertire();
                 }
@@ -14252,7 +14262,7 @@
         // variabili separate che c'erano prima.
         const cloudOk = {};
 
-        window.applicaSnapshotArchivio = async function (opz, dalCloud, vuoto, salvaUno) {
+        window.applicaSnapshotArchivio = async function (opz, dalCloud, vuoto, salvaUno, daCache) {
             const nome = opz.nome;                       // window.<nome>
             const chiave = opz.chiave;                   // taxi_<...>, sul disco e sul Cloud
             const ordina = opz.ordina || null;
@@ -14261,6 +14271,14 @@
             const campoId = opz.campoId || 'id';         // 'id', oppure 'slug' per le voci
             const maiVuoto = !!opz.maiVuoto;
             const conNav = opz.conNav !== false;
+
+            // Un elenco vuoto che viene dalla copia in memoria di Firestore, non
+            // dal server, non dice niente: e' quello che arriva aprendo l'app
+            // senza campo. Prima si entrava nella migrazione, e al ritorno
+            // della rete tutto l'archivio del telefono si riscriveva sul
+            // server, sopra le modifiche fatte intanto dal Mac. Si aspetta il
+            // server, senza toccare niente.
+            if (vuoto && daCache) return 'cache';
 
             if (!vuoto) cloudOk[nome] = true;
 
@@ -14286,6 +14304,8 @@
                 return 'tenuto';
             }
 
+            // Le modifiche fatte qui e non ancora confermate restano (vedi L'UNIONE)
+            dalCloud = unisciConSospesi(chiave, campoId, dalCloud, window[nome] || []);
             if (ordina) dalCloud.sort(ordina);
             window[nome] = dalCloud;
             window.scriviLocale(chiave, dalCloud);
