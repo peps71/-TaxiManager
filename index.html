@@ -1658,10 +1658,12 @@
         //   - Il no di UNA riga (un identificativo che Firestore non accetta,
         //     un campo che non sa salvare): riprovare non serve, e prima
         //     quella riga si portava dietro tutto il suo blocco, per sempre.
-        //     Un blocco rifiutato con piu' righe si rimanda riga per riga,
-        //     per trovare la colpevole; una riga che non si riesce nemmeno a
-        //     preparare (l'errore arriva prima di partire) e' colpevole
-        //     subito. La colpevole si mette da parte: resta nel registro,
+        //     Un blocco rifiutato con piu' righe si rimanda riga per riga, in
+        //     fila, per trovare la colpevole (vedi SMONTARE UN BLOCCO SENZA
+        //     MARTELLARE); una riga che non si riesce nemmeno a preparare
+        //     (l'errore arriva prima di partire) e' colpevole subito.
+        //   - Un no che non sta in nessuno dei due elenchi non ferma niente:
+        //     va all'attesa crescente (vedi NO_DELLA_RIGA). La colpevole si mette da parte: resta nel registro,
         //     segnata «ferma» ('!' in fondo), non si ritenta da sola, e la
         //     scheda Cloud la mostra (vedi testoSospesi). Qui non si
         //     cancella niente: se la si corregge, il segno nuovo la rimette
@@ -1719,19 +1721,44 @@
             else batch.set(o.ref, o.dati);
         }
 
-        // Le operazioni da spedire, preparate una per una: quella che non si
-        // riesce a preparare (un identificativo con '/', un campo con una
-        // lista dentro una lista) finisce in daFermare, e le altre partono.
+        // Si prova a metterla in un blocco che non partira' mai: Firestore
+        // controlla li' la forma dei dati, prima di qualsiasi rete.
+        function preparabile(o) {
+            try { mettiNelBlocco(writeBatch(db), o); return true; }
+            catch (err) { console.error('Una modifica in attesa non si puo\' spedire, la metto da parte:', o.voci.map(v => v[0] + '/' + v[1]).join(', '), err); return false; }
+        }
+
+        // Un blocco che Firestore ha rifiutato prima di partire: si cerca
+        // qui, una per una, quale non si prepara (per i documenti a campi,
+        // quale campo: un campo storto non ferma gli altri). Prima lo si
+        // faceva per ogni riga a ogni spedizione, con un blocco nuovo per
+        // riga: adesso solo quando serve, cioe' quasi mai.
+        function separaImpreparabili(fetta) {
+            const buone = [];
+            const cattive = [];
+            fetta.forEach(o => {
+                if (preparabile(o)) { buone.push(o); return; }
+                if (o.tipo !== 'm' || o.voci.length < 2) { cattive.push(o); return; }
+                const dati = {};
+                const vociBuone = [];
+                o.voci.forEach(v => {
+                    const uno = { tipo: 'm', ref: o.ref, dati: { [v[1]]: o.dati[v[1]] }, voci: [v] };
+                    if (preparabile(uno)) { dati[v[1]] = o.dati[v[1]]; vociBuone.push(v); }
+                    else cattive.push(uno);
+                });
+                if (vociBuone.length) buone.push({ tipo: 'm', ref: o.ref, dati, voci: vociBuone });
+            });
+            return { buone, cattive };
+        }
+
+        // Le operazioni da spedire. Quella che non ha nemmeno un indirizzo
+        // (un identificativo con '/') finisce in daFermare, e le altre
+        // partono; la forma dei dati la controlla Firestore mettendole nel
+        // blocco (vedi spedisciBlocco e separaImpreparabili).
         function preparaOperazioni(reg, opz, daTogliere, daFermare) {
             const operazioni = [];      // { tipo, ref, dati, voci:[[chiave,id,valore]] }
             const pronta = (chiave, id, valore) => valore[0] !== 'c' && !valore.endsWith('!')
                 && !inViaggio.has(chiave + '|' + id + '|' + valore);
-            // Si prova a metterla in un blocco che non partira' mai: Firestore
-            // controlla li' la forma dei dati, prima di qualsiasi rete.
-            const preparabile = (o) => {
-                try { mettiNelBlocco(writeBatch(db), o); return true; }
-                catch (err) { console.error('Una modifica in attesa non si puo\' spedire, la metto da parte:', o.voci.map(v => v[0] + '/' + v[1]).join(', '), err); return false; }
-            };
             Object.keys(reg.per).forEach(chiave => {
                 if (opz.chiavi && !opz.chiavi.includes(chiave)) return;
                 const voci = reg.per[chiave];
@@ -1752,17 +1779,7 @@
                     let ref;
                     try { ref = DOC_A_CAMPI[chiave](); }
                     catch (err) { console.error('Documento ' + chiave + ' non raggiungibile:', err); daFermare.push(...prese); return; }
-                    const tutto = { tipo: 'm', ref, dati: campi, voci: prese };
-                    if (preparabile(tutto)) { operazioni.push(tutto); return; }
-                    // Un campo storto non ferma gli altri: si provano uno per uno
-                    const buoni = {};
-                    const vociBuone = [];
-                    prese.forEach(v => {
-                        const uno = { tipo: 'm', ref, dati: { [v[1]]: campi[v[1]] }, voci: [v] };
-                        if (preparabile(uno)) { buoni[v[1]] = campi[v[1]]; vociBuone.push(v); }
-                        else daFermare.push(v);
-                    });
-                    if (vociBuone.length) operazioni.push({ tipo: 'm', ref, dati: buoni, voci: vociBuone });
+                    operazioni.push({ tipo: 'm', ref, dati: campi, voci: prese });
                     return;
                 }
                 let locale = null;      // si legge solo se c'e' qualcosa da scrivere
@@ -1788,8 +1805,7 @@
                         daFermare.push(voce);
                         return;
                     }
-                    if (preparabile(o)) operazioni.push(o);
-                    else daFermare.push(voce);
+                    operazioni.push(o);
                 });
             });
             return operazioni;
@@ -1827,7 +1843,26 @@
                 window.togliSospesi([].concat(...ops.map(o => o.voci)));
                 conta(ops.length);
             };
-            return commit(fetta).then(() => {
+            // Il blocco si prepara qui, fuori dalla promessa: un errore che
+            // arriva adesso e' di Firestore sulla forma dei dati, prima di
+            // qualsiasi rete, e dice con certezza che una riga non partira'
+            // mai. Si trovano quelle (fermate: preparazione) e il resto
+            // riparte, senza smontare niente sul server.
+            let batch;
+            try {
+                batch = writeBatch(db);
+                fetta.forEach(o => mettiNelBlocco(batch, o));
+            } catch (err) {
+                const { buone, cattive } = separaImpreparabili(fetta);
+                // Nessuna da sola: non e' la forma di una riga, e' il momento
+                if (!cattive.length) return Promise.resolve({ fatti: 0, no: fetta.map(o => ({ o, err, nonFermare: true })), err });
+                const ferme = cattive.map(o => ({ o, err, preparazione: true }));
+                if (!buone.length) return Promise.resolve({ fatti: 0, no: ferme, err });
+                return spedisciBlocco(buone, opz, conta, prova).then(e => Object.assign({}, e, { no: ferme.concat(e.no) }));
+            }
+            let partito;
+            try { partito = batch.commit(); } catch (err) { partito = Promise.reject(err); }
+            return partito.then(() => {
                 confermati(fetta);
                 return { fatti: fetta.length, no: [] };
             }, (err) => {
@@ -1911,7 +1946,7 @@
                 // Colpevole: solo un no «della riga» (vedi NO_DELLA_RIGA) per
                 // una riga sola - non le righe del blocco di prova, che si e'
                 // rifiutato tutto insieme.
-                const colpevoli = tuttiNo.filter(n => !n.nonFermare && NO_DELLA_RIGA.includes(codiceDi(n.err)));
+                const colpevoli = tuttiNo.filter(n => n.preparazione || (!n.nonFermare && NO_DELLA_RIGA.includes(codiceDi(n.err))));
                 const delMomento = tuttiNo.filter(n => !colpevoli.includes(n));
                 // Un blocco ha risposto «e' una riga»: il server c'e', non
                 // serve un altro blocco di prova (vedi SMONTARE UN BLOCCO).
