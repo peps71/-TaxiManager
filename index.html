@@ -1463,16 +1463,21 @@
             const lun = (x) => (Array.isArray(x) ? x.length : 0);
             const nMov = lun(window.dailyRecords);
             const nTur = lun(window.shifts);
-            // Contano i movimenti, i turni e le modifiche scritte qui e non
-            // ancora partite (di qualsiasi archivio). Non le cancellazioni:
-            // entrando con un altro account si buttano (vedi adottaAccount),
-            // e chi ha azzerato il telefono per entrare con B non deve
-            // ritrovarsi la domanda per quelle. Non le note e le scadenze
-            // gia' sul Cloud di A: lassu' restano, e l'azzeramento
-            // consigliato qui sotto tocca solo movimenti e turni - con loro
-            // nel conto la domanda tornerebbe sempre.
+            // Contano i movimenti, i turni, le modifiche scritte qui e non
+            // ancora partite che OK porterebbe nel nuovo account, e quelle
+            // che OK lascerebbe indietro (le cancellazioni, il profilo, le
+            // impostazioni fiscali, le voci di budget: vedi adottaAccount).
+            // Senza le seconde nel conto, chi aveva solo quelle in attesa
+            // entrava senza domanda e le perdeva in silenzio. Chi ha
+            // azzerato il telefono fuori dal Cloud per entrare con B non ne
+            // ha (fuori dal Cloud l'azzeramento non segna niente), e la
+            // domanda non torna. Non le note e le scadenze gia' sul Cloud di
+            // A: lassu' restano, e l'azzeramento consigliato qui sotto tocca
+            // solo movimenti e turni - con loro nel conto la domanda
+            // tornerebbe sempre (l'avviso dopo Annulla dice cosa succede).
             const nAttesa = window.contaSospesiDaPortare();
-            const decisione = window.decidiAccount(user.uid, appena, nMov + nTur + nAttesa > 0);
+            const nLasciate = window.contaSospesiDaLasciare();
+            const decisione = window.decidiAccount(user.uid, appena, nMov + nTur + nAttesa + nLasciate > 0);
             if (decisione === 'procedi') return true;
             if (decisione === 'adotta') { window.adottaAccount(user.uid); return true; }
             const email = user.email || 'questo account';
@@ -1480,7 +1485,9 @@
             const domanda = `Sei entrato con ${email}. Su questo telefono ci sono già `
                 + `${plur(nMov, 'movimento', 'movimenti')} e ${plur(nTur, 'turno', 'turni')}`
                 + (nAttesa ? `, e ${plur(nAttesa, 'modifica non ancora inviata', 'modifiche non ancora inviate')}` : '')
-                + ` di un altro account o mai caricati.\n\n`
+                + ` di un altro account o mai caricati`
+                + (nLasciate ? `, e ${plur(nLasciate, 'modifica', 'modifiche')} per l'altro account, che con OK non ${nLasciate === 1 ? 'partirà' : 'partiranno'}` : '')
+                + `.\n\n`
                 + `OK: li porto anche in ${email}, insieme a quello che c'è già.\n`
                 + `Annulla: esco da ${email} e non tocco niente.`;
             if (confirm(domanda)) {
@@ -1498,7 +1505,12 @@
                 return false;
             }
             signOut(auth).catch(err => console.warn('Uscita non riuscita:', err));
-            if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra.`, 'avviso');
+            // Azzerare movimenti e turni basta per la domanda, non per il
+            // resto: note, scadenze, vetture, versamenti, voci di budget, la
+            // scheda e le impostazioni fiscali del telefono, entrando, vanno
+            // da sole nelle cartelle di B ancora vuote (la migrazione), senza
+            // chiedere. L'avviso lo dice, invece di far credere che basti.
+            if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra. Attenzione: note, scadenze, vetture, versamenti, voci di budget, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in ${email} dove lì non ce ne sono ancora.`, 'avviso');
             return false;
         }
 
@@ -3153,6 +3165,16 @@
                 .filter(v => v[0] === 's' || v[0] === 'c').length, 0);
         }
 
+        // E quelle che OK lascerebbe indietro, perche' sono dell'altro
+        // account: le cancellazioni, e tutto quello del profilo, delle
+        // impostazioni fiscali e delle voci di budget (comprese le ferme).
+        // Esattamente cio' che adottaAccount toglie.
+        function contaSospesiDaLasciare() {
+            const reg = leggiSospesi();
+            return Object.keys(reg.per).reduce((a, k) => a + Object.values(reg.per[k])
+                .filter(v => !ARCHIVI_CANDIDATI.includes(k) || v[0] === 'd').length, 0);
+        }
+
         // presenti: gli identificativi dell'elenco arrivato dal server.
         // Restituisce quante voci sono diventate da spedire.
         function risolviCandidati(chiave, presenti) {
@@ -3215,7 +3237,7 @@
         Object.assign(window, {
             testoSospesi, leggiSospesi, contaSospesi, segnoRifiutato, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
             mappaLocaleSospesi, valoriLocaliCampi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
-            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare, fermaSospesi, riprovaFerme, elencoFerme,
+            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare, contaSospesiDaLasciare, fermaSospesi, riprovaFerme, elencoFerme,
             listaArrivata, azzeraListeDalServer
         });
 
