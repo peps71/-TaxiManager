@@ -99,6 +99,108 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Una revisione da sei specialisti, e le prime correzioni (versione 175)
+
+Questa versione non nasce da un difetto visto sul telefono ma da un'analisi completa
+dell'app, fatta da sei agenti con compiti diversi: architettura, grafica sull'iPhone,
+sicurezza, velocità, prove e revisione del codice. Hanno trovato una ventina di cose; qui
+ci sono quelle che si potevano sistemare **senza toccare Firebase né il formato dei
+dati**. Le altre aspettano una decisione (vedi in fondo).
+
+### Una corsa da 2.350 € con un tocco solo
+
+Scrivendo «2350» invece di «23,50» l'app registrava 2.350 € al primo tocco su Contanti,
+senza domande: in un registro che finisce nella dichiarazione è l'errore più probabile e
+più caro. Adesso, **sopra i 300 € a corsa**, il primo tocco non salva: sotto il campo
+compare «2.350,00 € per una corsa sola? Tocca di nuovo Contanti per confermare». Il
+secondo tocco sullo stesso metodo salva; un altro metodo o un'altra cifra ricominciano.
+
+Niente finestra di conferma: tutto resta sotto il pollice. Ma fra i due tocchi devono
+passare **almeno 0,6 secondi**, perché sull'iPhone un doppio tocco nervoso arriva come due
+tocchi a pochi millesimi e avrebbe confermato prima che l'avviso si potesse leggere. Il
+tempo si misura col cronometro della pagina e non con l'ora, che il telefono a volte
+risistema da solo.
+
+La stessa domanda la fa il modulo completo e la modifica di una corsa, quando l'importo
+cambia. Le spese no: un'assicurazione da 2.000 € è normale. E un importo che non è un
+numero («abc», «Infinity») non si salva più in nessun modulo, con un messaggio che lo
+dice; lo zero sulle corse si rifiuta, ma una vecchia corsa già a zero si può ancora
+correggere di data o di metodo.
+
+### Il ripristino chiede prima di sovrascrivere
+
+Rimettere un backup sostituiva **senza chiedere** le correzioni fatte dopo e riportava le
+righe cancellate. Adesso prima si legge, per esempio:
+
+> Il backup del 01/03/2026 contiene 4 movimenti e 2 turni. Adesso ne hai 5 e 2.
+> Entrano 1 movimento e 1 turno che adesso non ci sono. 1 movimento che hai cambiato
+> dopo quella data torna com'era nel backup.
+> Anche le impostazioni tornano come nel backup; quello che hai aggiunto dopo resta.
+
+Le righe che entrano e quelle che cambiano si contano a parte: su un telefono nuovo la
+prima versione della domanda diceva «3.000 movimenti cambiati o cancellati», che era falso
+e spaventava. Il conto e il ripristino passano dalla stessa funzione, così la domanda non
+può dire un numero diverso da quello che succede.
+
+E il ripristino rimette finalmente **tutte** le impostazioni INPS: rata, numero di rate e
+minimale restavano fuori, e su un telefono nuovo la stima delle tasse usava i valori
+predefiniti mentre il messaggio diceva «ripristinate».
+
+### Un backup confezionato non fa più danni
+
+Un file di backup preparato apposta poteva **far partire del codice** nell'app: orari,
+ore e km dei turni finivano nella pagina senza la protezione che tutti gli altri campi
+avevano già. E da lì, attraverso il Cloud, sul Mac. Adesso:
+
+- quei campi a video passano da `esc()`, e così anche gli identificativi e le date di
+  movimenti, scadenze e del resto, perché quelli che arrivano dal Cloud non passano dai
+  controlli del backup;
+- al ripristino un campo dei turni che non è in un formato che l'app scrive viene
+  scartato (non tutto il turno: solo quel campo); ore fra 0 e 24, km con un tetto
+  altissimo, perché i moduli non ne hanno e un numero battuto per sbaglio deve poter
+  rientrare per essere corretto;
+- un campo di testo che non è testo (un metodo «5», un importo che è un oggetto) non
+  rompe più le schermate per sempre;
+- il file delle foto non può più riempire la memoria del telefono con un campo «peso»
+  falso, e i file troppo grandi (backup oltre 50 MB, foto oltre 250 MB) non si aprono.
+
+### Le cose piccole
+
+- Nel CSV per il commercialista una nota come «-5 sconto» veniva letta da Excel come una
+  formula. Adesso le celle di testo che cominciano con `= + - @` prendono un apostrofo
+  davanti, che **nel foglio si vede**: è il prezzo di un file che non esegue niente.
+- Il nome del file di backup, fra mezzanotte e le due, prendeva il giorno prima (era
+  l'ora di Greenwich). Adesso è il giorno di qui.
+- Alcune somme con un valore storto davano «NaN» su una schermata e zero sulle altre.
+- Senza service worker attivo — al primo avvio, o dopo aver cancellato i dati del sito —
+  la scheda Cloud si ridisegnava **540 volte in tre secondi**, consumando batteria. Ora
+  due.
+
+### Le prove, che adesso dicono quando si rompono
+
+Il giro completo `sh prove/tutte.sh` aveva un difetto suo: **una prova che si interrompeva
+con un errore non lasciava traccia**, e il giro sembrava verde. Adesso ogni prova
+interrotta viene nominata, c'è un riepilogo in fondo e lo script esce con errore. Due
+prove (`testUso`, `testTastiera`) dipendevano dall'ora in cui giravano: fuori turno si
+fermavano. Ora l'orologio è fermo.
+
+Prove nuove: `testCorsaStrana.mjs`, `testRipristino.mjs`, `testEsporta.mjs`, e
+`testIniezione.mjs` e `testDisegni.mjs` allargate. Ognuna è stata fatta girare anche
+sulla versione 174, e lì falliva.
+
+### Quello che resta, e perché aspetta
+
+- **Una corsa registrata senza campo può sparire.** Se iOS chiude l'app prima che torni
+  la rete, alla riapertura la copia del Cloud prende il posto di quella del telefono. È il
+  difetto più serio trovato, ma correggerlo vuol dire cambiare il modo in cui l'app parla
+  con Firebase: serve una decisione.
+- Le regole di Firestore lasciano entrare qualsiasi account Google nella propria cartella
+  (non nella tua): da restringere dalla console.
+- Sull'iPhone: campi sotto i 16 px che fanno ingrandire la pagina, la tastiera che copre
+  Contanti e POS, un «Annulla» dopo la corsa.
+- Una data malformata rompe la scheda Rendimento; un turno di notte riaperto dopo
+  mezzanotte finisce sul giorno dopo.
+
 ## La pausa dello Spezzato non era scritta da nessuna parte (versione 174)
 
 Lo Spezzato va dalle 7:30 alle 13, due ore di pausa, e riprende dalle 15 alle 21:30:

@@ -1978,7 +1978,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 174;
+        const VERSIONE_APP = 175;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -11933,6 +11933,9 @@
         // l'avviso si potesse leggere. La conferma vale solo se arriva almeno
         // dopo questo tempo dal primo tocco; quella troppo rapida si ignora
         // lasciando l'avviso, e il conto non riparte: il tocco calmo dopo salva.
+        // Il tempo si misura con performance.now() e non con l'ora: se il
+        // telefono risistema l'orologio fra i due tocchi, la conferma non
+        // resta bloccata.
         const ATTESA_CONFERMA_CORSA_MS = 600;
 
         // I nomi come sono scritti sui tasti, per dire «tocca di nuovo X»
@@ -11972,7 +11975,7 @@
             if (importo > SOGLIA_CORSA_STRANA) {
                 const attesa = window.corsaStranaInAttesa;
                 const confermata = attesa && attesa.metodo === metodo && attesa.importo === importo;
-                if (confermata && Date.now() - attesa.momento < ATTESA_CONFERMA_CORSA_MS) {
+                if (confermata && performance.now() - attesa.momento < ATTESA_CONFERMA_CORSA_MS) {
                     // Secondo tocco troppo vicino al primo: e' lo stesso dito
                     // che rimbalza, non una risposta. Avviso e momento restano.
                     campo.focus();
@@ -11981,7 +11984,7 @@
                 if (!confermata) {
                     // Niente confirm(): la domanda resta sotto il campo e la
                     // risposta e' lo stesso tasto, senza togliere il pollice.
-                    window.corsaStranaInAttesa = { importo, metodo, momento: Date.now() };
+                    window.corsaStranaInAttesa = { importo, metodo, momento: performance.now() };
                     const riga = document.getElementById('corsa-lampo-avviso');
                     if (riga) {
                         riga.textContent = `${formatCurrency(importo)} per una corsa sola? Tocca di nuovo ${nomeTastoMetodo(metodo)} per confermare.`;
@@ -13329,7 +13332,9 @@
                 if (!orarioBackupBuono(t[k])) togli(k, '');
             });
             // Oltre al tipo, un tetto: le ore di un turno stanno fra 0 e 24
-            // (lo stesso limite dei moduli), i km fra zero e due milioni. I
+            // (lo stesso limite dei moduli), i km fra zero e un miliardo: i
+            // moduli non hanno un massimo, e un «12345678» battuto per sbaglio
+            // e salvato deve rientrare com'era, per poterlo correggere. I
             // contachilometri di inizio e fine possono essere negativi: i
             // moduli accettano «-5» e lo scrivono cosi' com'e', quindi un
             // backup legittimo puo' averlo e deve rientrare uguale. I km
@@ -13345,7 +13350,7 @@
             });
             return pulito || t;
         }
-        const KM_BACKUP_MAX = 2000000;
+        const KM_BACKUP_MAX = 1e9;
 
         // I CAMPI DI TESTO SI CONTROLLANO ANCHE LORO
         // Categoria, metodo, nome di una scadenza, modello di una vettura:
@@ -13584,8 +13589,9 @@
                 const elenco = altre.length === 1
                     ? articolo[altre[0]]
                     : altre.slice(0, -1).join(', ') + ' e ' + altre[altre.length - 1];
-                const quelle = altre.length === 1 && altre[0] === 'versamenti' ? 'quelli' : 'quelle';
-                testo += `\n\nAnche ${elenco} del backup prendono il posto di ${quelle} di adesso.`;
+                // Non «prendono il posto di quelle di adesso»: si leggeva come
+                // una cancellazione, e invece quello che manca nel backup resta.
+                testo += `\n\nAnche ${elenco} tornano come nel backup; quello che hai aggiunto dopo resta.`;
             }
             return testo + '\n\nContinuare?';
         }
