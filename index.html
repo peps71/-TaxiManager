@@ -1547,37 +1547,94 @@
         //  legge il loro contenuto dall'archivio locale di adesso, si
         //  mandano a blocchi da 400 senza aspettarle in fila, e ogni blocco
         //  confermato toglie le sue voci - solo se non sono cambiate nel
-        //  frattempo. Un blocco rifiutato lascia le voci dove sono: si
-        //  riprova al massimo ogni 30 secondi, al ritorno della rete, alla
-        //  riapertura dell'app e al prossimo salvataggio.
+        //  frattempo.
         //  Senza campo Firestore non rifiuta: tiene la scrittura in memoria
         //  finche' la rete torna. Le voci restano «in viaggio» e non si
         //  rimandano; se intanto l'app viene chiusa, alla riapertura
         //  ripartono dal registro sul disco.
+        //
+        //  QUANDO IL CLOUD DICE NO
+        //  Ci sono due no diversi, e vanno trattati in due modi.
+        //   - Il no di TUTTO (regole, accesso scaduto, server occupato):
+        //     non c'entra la riga, c'entra il momento. Si riprova da soli
+        //     con un'attesa che cresce - 30 secondi, 1 minuto, 2, 4, 8, fino
+        //     a 15 - e che torna da capo al primo successo o quando torna la
+        //     rete. Dopo un no a tutto si rimanda un blocco solo, di prova:
+        //     se passa parte il resto, se no non si sono buttate migliaia di
+        //     scritture contro un muro.
+        //   - Il no di UNA riga (un identificativo che Firestore non accetta,
+        //     un campo che non sa salvare): riprovare non serve, e prima
+        //     quella riga si portava dietro tutto il suo blocco, per sempre.
+        //     Un blocco rifiutato con piu' righe si rimanda riga per riga,
+        //     per trovare la colpevole; una riga che non si riesce nemmeno a
+        //     preparare (l'errore arriva prima di partire) e' colpevole
+        //     subito. La colpevole si mette da parte: resta nel registro,
+        //     segnata «ferma» ('!' in fondo), non si ritenta da sola, e la
+        //     scheda Cloud la mostra (vedi testoSospesi). Qui non si
+        //     cancella niente: se la si corregge, il segno nuovo la rimette
+        //     in viaggio.
+        //  Niente di tutto questo puo' alzare un'eccezione verso chi chiama:
+        //  si chiama anche dall'accesso (onAuthStateChanged).
         // ============================================================
         const inViaggio = new Set();              // 'chiave|id|valore'
-        const rifiutateAlle = new Map();          // 'chiave|id|valore' -> quando
-        const RIPROVA_MS = 30000;
+        const ATTESA_MIN = 30000;
+        const ATTESA_MAX = 15 * 60000;
+        let attesaRifiuto = 0;                    // 0 = nessun no in corso
+        let riprovaDopo = 0;                      // prima di quest'ora non si riprova da soli
+        let soloProva = false;                    // dopo un no a tutto: un blocco solo
         let avvisoRifiutoDato = false;
+        let avvisoFermaDato = false;
         let riprovaProgrammata = null;
+
+        // I codici di Firestore che dicono «e' la riga», e quelli che dicono
+        // «e' il momento». Un codice che non sta in nessuno dei due elenchi
+        // conta come riga solo se nello stesso giro qualcos'altro e' passato.
+        const NO_DELLA_RIGA = ['invalid-argument', 'failed-precondition', 'out-of-range'];
+        const NO_DI_TUTTO = ['permission-denied', 'unauthenticated', 'unavailable', 'deadline-exceeded',
+            'resource-exhausted', 'cancelled', 'aborted'];
+        const codiceDi = (err) => String((err && err.code) || '').replace(/^firestore\//, '');
+
+        function riprovaFra(ms) {
+            if (riprovaProgrammata) clearTimeout(riprovaProgrammata);
+            riprovaProgrammata = setTimeout(() => { riprovaProgrammata = null; inviaSospesi(); }, ms);
+        }
+
+        function attesaDaCapo() {
+            attesaRifiuto = 0;
+            riprovaDopo = 0;
+        }
+
+        function attesaPiuLunga(aTutto) {
+            attesaRifiuto = attesaRifiuto ? Math.min(attesaRifiuto * 2, ATTESA_MAX) : ATTESA_MIN;
+            riprovaDopo = Date.now() + attesaRifiuto;
+            if (aTutto) soloProva = true;
+            riprovaFra(attesaRifiuto + 100);
+        }
 
         const DOC_A_CAMPI = {
             profilo: () => doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'),
             fiscali: () => doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali')
         };
 
-        function inviaSospesi(opz) {
-            opz = opz || {};
-            const uid = uidCorrente();
-            if (!isCloudActive || !db || !uid) return Promise.resolve([]);
-            const reg = window.leggiSospesi();
-            if (!reg.uid || reg.uid !== uid) return Promise.resolve([]);
-            const ora = Date.now();
-            const pronta = (firma) => !inViaggio.has(firma)
-                && (opz.forza || !(rifiutateAlle.get(firma) > ora - RIPROVA_MS));
+        function mettiNelBlocco(batch, o) {
+            if (o.tipo === 'd') batch.delete(o.ref);
+            else if (o.tipo === 'm') batch.set(o.ref, o.dati, { merge: true });
+            else batch.set(o.ref, o.dati);
+        }
 
+        // Le operazioni da spedire, preparate una per una: quella che non si
+        // riesce a preparare (un identificativo con '/', un campo con una
+        // lista dentro una lista) finisce in daFermare, e le altre partono.
+        function preparaOperazioni(reg, opz, daTogliere, daFermare) {
             const operazioni = [];      // { tipo, ref, dati, voci:[[chiave,id,valore]] }
-            const daTogliere = [];
+            const pronta = (chiave, id, valore) => valore[0] !== 'c' && !valore.endsWith('!')
+                && !inViaggio.has(chiave + '|' + id + '|' + valore);
+            // Si prova a metterla in un blocco che non partira' mai: Firestore
+            // controlla li' la forma dei dati, prima di qualsiasi rete.
+            const preparabile = (o) => {
+                try { mettiNelBlocco(writeBatch(db), o); return true; }
+                catch (err) { console.error('Una modifica in attesa non si puo\' spedire, la metto da parte:', o.voci.map(v => v[0] + '/' + v[1]).join(', '), err); return false; }
+            };
             Object.keys(reg.per).forEach(chiave => {
                 if (opz.chiavi && !opz.chiavi.includes(chiave)) return;
                 const voci = reg.per[chiave];
@@ -1587,81 +1644,184 @@
                     const prese = [];
                     Object.keys(voci).forEach(campo => {
                         const valore = voci[campo];
-                        if (!pronta(chiave + '|' + campo + '|' + valore)) return;
-                        prese.push([chiave, campo, valore]);
+                        if (!pronta(chiave, campo, valore)) return;
                         // Vuoto e' sempre un valore esplicito ('' o null):
                         // quello che manca del tutto non si manda.
-                        if (valori[campo] !== undefined) campi[campo] = valori[campo];
+                        if (valori[campo] === undefined) { daTogliere.push([chiave, campo, valore]); return; }
+                        prese.push([chiave, campo, valore]);
+                        campi[campo] = valori[campo];
                     });
                     if (!prese.length) return;
-                    if (!Object.keys(campi).length) { daTogliere.push(...prese); return; }
-                    operazioni.push({ tipo: 'm', ref: DOC_A_CAMPI[chiave](), dati: campi, voci: prese });
+                    let ref;
+                    try { ref = DOC_A_CAMPI[chiave](); }
+                    catch (err) { console.error('Documento ' + chiave + ' non raggiungibile:', err); daFermare.push(...prese); return; }
+                    const tutto = { tipo: 'm', ref, dati: campi, voci: prese };
+                    if (preparabile(tutto)) { operazioni.push(tutto); return; }
+                    // Un campo storto non ferma gli altri: si provano uno per uno
+                    const buoni = {};
+                    const vociBuone = [];
+                    prese.forEach(v => {
+                        const uno = { tipo: 'm', ref, dati: { [v[1]]: campi[v[1]] }, voci: [v] };
+                        if (preparabile(uno)) { buoni[v[1]] = campi[v[1]]; vociBuone.push(v); }
+                        else daFermare.push(v);
+                    });
+                    if (vociBuone.length) operazioni.push({ tipo: 'm', ref, dati: buoni, voci: vociBuone });
                     return;
                 }
                 let locale = null;      // si legge solo se c'e' qualcosa da scrivere
                 Object.keys(voci).forEach(id => {
                     const valore = voci[id];
-                    if (valore[0] === 'c') return;   // candidato: aspetta l'elenco del server
-                    if (!pronta(chiave + '|' + id + '|' + valore)) return;
-                    if (valore[0] === 'd') {
-                        operazioni.push({ tipo: 'd', ref: docDati(chiave, id), voci: [[chiave, id, valore]] });
+                    if (!pronta(chiave, id, valore)) return;
+                    const voce = [chiave, id, valore];
+                    let o;
+                    try {
+                        if (valore[0] === 'd') {
+                            o = { tipo: 'd', ref: docDati(chiave, id), voci: [voce] };
+                        } else {
+                            if (!locale) locale = window.mappaLocaleSospesi(chiave);
+                            const x = locale.get(id);
+                            // Segnata come scritta ma qui non c'e' piu': l'ha tolta
+                            // qualcos'altro dopo (un ascolto, l'altra finestra). Non
+                            // c'e' niente da mandare.
+                            if (!x) { daTogliere.push(voce); return; }
+                            o = { tipo: 's', ref: docDati(chiave, id), dati: x, voci: [voce] };
+                        }
+                    } catch (err) {
+                        console.error('Una modifica in attesa non si puo\' spedire, la metto da parte:', chiave + '/' + id, err);
+                        daFermare.push(voce);
                         return;
                     }
-                    if (!locale) locale = window.mappaLocaleSospesi(chiave);
-                    const x = locale.get(id);
-                    // Segnata come scritta ma qui non c'e' piu': l'ha tolta
-                    // qualcos'altro dopo (un ascolto, l'altra finestra). Non
-                    // c'e' niente da mandare.
-                    if (!x) { daTogliere.push([chiave, id, valore]); return; }
-                    operazioni.push({ tipo: 's', ref: docDati(chiave, id), dati: x, voci: [[chiave, id, valore]] });
+                    if (preparabile(o)) operazioni.push(o);
+                    else daFermare.push(voce);
                 });
             });
+            return operazioni;
+        }
+
+        // Un blocco parte; se il Cloud lo rifiuta e dentro c'e' piu' di una
+        // riga, e il no non e' «di tutto», si rimanda riga per riga.
+        // Risolve sempre: { fatti, no: [{ o, err }], err }.
+        function spedisciBlocco(fetta, opz, conta) {
+            const commit = (ops) => {
+                try {
+                    const batch = writeBatch(db);
+                    ops.forEach(o => mettiNelBlocco(batch, o));
+                    return batch.commit();
+                } catch (err) {
+                    return Promise.reject(err);
+                }
+            };
+            const confermati = (ops) => {
+                window.togliSospesi([].concat(...ops.map(o => o.voci)));
+                conta(ops.length);
+            };
+            return commit(fetta).then(() => {
+                confermati(fetta);
+                return { fatti: fetta.length, no: [] };
+            }, (err) => {
+                console.error('Il Cloud non ha accettato le modifiche in attesa:', err);
+                if (fetta.length < 2 || NO_DI_TUTTO.includes(codiceDi(err))) {
+                    return { fatti: 0, no: fetta.map(o => ({ o, err })), err };
+                }
+                return Promise.allSettled(fetta.map(o => commit([o]).then(() => confermati([o]))))
+                    .then(esiti => {
+                        const no = [];
+                        esiti.forEach((e, k) => { if (e.status === 'rejected') no.push({ o: fetta[k], err: e.reason }); });
+                        return { fatti: fetta.length - no.length, no, err };
+                    });
+            });
+        }
+
+        function inviaSospesi(opz) {
+            opz = opz || {};
+            try {
+                return inviaSospesiDavvero(opz);
+            } catch (err) {
+                // Mai un'eccezione verso chi chiama (l'accesso, un salvataggio)
+                console.error('Spedizione delle modifiche in attesa non riuscita:', err);
+                return Promise.resolve([]);
+            }
+        }
+
+        function inviaSospesiDavvero(opz) {
+            const uid = uidCorrente();
+            if (!isCloudActive || !db || !uid) return Promise.resolve([]);
+            const reg = window.leggiSospesi();
+            if (!reg.uid || reg.uid !== uid) return Promise.resolve([]);
+            // Dopo un no si aspetta il proprio turno (c'e' gia' un tentativo
+            // programmato); forza = l'accesso, la rete tornata, la migrazione.
+            if (!opz.forza && Date.now() < riprovaDopo) return Promise.resolve([]);
+
+            const daTogliere = [];
+            const daFermare = [];
+            let operazioni = preparaOperazioni(reg, opz, daTogliere, daFermare);
             if (daTogliere.length) window.togliSospesi(daTogliere);
+            if (daFermare.length) fermaColpevoli(daFermare, opz);
             if (!operazioni.length) return Promise.resolve([]);
+
+            // Dopo un no a tutto: un blocco di prova, il resto se passa.
+            let rimandate = 0;
+            if (soloProva && operazioni.length > 400) {
+                rimandate = operazioni.length - 400;
+                operazioni = operazioni.slice(0, 400);
+            }
 
             const totale = operazioni.length;
             let fatti = 0;
-            const promesse = [];
+            const conta = (n) => {
+                fatti += n;
+                if (opz.onProgress) opz.onProgress(fatti, totale);
+            };
+            const blocchi = [];
             for (let i = 0; i < operazioni.length; i += 400) {
                 const fetta = operazioni.slice(i, i + 400);
-                const voci = [].concat(...fetta.map(o => o.voci));
-                const firme = voci.map(v => v.join('|'));
-                let commit;
-                try {
-                    const batch = writeBatch(db);
-                    fetta.forEach(o => {
-                        if (o.tipo === 'd') batch.delete(o.ref);
-                        else if (o.tipo === 'm') batch.set(o.ref, o.dati, { merge: true });
-                        else batch.set(o.ref, o.dati);
-                    });
-                    commit = batch.commit();
-                } catch (err) {
-                    commit = Promise.reject(err);
-                }
+                const firme = [].concat(...fetta.map(o => o.voci)).map(v => v.join('|'));
                 firme.forEach(f => inViaggio.add(f));
-                promesse.push(commit.then(() => {
-                    window.togliSospesi(voci);
-                    firme.forEach(f => rifiutateAlle.delete(f));
+                blocchi.push(spedisciBlocco(fetta, opz, conta).finally(() => firme.forEach(f => inViaggio.delete(f))));
+            }
+            return Promise.all(blocchi).then(esiti => {
+                const passati = esiti.reduce((a, e) => a + e.fatti, 0);
+                const tuttiNo = [].concat(...esiti.map(e => e.no));
+                // Colpevole: un no «della riga», o un no qualsiasi (che non
+                // sia «di tutto») mentre il resto passava.
+                const colpevoli = tuttiNo.filter(n => NO_DELLA_RIGA.includes(codiceDi(n.err))
+                    || (passati > 0 && !NO_DI_TUTTO.includes(codiceDi(n.err))));
+                const delMomento = tuttiNo.filter(n => !colpevoli.includes(n));
+                if (colpevoli.length) fermaColpevoli([].concat(...colpevoli.map(n => n.o.voci)), opz);
+                if (passati > 0) {
+                    attesaDaCapo();
+                    soloProva = false;
                     avvisoRifiutoDato = false;
-                    fatti += fetta.length;
-                    if (opz.onProgress) opz.onProgress(fatti, totale);
-                    if (window.activeTab === 'cloud' && !formConDatiNonSalvati()) window.renderDifferito();
-                    return fetta.length;
-                }, (err) => {
-                    console.error('Il Cloud non ha accettato le modifiche in attesa:', err);
-                    const quando = Date.now();
-                    firme.forEach(f => rifiutateAlle.set(f, quando));
+                }
+                if (delMomento.length) {
+                    attesaPiuLunga(passati === 0);
                     if (!avvisoRifiutoDato && !opz.silenzioso) {
                         avvisoRifiutoDato = true;
                         if (window.showToast) window.showToast('Salvato sul telefono; il Cloud non l\'ha accettato, riprovo più tardi.', 'avviso');
                     }
-                    if (!riprovaProgrammata) {
-                        riprovaProgrammata = setTimeout(() => { riprovaProgrammata = null; inviaSospesi(); }, RIPROVA_MS + 100);
-                    }
-                    throw err;
-                }).finally(() => firme.forEach(f => inViaggio.delete(f))));
+                } else if (rimandate) {
+                    // La prova e' passata: parte il resto
+                    inviaPresto();
+                }
+                if (window.activeTab === 'cloud' && !formConDatiNonSalvati()) window.renderDifferito();
+                // Per chi chiama, un esito per blocco come Promise.allSettled:
+                // un blocco con anche una sola riga non arrivata e' «rejected».
+                return esiti.map(e => e.no.length
+                    ? { status: 'rejected', reason: e.no[0].err || e.err }
+                    : { status: 'fulfilled', value: e.fatti });
+            });
+        }
+
+        // Per le prove e per chi indaga dalla console: a che punto sono i
+        // tentativi dopo un no. Solo lettura.
+        window.statoSpedizione = () => ({ attesa: attesaRifiuto, riprovaDopo, soloProva, inViaggio: inViaggio.size });
+
+        function fermaColpevoli(voci, opz) {
+            window.fermaSospesi(voci);
+            if (!avvisoFermaDato && !opz.silenzioso) {
+                avvisoFermaDato = true;
+                if (window.showToast) window.showToast('Una modifica non è accettata dal Cloud: resta sul telefono. La trovi in «Gestione → Backup e impostazioni».', 'avviso');
             }
-            return Promise.allSettled(promesse);
         }
         window.inviaSospesi = inviaSospesi;
 
@@ -1675,7 +1835,8 @@
 
         // Si riparte quando torna la rete e quando l'app torna in primo
         // piano: su iPhone e' il momento in cui ci si rimette a lavorare.
-        window.addEventListener('online', () => inviaSospesi({ forza: true }));
+        // Con la rete tornata l'attesa dopo un no riparte da capo.
+        window.addEventListener('online', () => { attesaDaCapo(); inviaSospesi({ forza: true }); });
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') inviaSospesi();
         });
@@ -2160,6 +2321,14 @@
                 if (window.showToast) window.showToast(avviso, 'avviso');
                 return { cloud: false, errore: true, scritti };
             }
+            // «Sul Cloud» solo se tutte le righe di questo salvataggio sono
+            // state confermate: una ferma, una in attesa dopo un no, una
+            // rimandata dopo il blocco di prova restano nel registro.
+            const reg = window.leggiSospesi();
+            const rimaste = (elenco, chiave) => (elenco || []).some(x => x && reg.per[chiave] && reg.per[chiave][String(x.id)]);
+            if (rimaste(newRecords, 'taxi_records') || rimaste(newShifts, 'taxi_shifts')) {
+                return { cloud: false, scritti };
+            }
             return { cloud: true, scritti };
         };
 
@@ -2348,8 +2517,10 @@
         const DOCUMENTI_SOSPESI = ['profilo', 'fiscali'];
 
         // Il valore di una voce: 's' scritto, 'd' cancellato o 'c' candidato
-        // (vedi segnaTuttoIlLocale), seguito dal numero.
-        const VALORE_SOSPESO = /^[sdc]\d+$/;
+        // (vedi segnaTuttoIlLocale), seguito dal numero; un '!' in fondo
+        // vuol dire «ferma»: il Cloud non la accetta, e non si ritenta da
+        // sola (vedi QUANDO IL CLOUD DICE NO nel blocco di Firebase).
+        const VALORE_SOSPESO = /^[sdc]\d+!?$/;
 
         function leggiSospesi() {
             let r = null;
@@ -2387,12 +2558,79 @@
 
         // Quante modifiche aspettano di partire: scritte e cancellate. I
         // candidati no - non sono ancora modifiche, lo diventano (o no)
-        // quando il server dice cosa ha gia'. solo: 's' o 'd' per contarne
-        // un tipo.
+        // quando il server dice cosa ha gia'. E nemmeno le ferme: quelle
+        // non aspettano, le conta elencoFerme. solo: 's' o 'd' per
+        // contarne un tipo.
         function contaSospesi(reg, solo) {
             const r = reg || leggiSospesi();
             return Object.keys(r.per).reduce((a, k) => a + Object.values(r.per[k])
-                .filter(v => (solo ? v[0] === solo : v[0] === 's' || v[0] === 'd')).length, 0);
+                .filter(v => !v.endsWith('!') && (solo ? v[0] === solo : v[0] === 's' || v[0] === 'd')).length, 0);
+        }
+
+        // Mette da parte le voci che il Cloud non accetta: restano nel
+        // registro col loro '!', solo se sono ancora quelle (una modifica
+        // nuova alla stessa riga ha un altro numero, e riparte).
+        // elenco: [[chiave, id, valore], ...]
+        function fermaSospesi(elenco) {
+            if (!elenco || !elenco.length) return true;
+            const reg = leggiSospesi();
+            let cambiato = false;
+            elenco.forEach(([chiave, id, valore]) => {
+                const voci = reg.per[chiave];
+                if (voci && voci[String(id)] === valore && !valore.endsWith('!')) {
+                    voci[String(id)] = valore + '!';
+                    cambiato = true;
+                }
+            });
+            return cambiato ? scriviSospesi(reg) : true;
+        }
+
+        // Le ferme ripartono: per un tasto «riprova», o per chi sa di aver
+        // tolto la causa. Non le chiama niente da solo.
+        function riprovaFerme() {
+            const reg = leggiSospesi();
+            let cambiato = false;
+            Object.values(reg.per).forEach(voci => Object.keys(voci).forEach(id => {
+                if (voci[id].endsWith('!')) { voci[id] = voci[id].slice(0, -1); cambiato = true; }
+            }));
+            if (cambiato) scriviSospesi(reg);
+            if (cambiato && window.inviaSospesi) window.inviaSospesi({ forza: true });
+            return cambiato;
+        }
+
+        function elencoFerme(reg) {
+            const r = reg || leggiSospesi();
+            const out = [];
+            Object.keys(r.per).forEach(chiave => Object.keys(r.per[chiave]).forEach(id => {
+                const valore = r.per[chiave][id];
+                if (valore.endsWith('!')) out.push({ chiave, id, op: valore[0] });
+            }));
+            return out;
+        }
+
+        // Una riga ferma detta a parole: cosa e', e per un movimento la data
+        // e l'importo, che e' come la si ritrova nell'elenco.
+        function descriviFerma(f) {
+            const giorno = (d) => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? String(d).split('-').reverse().join('/') : '';
+            const nomi = {
+                taxi_records: 'un movimento', taxi_shifts: 'un turno', taxi_scadenze: 'una scadenza',
+                taxi_versamenti: 'un versamento', taxi_note: 'una nota', taxi_veicoli: 'una vettura',
+                taxi_voci_fisse: 'una voce di budget', profilo: 'un campo della tua scheda',
+                fiscali: 'un\'impostazione fiscale'
+            };
+            const nome = nomi[f.chiave] || 'una riga';
+            if (f.op === 'd') return 'la cancellazione di ' + nome;
+            if (!MEMORIA_SOSPESI[f.chiave]) return nome;
+            const x = mappaLocaleSospesi(f.chiave).get(String(f.id));
+            if (!x) return nome;
+            const quando = giorno(x.data);
+            const titolo = String(x.nome || x.targa || '').trim().slice(0, 40);
+            if (f.chiave === 'taxi_records' || f.chiave === 'taxi_versamenti') {
+                const importo = Number.isFinite(parseFloat(x.importo)) ? ' da ' + formatCurrency(parseFloat(x.importo)) : '';
+                return (f.chiave === 'taxi_records' ? 'movimento' : 'versamento') + (quando ? ' del ' + quando : '') + importo;
+            }
+            if (titolo) return nome + ' («' + titolo + '»)';
+            return nome + (quando ? ' del ' + quando : '');
         }
 
         function scriviSospesi(reg) {
@@ -2678,22 +2916,34 @@
             const reg = leggiSospesi();
             if (!reg.uid) return '';
             const n = contaSospesi(reg);
-            if (!n) return '';
-            let dal = '';
-            const d = reg.dal ? new Date(reg.dal) : null;
-            if (d && !isNaN(d.getTime())) {
-                dal = ` (dal ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')})`;
+            const pezzi = [];
+            if (n) {
+                let dal = '';
+                const d = reg.dal ? new Date(reg.dal) : null;
+                if (d && !isNaN(d.getTime())) {
+                    dal = ` (dal ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')})`;
+                }
+                let t = `${n} ${n === 1 ? 'modifica' : 'modifiche'} in attesa di invio al Cloud${dal}`;
+                if (!connesso) t += `: ${n === 1 ? 'partirà' : 'partiranno'} quando rientri`;
+                if (n > 5000) t += ' · molte modifiche in attesa: collegati a una rete';
+                pezzi.push(t);
             }
-            let t = `${n} ${n === 1 ? 'modifica' : 'modifiche'} in attesa di invio al Cloud${dal}`;
-            if (!connesso) t += `: ${n === 1 ? 'partirà' : 'partiranno'} quando rientri`;
-            if (n > 5000) t += ' · molte modifiche in attesa: collegati a una rete';
-            return t;
+            // Le ferme: il Cloud non le accetta, e da sole non ripartono.
+            // Restano sul telefono: lo si dice, con quanto basta per
+            // ritrovarle (le prime tre).
+            const ferme = elencoFerme(reg);
+            if (ferme.length) {
+                const dette = ferme.slice(0, 3).map(descriviFerma).join(', ');
+                const altre = ferme.length > 3 ? ` e altre ${ferme.length - 3}` : '';
+                pezzi.push(`${ferme.length} ${ferme.length === 1 ? 'modifica che il Cloud non accetta' : 'modifiche che il Cloud non accetta'}: ${dette}${altre}. Sul telefono ${ferme.length === 1 ? 'resta' : 'restano'}; se ${ferme.length === 1 ? 'la correggi riparte' : 'le correggi ripartono'}`);
+            }
+            return pezzi.join(' · ');
         }
 
         Object.assign(window, {
             testoSospesi, leggiSospesi, contaSospesi, segnoRifiutato, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
             mappaLocaleSospesi, valoriLocaliCampi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
-            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare
+            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare, fermaSospesi, riprovaFerme, elencoFerme
         });
 
         // Quanto spazio prendono le strisce aperte: si misura, non si indovina.
