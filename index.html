@@ -257,6 +257,42 @@
         /* Rare eccezioni dove 44px spaccherebbe davvero la riga: si chiede
            apposta, non per sbaglio. */
         .tasto-minuto { min-height: 0; }
+        /* La crocetta sull'angolo di una foto era un tasto di 20 punti per
+           15: sul telefono si prendeva la foto invece della crocetta. Il
+           tasto ora e' un quadrato trasparente di 44 punti centrato sulla
+           crocetta, che resta piccola e nello stesso posto (6 punti fuori
+           dall'angolo): la miniatura, di 56 punti, non sparisce sotto un
+           tasto nero grande quasi quanto lei. */
+        .tasto-foto-via {
+            top: -10px; right: -10px;
+            width: 44px; height: 44px;
+            display: flex; align-items: flex-start; justify-content: flex-end;
+            padding: 4px;
+            background: transparent;
+        }
+
+        /* I CAMPI NON SCENDONO SOTTO I 16 PIXEL
+           Safari su iPhone, quando tocchi un campo scritto piu' piccolo di
+           16px, ingrandisce tutta la pagina per fartelo leggere, e poi la
+           lascia ingrandita: la schermata esce dai lati e va rimessa a posto
+           con due dita. Succedeva col selettore dell'anno (15px), col filtro
+           dei metodi, con le date dei filtri, con la data di una scadenza
+           fatta (13px), con le impostazioni fiscali e con la modifica in riga:
+           tutti campi nati con text-sm o text-xs, che qui sopra sono stati
+           alzati ma restano sotto la soglia.
+           Una regola sola, come per i 44px, cosi' vale anche per i campi che
+           verranno. max(16px, 1em): 1em e' il corpo del contenitore, quindi
+           un campo dentro un titolo grande resta grande. I campi che hanno un
+           corpo grande loro (la cifra della corsa veloce, il selettore
+           dell'anno nel menu) si tolgono con :not: questa regola pesa piu'
+           delle classi e li rimpicciolirebbe. Un campo nuovo con un corpo
+           grande va aggiunto all'elenco. (Niente «revert-layer»: su Safari
+           c'e' solo dalla 16.4.) */
+        input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.text-base):not(.text-lg):not(.text-xl):not(.text-2xl):not(.text-\[2\.35rem\]),
+        select:not(.text-base):not(.text-lg):not(.text-xl):not(.text-2xl),
+        textarea:not(.text-base):not(.text-lg):not(.text-xl):not(.text-2xl) {
+            font-size: max(16px, 1em);
+        }
 
         /* ============================================================
            LA NAVIGAZIONE DA TASTIERA
@@ -647,6 +683,15 @@
            messaggio torna in basso a destra. */
         #toast { bottom: calc(6rem + env(safe-area-inset-bottom)); }
         @media (min-width: 768px) { #toast { bottom: 1.25rem; } }
+        /* IL MESSAGGIO NON RUBA I TOCCHI
+           Il messaggio sta proprio sopra i tasti della scheda Giornate, e
+           per tre secondi un tocco li' finiva sul messaggio invece che sul
+           tasto: la corsa dopo non partiva. Il messaggio si lascia
+           attraversare; si tocca solo il suo tasto «Annulla», quando c'e'. */
+        #toast { pointer-events: none; }
+        /* Il tasto e' alto 44 punti come tutti; entra un po' nel margine
+           del messaggio, cosi' il riquadro non raddoppia di altezza. */
+        #toast-annulla { pointer-events: auto; margin-top: -0.5rem; margin-bottom: -0.5rem; }
 
         /* Il simbolo dell'euro accanto a una cifra grande: piu' piccolo e piu'
            tenue del numero. Da lontano si legge «116,50», non «€». */
@@ -874,6 +919,16 @@
            sono le frecce e i puntini di separazione, che devono vedersi
            senza prendersi la scena. */
         :root[data-tema="scuro"] .text-gray-300 { color: #8a8275; }
+        /* IL «0,00» DEL CAMPO GRANDE NON E' UN IMPORTO
+           Di giorno il segnaposto della corsa e della spesa veloci e' un
+           grigio chiarissimo su bianco: si capisce che e' vuoto. Di notte
+           restava lo stesso grigio (#d1d5db) sulla scheda scura, cioe' quasi
+           bianco, grande quanto una cifra vera: sembrava gia' scritto
+           «0,00». Qui scende a #5e584d, che sulla scheda (#1d1a16) da'
+           circa 2,5 di contrasto: si vede che c'e' un campo, non si legge
+           come un numero. Apposta sotto il 4,5 dei testi: non e' un testo
+           da leggere, e' il posto dove scriverne uno. */
+        :root[data-tema="scuro"] .placeholder\:text-gray-300::placeholder { color: #5e584d; }
         :root[data-tema="scuro"] .hover\:text-gray-900:hover,
         :root[data-tema="scuro"] .hover\:text-gray-800:hover,
         :root[data-tema="scuro"] .hover\:text-gray-700:hover { color: var(--inchiostro-su); }
@@ -1189,7 +1244,10 @@
 
     <!-- Toast Notifica -->
     <div id="toast" role="status" aria-live="polite" class="hidden fixed right-5 left-5 md:left-auto justify-center md:justify-start bg-gray-900 text-yellow-400 px-5 py-3 rounded-xl shadow-2xl z-50 items-center space-x-2 border border-yellow-400/30 slide-in font-bold text-sm no-print">
-        <span id="toast-text">Messaggio</span>
+        <span id="toast-text" class="min-w-0">Messaggio</span>
+        <!-- Solo dopo una corsa o una spesa veloci: toglie quel movimento.
+             Vedi mostraAnnulla(). -->
+        <button type="button" id="toast-annulla" class="hidden shrink-0 px-4 rounded-lg bg-yellow-400 text-gray-900 font-black">Annulla</button>
     </div>
 
     <!-- ============================================================
@@ -3540,7 +3598,10 @@
         // Un solo messaggio alla volta: senza azzerare il timer precedente, due avvisi
         // ravvicinati facevano sparire il secondo dopo una frazione di secondo.
         let timerToast = null;
-        function showToast(msg, tipo) {
+        // Il terzo argomento, se c'e', e' cosa fa il tasto «Annulla» del
+        // messaggio. Senza, il tasto non si vede: ogni messaggio nuovo spegne
+        // l'annulla di quello prima, cosi' non si annulla mai la cosa sbagliata.
+        function showToast(msg, tipo, annulla) {
             const toast = document.getElementById('toast');
             const text = document.getElementById('toast-text');
             if (!toast || !text) return;
@@ -3548,12 +3609,31 @@
             toast.classList.toggle('messaggio-avviso', tipo === 'avviso');
             toast.classList.remove('hidden');
             toast.classList.add('flex');
+            const tasto = document.getElementById('toast-annulla');
+            if (tasto) {
+                tasto.onclick = annulla ? () => { nascondiToast(); annulla(); } : null;
+                tasto.classList.toggle('hidden', !annulla);
+            }
             if (timerToast) clearTimeout(timerToast);
-            timerToast = setTimeout(() => {
-                toast.classList.add('hidden');
-                toast.classList.remove('flex');
-                timerToast = null;
-            }, 3000);
+            // Con l'annulla resta di piu': il tempo di leggere la cifra,
+            // accorgersi dello sbaglio e spostare il dito.
+            timerToast = setTimeout(nascondiToast, annulla ? 6000 : 3000);
+        }
+        function nascondiToast() {
+            const toast = document.getElementById('toast');
+            if (timerToast) clearTimeout(timerToast);
+            timerToast = null;
+            if (!toast) return;
+            // Il fuoco della tastiera non deve restare su un tasto che sparisce:
+            // finirebbe in fondo alla pagina.
+            const tasto = document.getElementById('toast-annulla');
+            if (tasto) {
+                if (document.activeElement === tasto) tasto.blur();
+                tasto.onclick = null;
+                tasto.classList.add('hidden');
+            }
+            toast.classList.add('hidden');
+            toast.classList.remove('flex');
         }
 
         // ============================================================
@@ -8336,6 +8416,12 @@
             Object.keys(perData).forEach(d => {
                 const [a, m, gi] = d.split('-').map(Number);
                 const idx = new Date(a, m - 1, gi).getDay();
+                // Una data storta nell'archivio («2026-xx», arrivata da un
+                // backup o da un import a mano) non ha un giorno della
+                // settimana: getDay() da' NaN e la schermata intera cadeva
+                // con «Cannot read properties of undefined». Quella riga qui
+                // si salta; le date buone si contano come prima.
+                if (!settimana[idx]) return;
                 settimana[idx].gg++;
                 settimana[idx].tot += perData[d].tot;
                 settimana[idx].n += perData[d].n;
@@ -9075,7 +9161,7 @@
         // non deve far salvare d'un colpo la stessa cifra riscritta dopo.
         window.corsaStranaInAttesa = null;
         return `
-            <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5">
+            <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5" data-scheda-corsa>
                 <label for="corsa-lampo" class="etichetta block">Incasso corsa</label>
                 <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-green-600 pb-2.5 transition-colors">
                     <input type="text" inputmode="decimal" id="corsa-lampo" placeholder="0,00"
@@ -9119,7 +9205,7 @@
             <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="etichetta text-red-600">Stai registrando una spesa</span>
-                    <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || oggiISO())}</span>
+                    <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || giornoDiLavoroAdesso())}</span>
                 </div>
                 <div>
                     <label for="spesa-lampo-cat" class="etichetta block mb-1.5">Tipo di spesa</label>
@@ -9170,7 +9256,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                     Torna alle corse
                 </button>
-                ${window.showUscitaForm ? moduloUscitaHTML(giorno || oggiISO()) : ''}
+                ${window.showUscitaForm ? moduloUscitaHTML(giorno || giornoDiLavoroAdesso()) : ''}
             </div>`;
         }
 
@@ -9586,9 +9672,10 @@
                 </details>`;
 
             // Senza filtro giorno si sta guardando tutto l'anno, ma quello che
-            // si registra va su oggi: e' quella la giornata che il registro
-            // apre o chiude.
-            const giornoReg = giorno || oggiISO();
+            // si registra va su oggi (o, dopo mezzanotte, sul giorno del turno
+            // di notte ancora in corso: vedi giornoDiLavoroAdesso): e' quella
+            // la giornata che il registro apre o chiude.
+            const giornoReg = giorno || giornoDiLavoroAdesso();
             const aperto = registroAperto(giornoReg);
 
             return { aperto, corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, giornoReg, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo };
@@ -9655,7 +9742,7 @@
                                         <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                         <span class="text-[11px] font-bold text-yellow-400 whitespace-nowrap">in turno</span>
                                     </span>` : ''}
-                                ${giorno ? `<button onclick="pulisciGiornoGiornate()" title="Togli il filtro giorno" aria-label="Togli il filtro giorno" class="tasto-icona w-9 h-9 flex-shrink-0 rounded-xl text-white/45 hover:text-white flex items-center justify-center">×</button>` : ''}
+                                ${giorno ? `<button onclick="pulisciGiornoGiornate()" title="Mostra tutti i giorni" aria-label="Mostra tutti i giorni" class="tasto-icona w-9 h-9 flex-shrink-0 rounded-xl text-white/45 hover:text-white flex items-center justify-center">×</button>` : ''}
                             </span>
                         </div>
 
@@ -9899,7 +9986,14 @@
             if (gia && !confirm(`Il ${ggMm(iso)} ha già ${gia.turno}. Lo sostituisco con ${preset.label}?`)) return;
             if (gia) window.deleteShiftFromCloud(gia.id);
 
-            const ore = calcolaOreTurno(iso, preset.inizio, preset.fine, preset.pausaInizio, preset.pausaFine);
+            // Le ore si contano su una data fissa senza cambio d'ora, come fa il
+            // modulo «+ Registra un turno» (vedi moduloTurnoHTML): sulla data
+            // vera, «La notte» del sabato del cambio d'ora diventava 13 ore in
+            // ottobre e 11 a marzo, mentre lo stesso turno dal modulo ne
+            // segnava 12. Lo stesso turno deve valere le stesse ore da tutte e
+            // due le strade, e le ore di un turno a orario fisso sono quelle
+            // del contratto, non quelle dell'orologio.
+            const ore = calcolaOreTurno('2000-01-01', preset.inizio, preset.fine, preset.pausaInizio, preset.pausaFine);
             // I km restano da compilare: si aggiungono dall'elenco turni quando si sanno
             window.saveShiftToCloud(conPausaDelPreset({
                 id: nuovoId(),
@@ -10013,7 +10107,7 @@
                                         ${formatCurrency(incassoDi(iso))}
                                     </p>` : ''}
                             </div>
-                            <button onclick="toccaGiornoCalendario('${escJs(iso)}')" class="text-gray-400 hover:text-white text-xl leading-none px-2">×</button>
+                            <button onclick="toccaGiornoCalendario('${escJs(iso)}')" title="Chiudi la giornata" aria-label="Chiudi la giornata" class="tasto-icona shrink-0 rounded-xl text-gray-400 hover:text-white text-xl leading-none flex items-center justify-center">×</button>
                         </div>
 
                         <div>
@@ -10080,16 +10174,23 @@
 
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-4">
                         <!-- Intestazione con mese precedente e successivo -->
-                        <div class="flex items-center justify-between gap-3">
-                            <button onclick="scorriMeseCalendario(-1)" title="Mese precedente" class="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
-                            <div class="text-center min-w-0">
+                        <!-- A 320 punti la freccia ‹ veniva schiacciata a 18 punti
+                             di larghezza dal titolo, e il conto del mese andava a
+                             capo in cinque righe strette. Le frecce non si
+                             stringono piu' (shrink-0, 44 punti come ogni tasto
+                             icona) e il conto sta sotto, a tutta larghezza. -->
+                        <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="scorriMeseCalendario(-1)" title="Mese precedente" aria-label="Mese precedente" class="tasto-icona shrink-0 w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
+                            <div class="flex-1 text-center min-w-0">
                                 <p class="text-lg font-black text-gray-900 capitalize leading-tight">${nomeMese(mm)} ${anno}</p>
-                                <p class="text-xs font-bold text-gray-400">${lavorati.length} lavorati · ${festivi.length} festivi · ${recuperi.length} recuperi · ${oreScritte(oreMese)} h</p>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="meseCalendarioOggi()" class="px-3 h-10 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black">Oggi</button>
-                                <button onclick="scorriMeseCalendario(1)" title="Mese successivo" class="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="meseCalendarioOggi()" class="px-2.5 h-10 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black">Oggi</button>
+                                <button onclick="scorriMeseCalendario(1)" title="Mese successivo" aria-label="Mese successivo" class="tasto-icona shrink-0 w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
                             </div>
+                        </div>
+                        <p class="text-xs font-bold text-gray-400 text-center">${lavorati.length} lavorati · ${festivi.length} festivi · ${recuperi.length} recuperi · ${oreScritte(oreMese)} h</p>
                         </div>
 
                         ${inSpostamento ? `
@@ -10725,6 +10826,10 @@
                     ${rd.giorniLavorati === 0 ? `
                         <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
                             <p class="text-gray-400 font-bold">Nessuna giornata lavorata nel ${annoAttivo()}.</p>
+                            <!-- Uno stato vuoto deve dire da dove si comincia:
+                                 senza turni qui non c'e' niente da contare. -->
+                            <p class="text-sm text-gray-500 mt-1">I conti partono dal primo turno registrato.</p>
+                            <button onclick="apriCalendario()" class="mt-4 bg-gray-900 hover:bg-gray-800 text-yellow-400 text-sm font-black px-5 py-3 rounded-xl">Apri il Calendario</button>
                         </div>
                     ` : `
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -10929,6 +11034,9 @@
         // che non esiste non da' errore - semplicemente non fa niente.
         const CLASSE_MINIATURA = 'rounded-lg border border-gray-200';
         const STILE_MINIATURA = 'width: 3.5rem; height: 3.5rem; object-fit: cover;';
+        // La crocetta che toglie una foto: si vede piccola nell'angolo, come
+        // prima, ma il tasto intorno e' di 44 punti (vedi .tasto-foto-via).
+        const CROCETTA_FOTO = '<span class="bg-gray-900 text-white rounded-xl text-xs font-black px-1.5" aria-hidden="true">×</span>';
 
         // Le foto gia' scattate ma non ancora salvate con la nota.
         function riquadroFotoInAttesa() {
@@ -10939,9 +11047,8 @@
                     ${attesa.map((f, i) => `
                         <span class="relative inline-flex">
                             <img data-foto="attesa:${i}" alt="Foto da allegare" class="${CLASSE_MINIATURA}" style="${STILE_MINIATURA}" />
-                            <button type="button" onclick="togliFotoInAttesa(${i})" aria-label="Togli questa foto"
-                                    class="absolute bg-gray-900 text-white rounded-xl text-xs font-black px-1.5"
-                                    style="top:-6px; right:-6px;">×</button>
+                            <button type="button" onclick="togliFotoInAttesa(${i})" aria-label="Togli questa foto" title="Togli questa foto"
+                                    class="tasto-foto-via absolute">${CROCETTA_FOTO}</button>
                         </span>`).join('')}
                     <span class="text-xs font-bold text-gray-400">${attesa.length === 1 ? 'una foto' : attesa.length + ' foto'} da allegare</span>
                 </div>`;
@@ -10968,9 +11075,8 @@
                         <span class="relative inline-flex">
                             <button type="button" onclick="apriFoto('${escJs(id)}')" aria-label="Guarda la foto allegata"
                                     class="inline-flex">${riquadroFoto(id, CLASSE_MINIATURA, STILE_MINIATURA)}</button>
-                            <button type="button" onclick="staccaFoto('${escJs(n.id)}', '${escJs(id)}')" aria-label="Elimina questa foto"
-                                    class="absolute bg-gray-900 text-white rounded-xl text-xs font-black px-1.5"
-                                    style="top:-6px; right:-6px;">×</button>
+                            <button type="button" onclick="staccaFoto('${escJs(n.id)}', '${escJs(id)}')" aria-label="Elimina questa foto" title="Elimina questa foto"
+                                    class="tasto-foto-via absolute">${CROCETTA_FOTO}</button>
                         </span>`).join('')}
                 </div>`;
         }
@@ -12549,6 +12655,14 @@
             switchTab('giornata');
         }
 
+        // Dallo stato vuoto di Rendimento: il calendario sul mese che stava
+        // gia' guardando, che e' dove si registra il primo turno.
+        function apriCalendario() {
+            ricordaVista('calendario');
+            window.giornoCalendarioAperto = null;
+            switchTab('giornata');
+        }
+
         function onShiftTypeChange(val) {
             window.selectedShiftType = val;
             try { localStorage.setItem('taxi_ultimo_turno', val); } catch (err) { /* spazio esaurito: pazienza */ }
@@ -12875,7 +12989,7 @@
             if (!categoria) { showToast('Scegli che spesa è.'); return; }
             // Le spese si registrano anche nei giorni di riposo: l'auto costa
             // lo stesso, e il conto della giornata lo dice gia' a chiare lettere.
-            const data = giornoGiornate() || oggiISO();
+            const data = giornoGiornate() || giornoDiLavoroAdesso();
 
             const conFattura = !!(document.getElementById('spesa-lampo-fattura') || {}).checked;
 
@@ -12897,7 +13011,8 @@
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
             // showToast scrive con textContent: qui esc() farebbe vedere «&amp;»
             // al posto di «&» nel nome della spesa.
-            showToast(`${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`);
+            showToast(`${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`, null,
+                () => annullaMovimentoVeloce(record.id, 'Spesa', 'spesa-lampo'));
             renderContent();
             setTimeout(() => {
                 const nuovo = document.getElementById('spesa-lampo');
@@ -12984,7 +13099,7 @@
                 campo.focus();
                 return;
             }
-            const data = giornoGiornate() || oggiISO();
+            const data = giornoGiornate() || giornoDiLavoroAdesso();
             const riposo = giornataNonLavorata(data);
             if (riposo) {
                 nascondiAvvisoCorsaStrana();
@@ -13027,7 +13142,8 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'ENTRATA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`);
+            showToast(`${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`, null,
+                () => annullaMovimentoVeloce(record.id, 'Corsa', 'corsa-lampo'));
             renderContent();
             // Il campo torna vuoto e tiene il cursore: la corsa dopo si scrive
             // senza toccare altro.
@@ -13035,6 +13151,64 @@
                 const nuovo = document.getElementById('corsa-lampo');
                 if (nuovo) { nuovo.value = ''; nuovo.focus(); }
             }, 0);
+        }
+
+        // ============================================================
+        //  LA TASTIERA NON COPRE I TASTI DEL METODO
+        //  Sull'iPhone, toccando «Incasso corsa», la tastiera sale e copre
+        //  proprio i quattro tasti Contanti / POS / Satispay / App: si scrive
+        //  la cifra e poi bisogna chiudere la tastiera per trovare dove
+        //  confermarla. Safari porta in vista il campo, non quello che gli sta
+        //  sotto. Qui, quando il campo prende il fuoco, la scheda intera sale
+        //  in cima allo schermo (8 punti di margine): campo e tasti stanno
+        //  insieme sopra la tastiera.
+        //  QUANDO SI SPOSTA, E QUANDO NO
+        //  Solo al fuoco (anche quello che torna da solo dopo una corsa) e
+        //  quando cambia l'area visibile (visualViewport: la tastiera che
+        //  finisce di salire, la barra dei suggerimenti che compare). Mai
+        //  mentre si scrive: nessun ascolto sui tasti. E se la scheda e' gia'
+        //  in cima non si muove niente, cosi' la tastiera che cambia altezza
+        //  non fa ballare la pagina.
+        //  Solo dove c'e' una tastiera sullo schermo (dito, o schermo stretto):
+        //  sul Mac la pagina non deve saltare a ogni clic nel campo.
+        // ============================================================
+        function portaInCimaSchedaCorsa() {
+            const campo = document.getElementById('corsa-lampo');
+            if (!campo || document.activeElement !== campo) return;
+            const tocco = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || window.innerWidth < 768;
+            if (!tocco) return;
+            const scheda = campo.closest('[data-scheda-corsa]');
+            if (!scheda) return;
+            // La cima di quello che si vede: con la tastiera aperta Safari
+            // puo' aver gia' spostato l'area visibile dentro la pagina.
+            const vv = window.visualViewport;
+            const cima = vv ? vv.offsetTop : 0;
+            const spostamento = scheda.getBoundingClientRect().top - cima - 8;
+            if (Math.abs(spostamento) < 2) return;
+            // Scorre il primo contenitore che scorre davvero: di solito il
+            // contenuto principale, altrimenti la pagina.
+            let scorre = scheda.parentElement;
+            while (scorre && scorre !== document.body) {
+                const oy = getComputedStyle(scorre).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && scorre.scrollHeight > scorre.clientHeight) break;
+                scorre = scorre.parentElement;
+            }
+            if (!scorre || scorre === document.body) scorre = document.scrollingElement || document.documentElement;
+            scorre.scrollTop += spostamento;
+        }
+        window.portaInCimaSchedaCorsa = portaInCimaSchedaCorsa;
+        // Un ascolto solo, sul documento: il campo rinasce a ogni disegno.
+        // Si aspetta un fotogramma, perche' al momento del fuoco Safari non ha
+        // ancora fatto il suo spostamento e la misura sarebbe vecchia.
+        document.addEventListener('focusin', (e) => {
+            if (e.target && e.target.id === 'corsa-lampo') requestAnimationFrame(portaInCimaSchedaCorsa);
+        });
+        if (window.visualViewport) {
+            let attesaVista = 0;
+            window.visualViewport.addEventListener('resize', () => {
+                cancelAnimationFrame(attesaVista);
+                attesaVista = requestAnimationFrame(portaInCimaSchedaCorsa);
+            });
         }
 
         function addCorsa(e) {
@@ -13524,11 +13698,43 @@
         function deleteRecord(id) {
             const rec = movimentoPerId(id);
             if (!rec) return;
-            const descrizione = `${rec.categoria || 'movimento'} del ${rec.data} · ${formatCurrency(rec.importo)}`;
+            // La data come la si legge ovunque nell'app (11/03/2026), non
+            // quella dell'archivio (2026-03-11): e' una domanda, va capita.
+            const descrizione = `${rec.categoria || 'movimento'} del ${ggMmAaaa(rec.data)} · ${formatCurrency(rec.importo)}`;
             if (!confirm(`Elimino definitivamente ${descrizione}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
+            togliMovimento(id, 'Movimento eliminato.');
+        }
+
+        // La strada unica per togliere un movimento: la usano il tasto
+        // «Elimina» (dopo la domanda) e l'«Annulla» del messaggio (senza,
+        // perche' li' la domanda e' gia' il tasto). Passa dal Cloud.
+        function togliMovimento(id, messaggio) {
             window.deleteRecordFromCloud(id);
-            showToast('Movimento eliminato.');
+            showToast(messaggio);
             renderContent();
+        }
+
+        // ============================================================
+        //  L'ANNULLA DOPO UNA CORSA O UNA SPESA VELOCI
+        //  Il tasto del metodo salva al primo tocco: e' il suo pregio, ed e'
+        //  anche il suo rischio - il POS al posto dei Contanti, 5 invece di
+        //  50. Prima, per rimediare, bisognava scendere nel registro, trovare
+        //  la riga, «Elimina», confermare. Ora il messaggio che dice cosa hai
+        //  salvato ha per sei secondi un tasto «Annulla» che toglie QUEL
+        //  movimento, per id: se nel frattempo ne hai salvato un altro, il
+        //  messaggio e' gia' cambiato e annulla quello nuovo.
+        // ============================================================
+        function annullaMovimentoVeloce(id, cosa, campoId) {
+            // Gia' tolto per un'altra strada (dal registro, da un altro
+            // dispositivo): non c'e' niente da annullare.
+            if (!movimentoPerId(id)) { showToast('Questo movimento non c\'è più.'); return; }
+            togliMovimento(id, `${cosa} annullata.`);
+            // Il campo riprende il cursore: chi annulla di solito riscrive
+            // subito la cifra giusta.
+            setTimeout(() => {
+                const campo = document.getElementById(campoId);
+                if (campo) campo.focus();
+            }, 0);
         }
 
         // Un turno ha i km "mancanti" anche quando valgono 0: un contachilometri a zero
@@ -13749,7 +13955,7 @@
         function deleteShift(id) {
             const t = (window.shifts || []).find(x => String(x.id) === String(id));
             if (!t) return;
-            if (!confirm(`Elimino definitivamente ${t.turno || 'il turno'} del ${t.data}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
+            if (!confirm(`Elimino definitivamente ${t.turno || 'il turno'} del ${ggMmAaaa(t.data)}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
             window.deleteShiftFromCloud(id);
             showToast('Turno eliminato.');
             renderContent();
@@ -13760,8 +13966,30 @@
         // Se pero' stai guardando un anno diverso da quello corrente, oggi non
         // c'entra nulla: in quel caso nessun filtro giorno.
         function giornoDefaultFiltro() {
-            const oggi = oggiISO();
+            const oggi = giornoDiLavoroAdesso();
             return oggi.slice(0, 4) === annoAttivo() ? oggi : '';
+        }
+
+        // ============================================================
+        //  DOPO MEZZANOTTE, DENTRO IL TURNO DI NOTTE, «OGGI» E' IERI
+        //  Con l'app aperta dalle 19 del 20, alle 2 di notte le corse
+        //  finivano sul 20: il giorno della scheda si era fissato all'apertura
+        //  e la mezzanotte non lo sposta. Ma chi riapriva l'app alle 2 (o la
+        //  ritrovava ripartita da capo, come fa l'iPhone con le app in
+        //  fondo) se la vedeva aprire sul 21: la corsa finiva su un giorno
+        //  senza turno, «turno non registrato», €/h «—», e il turno del 20
+        //  perdeva le corse della seconda meta'. Due strade, due giorni.
+        //  Qui la regola diventa una sola: se c'e' un turno in corso
+        //  cominciato ieri, il giorno di lavoro e' il suo. Altrimenti e' oggi.
+        //  Vale per il giorno proposto all'apertura e per le corse e le spese
+        //  veloci quando nessun giorno e' scelto. Le corse gia' registrate
+        //  non si toccano: cambia solo dove va la prossima.
+        // ============================================================
+        function giornoDiLavoroAdesso() {
+            const oggi = oggiISO();
+            const vivo = turnoVivoAdesso();
+            if (vivo && String(vivo.data) === spostaGiorno(oggi, -1)) return String(vivo.data);
+            return oggi;
         }
 
         // Il giorno scelto nella scheda Giornate. Mai scelto (null) = oggi, che e'
