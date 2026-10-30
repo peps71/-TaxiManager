@@ -1353,7 +1353,9 @@
                 snapshot.forEach(d => dalCloud.push(Object.assign({ [campoId]: d.id }, d.data())));
                 return window.applicaSnapshotArchivio(opz, dalCloud, snapshot.empty,
                     (x) => setDoc(docDati(opz.chiave, String(x[campoId])), x),
-                    !!(snapshot.metadata && snapshot.metadata.fromCache));
+                    !!(snapshot.metadata && snapshot.metadata.fromCache),
+                    () => (registroDiQuestoAccount() && !window.segnoRifiutato(opz.chiave)
+                        ? inviaSospesi({ chiavi: [opz.chiave], forza: true, silenzioso: true }) : null));
             }, (error) => console.error(`Errore Sync ${etichetta}:`, error));
         }
 
@@ -2148,6 +2150,23 @@
                 if (window.showToast) window.showToast(avviso || 'Salvato solo su questo dispositivo: il Cloud non l\'ha accettato.', 'avviso');
             }
         }
+
+        // Un elenco intero dello stesso archivio (il ripristino di un backup):
+        // un segno solo per tutti, e una spedizione sola.
+        window.salvaElencoSulCloud = async function(chiave, elenco) {
+            const campoId = chiave === 'taxi_voci_fisse' ? 'slug' : 'id';
+            const buoni = (elenco || []).filter(x => x && x[campoId] !== undefined && x[campoId] !== null && String(x[campoId]) !== '');
+            if (!buoni.length) return;
+            const segnato = segnaSospesi(chiave, buoni.map(x => x[campoId]), 's');
+            if (!(isCloudActive && db && auth.currentUser)) return;
+            if (segnato && registroDiQuestoAccount()) { inviaPresto(); return; }
+            try {
+                await scriviDiretti(chiave, buoni, campoId);
+            } catch (err) {
+                console.error('Errore scrittura Cloud ' + chiave + ':', err);
+                if (window.showToast) window.showToast('Salvato solo su questo dispositivo: il Cloud non l\'ha accettato.', 'avviso');
+            }
+        };
 
         window.saveScadenzaToCloud = async function(scadenza) {
             return spedisci('taxi_scadenze', scadenza && scadenza.id, 's', scadenza, 'Scadenza salvata solo su questo dispositivo.');
@@ -3313,6 +3332,10 @@
         window.saveVeicoloToCloud = function(x) { segnaSospeso('taxi_veicoli', x && x.id, 's'); };
         window.deleteVeicoloFromCloud = function(id) { segnaSospeso('taxi_veicoli', id, 'd'); };
         window.saveVoceFissaToCloud = function(x) { segnaSospeso('taxi_voci_fisse', x && x.slug, 's'); };
+        window.salvaElencoSulCloud = function(chiave, elenco) {
+            const campoId = chiave === 'taxi_voci_fisse' ? 'slug' : 'id';
+            segnaSospesi(chiave, (elenco || []).map(x => x && x[campoId]), 's');
+        };
         window.deleteVoceFissaFromCloud = function(slug) { segnaSospeso('taxi_voci_fisse', slug, 'd'); };
 
         window.bulkSave = async function(newRecords, newShifts) {
@@ -14640,14 +14663,15 @@
             );
 
             // Le scadenze non passano da bulkSave: si uniscono per identificativo
-            // e si ripubblicano una per una sul Cloud.
+            // e si segnano tutte insieme, con una spedizione sola (prima una
+            // chiamata per riga, e ognuna rileggeva e riscriveva il registro).
             if (scadenze.length) {
                 const mappa = new Map((window.scadenze || []).map(x => [String(x.id), x]));
                 scadenze.forEach(x => mappa.set(String(x.id), x));
                 window.scadenze = Array.from(mappa.values())
                     .sort((a, b) => String(a.data).localeCompare(String(b.data)));
                 salvaScadenze();
-                if (window.saveScadenzaToCloud) scadenze.forEach(x => window.saveScadenzaToCloud(x));
+                if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_scadenze', scadenze);
             }
 
             if (noteImportate.length) {
@@ -14655,7 +14679,7 @@
                 noteImportate.forEach(x => mappa.set(String(x.id), x));
                 window.note = Array.from(mappa.values()).sort(perDataDecrescente);
                 salvaNote();
-                if (window.saveNotaToCloud) noteImportate.forEach(x => window.saveNotaToCloud(x));
+                if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_note', noteImportate);
             }
 
             if (versamentiImportati.length) {
@@ -14663,7 +14687,7 @@
                 versamentiImportati.forEach(x => mappa.set(String(x.id), x));
                 window.versamenti = Array.from(mappa.values()).sort(perDataDecrescente);
                 salvaVersamenti();
-                if (window.saveVersamentoToCloud) versamentiImportati.forEach(x => window.saveVersamentoToCloud(x));
+                if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_versamenti', versamentiImportati);
             }
 
             if (vociImportate.length) {
@@ -14671,7 +14695,7 @@
                 vociImportate.forEach(x => mappa.set(String(x.slug), x));
                 window.vociFisse = Array.from(mappa.values());
                 salvaVociFisse();
-                if (window.saveVoceFissaToCloud) vociImportate.forEach(x => window.saveVoceFissaToCloud(x));
+                if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_voci_fisse', vociImportate);
             }
 
             // Stessa cosa per le vetture del parco auto
@@ -14680,7 +14704,7 @@
                 veicoli.forEach(x => mappa.set(String(x.id), x));
                 window.veicoli = Array.from(mappa.values());
                 salvaVeicoli();
-                if (window.saveVeicoloToCloud) veicoli.forEach(x => window.saveVeicoloToCloud(x));
+                if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_veicoli', veicoli);
             }
 
             // Le impostazioni fiscali erano nel backup ma nessuno le rimetteva
@@ -14936,7 +14960,10 @@
         // variabili separate che c'erano prima.
         const cloudOk = {};
 
-        window.applicaSnapshotArchivio = async function (opz, dalCloud, vuoto, salvaUno, daCache) {
+        // spedisciRegistro: dal blocco di Firebase, fa partire dal registro
+        // le righe segnate di questo archivio; null se il registro non e'
+        // di questo account (allora si usa salvaUno).
+        window.applicaSnapshotArchivio = async function (opz, dalCloud, vuoto, salvaUno, daCache, spedisciRegistro) {
             const nome = opz.nome;                       // window.<nome>
             const chiave = opz.chiave;                   // taxi_<...>, sul disco e sul Cloud
             const ordina = opz.ordina || null;
@@ -14977,12 +15004,31 @@
                     if (window.showToast) window.showToast(`${etichetta}: non porto i dati sul Cloud, il telefono non ha spazio per ricordarsi cosa ha già mandato.`, 'avviso');
                     return 'senzaSpazio';
                 }
-                const segni = leggiSospesi().per[chiave] || {};
                 try {
-                    for (const x of elenco) {
-                        await salvaUno(x);
-                        const id = String(x && x[campoId]);
-                        if (segni[id]) togliSospesi([[chiave, id, segni[id]]]);
+                    // Col registro di questo account parte dal registro, a
+                    // blocchi, come tutto il resto: una riga sola non parte
+                    // due volte se intanto un salvataggio fa partire anche
+                    // lei. Se no (registro d'altri, o le prove senza
+                    // Firebase) una per una, e i segni si tolgono insieme
+                    // alla fine: prima ogni riga rileggeva e riscriveva il
+                    // registro.
+                    const viaRegistro = spedisciRegistro ? spedisciRegistro() : null;
+                    if (viaRegistro) {
+                        const esiti = await viaRegistro;
+                        const no = esiti.find(e => e.status === 'rejected');
+                        if (no) throw no.reason;
+                    } else {
+                        const segni = leggiSospesi().per[chiave] || {};
+                        const fatti = [];
+                        try {
+                            for (const x of elenco) {
+                                await salvaUno(x);
+                                const id = String(x && x[campoId]);
+                                if (segni[id]) fatti.push([chiave, id, segni[id]]);
+                            }
+                        } finally {
+                            togliSospesi(fatti);
+                        }
                     }
                     cloudOk[nome] = true;
                     if (messaggi && window.showToast) window.showToast(messaggi.caricato);
