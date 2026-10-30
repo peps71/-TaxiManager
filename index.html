@@ -43,11 +43,16 @@
             // mandarci i dati. Adesso ci sono solo i tre servizi che l'app usa
             // davvero: l'accesso (identitytoolkit), il rinnovo dell'accesso
             // ogni ora (securetoken) e il database (firestore).
-            // script-src e frame-src restano larghi apposta: con 'unsafe-inline'
-            // (serve agli onclick) stringerli protegge poco, e un indirizzo in
-            // meno li' puo' rompere l'accesso con Google sull'iPhone in un modo
-            // che da qui non si puo' provare. La foto del profilo Google non si
-            // usa: googleusercontent.com esce da img-src.
+            // script-src resta largo apposta: con 'unsafe-inline' (serve agli
+            // onclick) stringerlo protegge poco, e un indirizzo in meno li' puo'
+            // rompere l'accesso con Google sull'iPhone in un modo che da qui non
+            // si puo' provare. frame-src invece si stringe: un riquadro su
+            // *.google.com (un sito di Google Sites, un Apps Script) e' un altro
+            // posto dove i dati possono uscire. Restano il nostro authDomain,
+            // dove vive la paginetta dell'accesso, e accounts.google.com.
+            // Questo pezzo e' provato su Chromium, non su Safari: se l'accesso
+            // si rompe sull'iPhone e' il primo sospettato. La foto del profilo
+            // Google non si usa: googleusercontent.com esce da img-src.
             // Se l'accesso o la sincronizzazione non vanno: Cloud & Sync ->
             // «Protezione sugli indirizzi» -> Disattiva, e si riprova.
             var regole = [
