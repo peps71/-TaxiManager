@@ -2273,6 +2273,18 @@
             return { v: 1, uid: null, n: 0, dal: null, per: {} };
         }
 
+        // Gli archivi che il registro puo' nominare: quelli che si
+        // sincronizzano, piu' i due documenti a campi. Un nome diverso nel
+        // registro (scritto a mano, o da un copione che non c'entra) non si
+        // legge: col nome dell'archivio si sceglie la cartella sul Cloud e
+        // la chiave del disco da cui prendere il contenuto.
+        const ARCHIVI_SOSPESI = ['taxi_records', 'taxi_shifts', 'taxi_scadenze', 'taxi_versamenti',
+            'taxi_note', 'taxi_veicoli', 'taxi_voci_fisse'];
+        const DOCUMENTI_SOSPESI = ['profilo', 'fiscali'];
+
+        // Il valore di una voce: 's' scritto o 'd' cancellato, seguito dal numero.
+        const VALORE_SOSPESO = /^[sd]\d+$/;
+
         function leggiSospesi() {
             let r = null;
             try { r = JSON.parse(localStorage.getItem(CHIAVE_SOSPESI) || 'null'); } catch (err) { r = null; }
@@ -2281,14 +2293,25 @@
             pulito.uid = typeof r.uid === 'string' && r.uid ? r.uid : null;
             pulito.n = Number.isFinite(r.n) && r.n > 0 ? Math.floor(r.n) : 0;
             pulito.dal = typeof r.dal === 'string' ? r.dal : null;
-            if (r.per && typeof r.per === 'object') {
+            // Senza un account le voci non sono di nessuno: noi non le
+            // scriviamo mai (vedi segnaSospesi), quindi se ci sono le ha
+            // messe qualcun altro, e non devono partire verso chi entra.
+            if (pulito.uid && r.per && typeof r.per === 'object' && !Array.isArray(r.per)) {
                 Object.keys(r.per).forEach(k => {
+                    const documento = DOCUMENTI_SOSPESI.includes(k);
+                    if (!documento && !ARCHIVI_SOSPESI.includes(k)) return;
                     const voci = r.per[k];
-                    if (!voci || typeof voci !== 'object') return;
+                    if (!voci || typeof voci !== 'object' || Array.isArray(voci)) return;
                     const buone = {};
                     Object.keys(voci).forEach(id => {
+                        // Identificativi come quelli del backup (niente '/',
+                        // niente '..'), nomi di campo semplici; e mai i nomi
+                        // fra doppi trattini bassi, che Firestore si tiene.
+                        const nomeBuono = documento
+                            ? /^[A-Za-z0-9_]{1,64}$/.test(id) && !/^__.*__$/.test(id)
+                            : idBackupBuono(id);
                         const val = voci[id];
-                        if (typeof val === 'string' && /^[sd]\d+$/.test(val)) buone[id] = val;
+                        if (nomeBuono && typeof val === 'string' && VALORE_SOSPESO.test(val)) buone[id] = val;
                     });
                     if (Object.keys(buone).length) pulito.per[k] = buone;
                 });
@@ -2367,11 +2390,15 @@
         function mappaLocaleSospesi(chiave) {
             const campoId = CAMPO_ID_SOSPESI[chiave] || 'id';
             const mappa = new Map();
+            // Un elemento senza identificativo non ha un posto sul Cloud:
+            // si spedirebbe come documento "undefined", e il secondo
+            // cancellerebbe il primo. Resta qui, e non parte.
+            const conId = (x) => x && typeof x === 'object' && x[campoId] !== undefined && x[campoId] !== null && String(x[campoId]) !== '';
             const disco = leggiLocale(chiave, []);
-            if (Array.isArray(disco)) disco.forEach(x => { if (x && typeof x === 'object') mappa.set(String(x[campoId]), x); });
+            if (Array.isArray(disco)) disco.forEach(x => { if (conId(x)) mappa.set(String(x[campoId]), x); });
             const mem = window[MEMORIA_SOSPESI[chiave]];
             if (Array.isArray(mem)) mem.forEach(x => {
-                if (x && typeof x === 'object' && !mappa.has(String(x[campoId]))) {
+                if (conId(x) && !mappa.has(String(x[campoId]))) {
                     try { mappa.set(String(x[campoId]), JSON.parse(JSON.stringify(x))); } catch (err) { /* pazienza */ }
                 }
             });
@@ -13758,8 +13785,12 @@
         // serie). Sta qui fuori perche' lo usano il ripristino del backup, il
         // suo riepilogo prima della conferma e il file delle foto: tre porte,
         // una regola sola.
+        // I nomi fra doppi trattini bassi (__x__) Firestore se li tiene per
+        // se' e li rifiuta: una riga cosi' resterebbe per sempre fra le
+        // modifiche in attesa, e nel blocco si porterebbe dietro le altre.
         function idBackupBuono(v) {
-            return v !== undefined && v !== null && /^[A-Za-z0-9_-]{1,64}$/.test(String(v));
+            return v !== undefined && v !== null && /^[A-Za-z0-9_-]{1,64}$/.test(String(v))
+                && !/^__.*__$/.test(String(v));
         }
         function rigaBackupValida(x) {
             return !!x && idBackupBuono(x.id) && /^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''));
