@@ -629,6 +629,15 @@
            messaggio torna in basso a destra. */
         #toast { bottom: calc(6rem + env(safe-area-inset-bottom)); }
         @media (min-width: 768px) { #toast { bottom: 1.25rem; } }
+        /* IL MESSAGGIO NON RUBA I TOCCHI
+           Il messaggio sta proprio sopra i tasti della scheda Giornate, e
+           per tre secondi un tocco li' finiva sul messaggio invece che sul
+           tasto: la corsa dopo non partiva. Il messaggio si lascia
+           attraversare; si tocca solo il suo tasto «Annulla», quando c'e'. */
+        #toast { pointer-events: none; }
+        /* Il tasto e' alto 44 punti come tutti; entra un po' nel margine
+           del messaggio, cosi' il riquadro non raddoppia di altezza. */
+        #toast-annulla { pointer-events: auto; margin-top: -0.5rem; margin-bottom: -0.5rem; }
 
         /* Il simbolo dell'euro accanto a una cifra grande: piu' piccolo e piu'
            tenue del numero. Da lontano si legge «116,50», non «€». */
@@ -1171,7 +1180,10 @@
 
     <!-- Toast Notifica -->
     <div id="toast" role="status" aria-live="polite" class="hidden fixed right-5 left-5 md:left-auto justify-center md:justify-start bg-gray-900 text-yellow-400 px-5 py-3 rounded-xl shadow-2xl z-50 items-center space-x-2 border border-yellow-400/30 slide-in font-bold text-sm no-print">
-        <span id="toast-text">Messaggio</span>
+        <span id="toast-text" class="min-w-0">Messaggio</span>
+        <!-- Solo dopo una corsa o una spesa veloci: toglie quel movimento.
+             Vedi mostraAnnulla(). -->
+        <button type="button" id="toast-annulla" class="hidden shrink-0 px-4 rounded-lg bg-yellow-400 text-gray-900 font-black">Annulla</button>
     </div>
 
     <!-- ============================================================
@@ -2549,7 +2561,10 @@
         // Un solo messaggio alla volta: senza azzerare il timer precedente, due avvisi
         // ravvicinati facevano sparire il secondo dopo una frazione di secondo.
         let timerToast = null;
-        function showToast(msg, tipo) {
+        // Il terzo argomento, se c'e', e' cosa fa il tasto «Annulla» del
+        // messaggio. Senza, il tasto non si vede: ogni messaggio nuovo spegne
+        // l'annulla di quello prima, cosi' non si annulla mai la cosa sbagliata.
+        function showToast(msg, tipo, annulla) {
             const toast = document.getElementById('toast');
             const text = document.getElementById('toast-text');
             if (!toast || !text) return;
@@ -2557,12 +2572,31 @@
             toast.classList.toggle('messaggio-avviso', tipo === 'avviso');
             toast.classList.remove('hidden');
             toast.classList.add('flex');
+            const tasto = document.getElementById('toast-annulla');
+            if (tasto) {
+                tasto.onclick = annulla ? () => { nascondiToast(); annulla(); } : null;
+                tasto.classList.toggle('hidden', !annulla);
+            }
             if (timerToast) clearTimeout(timerToast);
-            timerToast = setTimeout(() => {
-                toast.classList.add('hidden');
-                toast.classList.remove('flex');
-                timerToast = null;
-            }, 3000);
+            // Con l'annulla resta di piu': il tempo di leggere la cifra,
+            // accorgersi dello sbaglio e spostare il dito.
+            timerToast = setTimeout(nascondiToast, annulla ? 6000 : 3000);
+        }
+        function nascondiToast() {
+            const toast = document.getElementById('toast');
+            if (timerToast) clearTimeout(timerToast);
+            timerToast = null;
+            if (!toast) return;
+            // Il fuoco della tastiera non deve restare su un tasto che sparisce:
+            // finirebbe in fondo alla pagina.
+            const tasto = document.getElementById('toast-annulla');
+            if (tasto) {
+                if (document.activeElement === tasto) tasto.blur();
+                tasto.onclick = null;
+                tasto.classList.add('hidden');
+            }
+            toast.classList.add('hidden');
+            toast.classList.remove('flex');
         }
 
         // ============================================================
@@ -11901,7 +11935,8 @@
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
             // showToast scrive con textContent: qui esc() farebbe vedere «&amp;»
             // al posto di «&» nel nome della spesa.
-            showToast(`${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`);
+            showToast(`${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`, null,
+                () => annullaMovimentoVeloce(record.id, 'Spesa', 'spesa-lampo'));
             renderContent();
             setTimeout(() => {
                 const nuovo = document.getElementById('spesa-lampo');
@@ -12031,7 +12066,8 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'ENTRATA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`);
+            showToast(`${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`, null,
+                () => annullaMovimentoVeloce(record.id, 'Corsa', 'corsa-lampo'));
             renderContent();
             // Il campo torna vuoto e tiene il cursore: la corsa dopo si scrive
             // senza toccare altro.
@@ -12586,11 +12622,43 @@
         function deleteRecord(id) {
             const rec = movimentoPerId(id);
             if (!rec) return;
-            const descrizione = `${rec.categoria || 'movimento'} del ${rec.data} · ${formatCurrency(rec.importo)}`;
+            // La data come la si legge ovunque nell'app (11/03/2026), non
+            // quella dell'archivio (2026-03-11): e' una domanda, va capita.
+            const descrizione = `${rec.categoria || 'movimento'} del ${ggMmAaaa(rec.data)} · ${formatCurrency(rec.importo)}`;
             if (!confirm(`Elimino definitivamente ${descrizione}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
+            togliMovimento(id, 'Movimento eliminato.');
+        }
+
+        // La strada unica per togliere un movimento: la usano il tasto
+        // «Elimina» (dopo la domanda) e l'«Annulla» del messaggio (senza,
+        // perche' li' la domanda e' gia' il tasto). Passa dal Cloud.
+        function togliMovimento(id, messaggio) {
             window.deleteRecordFromCloud(id);
-            showToast('Movimento eliminato.');
+            showToast(messaggio);
             renderContent();
+        }
+
+        // ============================================================
+        //  L'ANNULLA DOPO UNA CORSA O UNA SPESA VELOCI
+        //  Il tasto del metodo salva al primo tocco: e' il suo pregio, ed e'
+        //  anche il suo rischio - il POS al posto dei Contanti, 5 invece di
+        //  50. Prima, per rimediare, bisognava scendere nel registro, trovare
+        //  la riga, «Elimina», confermare. Ora il messaggio che dice cosa hai
+        //  salvato ha per sei secondi un tasto «Annulla» che toglie QUEL
+        //  movimento, per id: se nel frattempo ne hai salvato un altro, il
+        //  messaggio e' gia' cambiato e annulla quello nuovo.
+        // ============================================================
+        function annullaMovimentoVeloce(id, cosa, campoId) {
+            // Gia' tolto per un'altra strada (dal registro, da un altro
+            // dispositivo): non c'e' niente da annullare.
+            if (!movimentoPerId(id)) { showToast('Questo movimento non c\'è più.'); return; }
+            togliMovimento(id, `${cosa} annullata.`);
+            // Il campo riprende il cursore: chi annulla di solito riscrive
+            // subito la cifra giusta.
+            setTimeout(() => {
+                const campo = document.getElementById(campoId);
+                if (campo) campo.focus();
+            }, 0);
         }
 
         // Un turno ha i km "mancanti" anche quando valgono 0: un contachilometri a zero
@@ -12811,7 +12879,7 @@
         function deleteShift(id) {
             const t = (window.shifts || []).find(x => String(x.id) === String(id));
             if (!t) return;
-            if (!confirm(`Elimino definitivamente ${t.turno || 'il turno'} del ${t.data}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
+            if (!confirm(`Elimino definitivamente ${t.turno || 'il turno'} del ${ggMmAaaa(t.data)}?\nL'operazione cancella il dato anche sul Cloud.`)) return;
             window.deleteShiftFromCloud(id);
             showToast('Turno eliminato.');
             renderContent();
