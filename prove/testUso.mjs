@@ -15,7 +15,15 @@ const DOVE_PW = process.env.PLAYWRIGHT || [
 if (!DOVE_PW) { console.error('Playwright non trovato: installalo o indicalo con PLAYWRIGHT=...'); process.exit(2); }
 const { chromium } = await import(DOVE_PW);
 const b = await chromium.launch();
-const p = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT' });
+// L'orologio e il fuso sono fermi: mercoledi' 11 marzo 2026, mezzogiorno a
+// Torino. Il turno registrato qui sotto va dalle 8 alle 20 di «oggi», e il
+// registro si apre solo col turno vivo (v173): lanciata alle 22 o alle 6 la
+// prova trovava il turno chiuso e cadeva per un motivo che non c'entra. Una
+// data lontana dai cambi dell'ora legale, e il fuso di casa invece di quello
+// della macchina che fa girare le prove (UTC nel cloud).
+const ORA_FISSA = new Date('2026-03-11T12:00:00+01:00');
+const p = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT', timezoneId: 'Europe/Rome' });
+await p.clock.setFixedTime(ORA_FISSA);
 const errori = []; p.on('pageerror', e => errori.push(String(e)));
 p.on('dialog', d => d.accept());
 await p.goto(APP);

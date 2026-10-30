@@ -4,9 +4,32 @@
 # Serve node con Playwright. Se sta in un posto suo:  PLAYWRIGHT=/percorso/index.mjs sh prove/tutte.sh
 cd "$(dirname "$0")/.." || exit 1
 P=prove
-rosso=0
+# Una prova che si interrompe a meta' (un'eccezione, un tasto che non si
+# trova, un tempo scaduto) non stampa nessun «***»: muore e basta, e nel
+# fiume dell'uscita passava per buona. Il suo codice d'uscita si perdeva nel
+# tubo verso grep, perche' sh di un tubo guarda solo l'ultimo comando. Qui
+# il codice si mette da parte in un file, prima del tubo, e si rilegge dopo.
+# Si tiene il conto anche delle prove che hanno stampato «***» senza
+# interrompersi: alla fine il riepilogo le nomina tutte, e lo script esce
+# con errore se ce n'e' anche una sola.
+ESITO=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/tutte-esito.$$")
+USCITA=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/tutte-uscita.$$")
+trap 'rm -f "$ESITO" "$USCITA"' EXIT
+trap 'exit 130' INT TERM
+rosse=0;   interrotte=""
+segnate=0; con_stelle=""
 titolo() { echo; echo "=== $1 ==="; }
-giro()   { node "$P/$1" 2>&1 | grep -v agent-proxy; }
+giro() {
+  echo 99 > "$ESITO"
+  { node "$P/$1" 2>&1; echo $? > "$ESITO"; } | grep -v agent-proxy | tee "$USCITA"
+  codice=$(cat "$ESITO")
+  if [ "$codice" != 0 ]; then
+    echo "*** $1 si e' interrotta: codice d'uscita $codice ***"
+    rosse=$((rosse + 1)); interrotte="$interrotte $1"
+  elif grep -q '[*][*][*]' "$USCITA"; then
+    segnate=$((segnate + 1)); con_stelle="$con_stelle $1"
+  fi
+}
 
 titolo "sintassi";                python3 "$P/verifica.py" || exit 1
 titolo "classi CSS";              python3 "$P/classi.py"   || exit 1
@@ -22,6 +45,8 @@ titolo "coerenza del report";     giro coerenza2.mjs
 titolo "coerenza del motore";     giro coerenza3.mjs
 titolo "coerenza a video";        giro coerenzaVideo.mjs
 titolo "integrita' dei dati";     giro testIntegrita.mjs
+titolo "ripristino con conferma"; giro testRipristino.mjs
+titolo "file che escono (CSV e nomi)"; giro testEsporta.mjs
 titolo "il giro dei giorni";      giro testGiorni.mjs
 titolo "previsione e realta'";    giro testPrevisioneRealta.mjs
 titolo "indice dei pagamenti";    giro testIndiceVivo.mjs
@@ -36,6 +61,7 @@ titolo "impostazioni fiscali";    giro testFiscali.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs
 titolo "costo e pareggio";        giro testPareggio.mjs
 titolo "corse da verificare";     giro testVerifica.mjs
+titolo "corse fuori misura";      giro testCorsaStrana.mjs
 titolo "riassegna a una voce";    giro testAssegna.mjs
 titolo "scadenze dal budget";     giro testScadenzeBudget.mjs
 titolo "confronto anno su anno";  giro testConfronto.mjs
@@ -45,6 +71,8 @@ titolo "incasso coperto";         giro testCoperto.mjs
 titolo "spazio e archivio";       giro testSpazio.mjs
 titolo "media fuori budget";      giro mediaAltre.mjs
 titolo "iniezione dal backup";    giro testIniezione.mjs
+titolo "iniezione da id e date";  giro testIniezioneDate.mjs
+titolo "backup coi tipi storti";  giro testBackupTipi.mjs
 titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "archivi sincronizzati";   giro testArchivi.mjs
 titolo "grafica e misure";        giro testGrafica.mjs
@@ -64,4 +92,15 @@ titolo "arrivo degli aggiornamenti"; giro testAggiorna.mjs
 titolo "prestazioni";             giro avvio.mjs
 titolo "profilo delle schermate"; giro profilo2.mjs
 echo
+echo "=== riepilogo ==="
+if [ "$rosse" -gt 0 ]; then
+  echo "*** $rosse prove si sono interrotte:$interrotte ***"
+fi
+if [ "$segnate" -gt 0 ]; then
+  echo "*** $segnate prove hanno segnato qualcosa che non torna:$con_stelle ***"
+fi
+if [ "$rosse" -eq 0 ] && [ "$segnate" -eq 0 ]; then
+  echo "nessuna prova interrotta, nessun «***»."
+fi
 echo "fine. Cerca «***» qui sopra: e' il segno di qualcosa che non torna."
+[ "$rosse" -eq 0 ] && [ "$segnate" -eq 0 ]

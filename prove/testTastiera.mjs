@@ -53,9 +53,20 @@ window.__semina = function () {
 };
 `;
 
+// L'orologio e il fuso sono fermi: mercoledi' 11 marzo 2026, mezzogiorno a
+// Torino. La semina mette un turno 8-20 nei giorni dispari fino al 25, e il
+// campo dell'incasso c'e' solo a turno vivo (v173): lanciata un giorno pari,
+// dopo il 26 o di sera, la prova non trovava il campo e cadeva per un motivo
+// che non c'entra con l'anello del fuoco. L'11 e' dispari, mezzogiorno sta
+// dentro il turno, marzo e' lontano dai cambi dell'ora legale; e il fuso e'
+// quello di casa, non quello della macchina che fa girare le prove.
+const ORA_FISSA = new Date('2026-03-11T12:00:00+01:00');
+
 async function apri(b, scuro) {
   const p = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT',
+                              timezoneId: 'Europe/Rome',
                               colorScheme: scuro ? 'dark' : 'light' });
+  await p.clock.setFixedTime(ORA_FISSA);
   p.on('dialog', d => d.accept());
   await p.goto(APP);
   await p.evaluate(() => localStorage.clear());
@@ -155,7 +166,8 @@ await p.close();
 // ------------------------------------------------------------------
 console.log('\n--- IL CAMPO DELL\'INCASSO, TOCCATO COL DITO ---');
 const q = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT',
-                            hasTouch: true, isMobile: true });
+                            timezoneId: 'Europe/Rome', hasTouch: true, isMobile: true });
+await q.clock.setFixedTime(ORA_FISSA);
 q.on('dialog', d => d.accept());
 await q.goto(APP);
 await q.evaluate(() => localStorage.clear());

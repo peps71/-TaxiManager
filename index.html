@@ -1978,7 +1978,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 174;
+        const VERSIONE_APP = 175;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3392,7 +3392,7 @@
             });
             (window.shifts || []).forEach(t => {
                 if (!t.data || String(t.data).slice(0, 4) !== anno || isRiposo(t)) return;
-                ore += parseFloat(t.ore || 0);
+                ore += importoDi(t.ore);
             });
             return { anno, entrate, uscite, saldo: entrate - uscite, corse, ore, giorni: giorni.size };
         }
@@ -5399,8 +5399,8 @@
 
             let kmTot = 0, oreTot = 0;
             shifts.filter(s => !isRiposo(s)).forEach(s => {
-                kmTot += parseFloat(s.kmTot || 0);
-                oreTot += parseFloat(s.ore || 0);
+                kmTot += importoDi(s.kmTot);
+                oreTot += importoDi(s.ore);
             });
 
             // Cassa e fisco: le spese in contanti tolgono soldi veri ma non
@@ -5525,7 +5525,7 @@
         // La pastiglia dell'anno: piccola, dove serve, invece che grande dappertutto.
         function pillolaAnno(stile) {
             const anni = anniDisponibili();
-            const opzioni = anni.map(a => `<option value="${a}" ${annoAttivo() === a ? 'selected' : ''}>${a}</option>`).join('');
+            const opzioni = anni.map(a => `<option value="${esc(a)}" ${annoAttivo() === a ? 'selected' : ''}>${esc(a)}</option>`).join('');
             if (stile === 'scura') {
                 return `
                     <div class="w-full p-3 bg-gray-900 rounded-lg flex items-center gap-3">
@@ -5678,7 +5678,7 @@
             const colore = classeEvidenziaGiorno(iso);
             const evidenziato = colore !== 'text-gray-400';
             const dettaglio = festivo ? `${giornoBreve(iso)} · ${festivo}` : `${giornoBreve(iso)} · sett. ${numeroSettimana(iso)}`;
-            return `<div class="${evidenziato ? colore + ' font-bold' : ''}">${iso}</div><div class="text-xs ${colore} font-bold uppercase tracking-wide">${dettaglio}</div>`;
+            return `<div class="${evidenziato ? colore + ' font-bold' : ''}">${esc(iso)}</div><div class="text-xs ${colore} font-bold uppercase tracking-wide">${esc(dettaglio)}</div>`;
         }
 
         // ============================================================
@@ -5940,7 +5940,7 @@
                 if (!t.data || !String(t.data).startsWith(prefisso)) return;
                 if (isRiposo(t)) { r.riposi.push(t); return; }
                 r.nTurni++;
-                r.ore += parseFloat(t.ore || 0);
+                r.ore += importoDi(t.ore);
                 r.turni.push(t);
             });
 
@@ -6770,9 +6770,20 @@
             if (typeof window.versioneCopiaSalvata === 'string') return;
             if (stoChiedendoLaVersione) return;
             stoChiedendoLaVersione = true;
+            const prima = window.versioneCopiaSalvata;
             try { window.versioneCopiaSalvata = await chiediVersioneAlServiceWorker(); }
             finally { stoChiedendoLaVersione = false; }
-            if (window.activeTab === 'cloud') renderContent();
+            // SI RIDISEGNA SOLO SE LA RISPOSTA E' CAMBIATA
+            // Ogni disegno della scheda Cloud richiede la versione, e ogni
+            // risposta ridisegnava. Senza una copia salvata al comando la
+            // risposta e' sempre «nessuna»: disegno, domanda, «nessuna»,
+            // disegno... 540 disegni in tre secondi, con il telefono che
+            // scalda per niente. Ora una risposta uguale all'ultima (anche
+            // «nessuna» dopo «nessuna») non ridisegna, e il giro si ferma.
+            // Il «nessuna» resta da richiedere, ma al disegno successivo o
+            // quando la copia prende il comando (controllerchange qui sotto),
+            // non in un ciclo.
+            if (window.versioneCopiaSalvata !== prima && window.activeTab === 'cloud') renderContent();
         }
 
         // E quando la copia salvata prende il comando, il riquadro si
@@ -7164,7 +7175,7 @@
                                 ${c.righe.filter(r => scelto === 'ALL' || r[scelto] > 0).map(r => `
                                     <tr class="${r.daVerificare ? 'riga-verifica' : ''}"${r.daVerificare ? ` title="${r.daVerificare} cors${r.daVerificare === 1 ? 'a' : 'e'} da verificare in questa giornata"` : ''}>
                                         <td class="px-3 py-2 whitespace-nowrap col-ferma col-ferma-chiara">
-                                            <button onclick="setDashGiorno('${r.iso}')" class="font-black text-gray-900 hover:text-yellow-600 tasto-minuto">
+                                            <button onclick="setDashGiorno('${escJs(r.iso)}')" class="font-black text-gray-900 hover:text-yellow-600 tasto-minuto">
                                                 ${String(r.giorno).padStart(2, '0')}/${String(mese).padStart(2, '0')}
                                             </button>
                                             <span class="block text-xs font-bold text-gray-400">${giornoBreve(r.iso)} · ${r.n} cors${r.n === 1 ? 'a' : 'e'}</span>
@@ -7199,13 +7210,13 @@
                         <div class="flex flex-wrap gap-2 p-4 no-print">
                             <button onclick="cambiaMetodoCorrispettivi('ALL')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === 'ALL' ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">Tutti</button>
                             ${c.usati.map(k => `
-                                <button onclick="cambiaMetodoCorrispettivi('${k}')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === k ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${METODI_BREVI[k]}</button>
+                                <button onclick="cambiaMetodoCorrispettivi('${escJs(k)}')" class="px-4 py-2 rounded-xl text-xs font-black transition-colors ${scelto === k ? 'bg-gray-900 text-yellow-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}">${METODI_BREVI[k]}</button>
                             `).join('')}
                         </div>` : ''}
                         ${corpo}
                         ${c.righe.length ? `
                         <div class="p-4 no-print">
-                            <button onclick="scaricaCorrispettivi('${ym}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm">
+                            <button onclick="scaricaCorrispettivi('${escJs(ym)}')" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm">
                                 Scarica questo prospetto (.csv)
                             </button>
                             <p class="text-xs text-gray-400 mt-2">Si apre in Excel o Numeri, con la virgola decimale e il punto e virgola come separatore.</p>
@@ -7278,7 +7289,7 @@
                 perTurno[k].gg++;
                 perTurno[k].tot += g.tot;
                 perTurno[k].n += g.n;
-                perTurno[k].ore += parseFloat(t.ore || 0);
+                perTurno[k].ore += importoDi(t.ore);
             });
 
             // Giornate con incassi ma senza turno registrato: le tengo separate
@@ -7331,7 +7342,7 @@
                         tot: perData[d].tot,
                         nCorse: perData[d].n,
                         turno: t ? (t.turno || 'Personalizzato') : null,
-                        ore: t ? parseFloat(t.ore || 0) : 0
+                        ore: t ? importoDi(t.ore) : 0
                     };
                 })
                 .sort((a, b) => b.tot - a.tot);
@@ -7388,7 +7399,7 @@
                             <label class="relative min-w-0 px-1.5 cursor-pointer">
                                 <span class="block text-sm font-black text-white prima-maiuscola truncate leading-tight">${dataDueRighe(g).su}</span>
                                 <span class="block text-[11px] font-medium text-white/45 truncate leading-tight">${dataDueRighe(g).giu}</span>
-                                <input type="date" value="${g}" onchange="setDashGiorno(this.value)" aria-label="Giorno del riepilogo" class="data-coperta" />
+                                <input type="date" value="${esc(g)}" onchange="setDashGiorno(this.value)" aria-label="Giorno del riepilogo" class="data-coperta" />
                             </label>
                             <button onclick="scorriGiorno(1)" title="Giorno successivo" aria-label="Giorno successivo" class="tasto-icona w-9 h-9 rounded-xl eroe-campo text-yellow-400 flex items-center justify-center text-lg">›</button>
                             <button onclick="setDashGiorno(ultimoGiornoConDati())" title="Vai all'ultima giornata registrata" class="px-2 text-[11px] font-bold text-white/55 hover:text-white underline underline-offset-2">Ultimo</button>
@@ -7432,10 +7443,10 @@
                                         <div class="riquadro-tinto tinta-gialla rounded-xl p-3 flex justify-between items-center">
                                             <div>
                                                 <p class="text-sm font-black text-gray-900">${esc(t.turno || (t.inizio + ' - ' + t.fine))}</p>
-                                                <p class="text-xs text-gray-500 font-bold">${t.inizio} → ${t.fine}${t.kmTot ? ' · ' + t.kmTot + ' km' : ''}</p>
+                                                <p class="text-xs text-gray-500 font-bold">${esc(t.inizio)} → ${esc(t.fine)}${t.kmTot ? ' · ' + esc(t.kmTot) + ' km' : ''}</p>
                                             </div>
                                             <div class="text-right">
-                                                <p class="text-base xl:text-lg font-black text-gray-900">${t.ore} h</p>
+                                                <p class="text-base xl:text-lg font-black text-gray-900">${esc(t.ore)} h</p>
                                                 <p class="text-xs font-bold text-gray-500">${formatCurrency(d.mediaOra)}/ora</p>
                                             </div>
                                         </div>
@@ -7599,7 +7610,7 @@
                             <label class="relative min-w-0 px-1.5 cursor-pointer">
                                 <span class="block text-sm font-black text-white truncate leading-tight">${nomeMese(mese)} ${anno}</span>
                                 <span class="block text-[11px] font-medium text-white/45 truncate leading-tight">tocca per cambiare mese</span>
-                                <input type="month" value="${ym}" onchange="setDashMese(this.value)" aria-label="Mese del riepilogo" class="data-coperta" />
+                                <input type="month" value="${esc(ym)}" onchange="setDashMese(this.value)" aria-label="Mese del riepilogo" class="data-coperta" />
                             </label>
                             <button onclick="scorriMese(1)" title="Mese successivo" aria-label="Mese successivo" class="tasto-icona w-9 h-9 rounded-xl eroe-campo text-yellow-400 flex items-center justify-center text-lg">›</button>
                         `, d, `${lavorati.length} giorni lavorati`)}
@@ -7615,7 +7626,7 @@
                             </div>
                             <div class="flex items-end gap-[2px] h-32 border-b-2 border-gray-200">
                                 ${serie.map(x => `
-                                    <div onclick="setDashGiorno('${x.iso}')" title="${x.giorno}: ${x.nCorse > 0 ? formatCurrency(x.incassi) + ' · ' + x.nCorse + ' corse' : (x.iso <= oggi ? 'riposo' : 'da compilare')}"
+                                    <div onclick="setDashGiorno('${escJs(x.iso)}')" title="${x.giorno}: ${x.nCorse > 0 ? formatCurrency(x.incassi) + ' · ' + x.nCorse + ' corse' : (x.iso <= oggi ? 'riposo' : 'da compilare')}"
                                          class="flex-1 h-full flex flex-col justify-end cursor-pointer group">
                                         <div class="w-full rounded-t-sm transition-colors ${x.iso === gSel ? 'bg-gray-900' : (x.incassi > 0 ? 'bg-yellow-400 group-hover:bg-yellow-500' : (x.iso <= oggi ? 'bg-blue-200' : 'bg-gray-100'))}"
                                              style="height:${x.incassi > 0 ? Math.max(3, (x.incassi / maxIncasso) * 100) : 3}%"></div>
@@ -7656,12 +7667,12 @@
 
                         ${migliore ? `
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <button onclick="setDashGiorno('${migliore.iso}')" class="text-left riquadro-tinto tinta-verde rounded-xl p-3">
+                                <button onclick="setDashGiorno('${escJs(migliore.iso)}')" class="text-left riquadro-tinto tinta-verde rounded-xl p-3">
                                     <p class="text-xs font-black uppercase tracking-wider text-green-700">Giornata migliore</p>
                                     <p class="text-sm font-black text-gray-900">${migliore.giorno} ${nomeMese(mese)} · ${formatCurrency(migliore.incassi)}</p>
                                     <p class="text-xs font-bold text-gray-500">${migliore.nCorse} corse</p>
                                 </button>
-                                <button onclick="setDashGiorno('${peggiore.iso}')" class="text-left riquadro-tinto tinta-rossa rounded-xl p-3">
+                                <button onclick="setDashGiorno('${escJs(peggiore.iso)}')" class="text-left riquadro-tinto tinta-rossa rounded-xl p-3">
                                     <p class="text-xs font-black uppercase tracking-wider text-red-700">Giornata peggiore</p>
                                     <p class="text-sm font-black text-gray-900">${peggiore.giorno} ${nomeMese(mese)} · ${formatCurrency(peggiore.incassi)}</p>
                                     <p class="text-xs font-bold text-gray-500">${peggiore.nCorse} corse</p>
@@ -7712,7 +7723,7 @@
                             </div>
                             <div class="flex items-end gap-1 h-32 border-b-2 border-gray-200">
                                 ${serie.map(x => `
-                                    <div onclick="setDashMese('${x.ym}')" title="${nomeMese(x.mese)}: ${x.nCorse > 0 ? formatCurrency(x.incassi) + ' · ' + x.nCorse + ' corse' : 'nessun incasso'}"
+                                    <div onclick="setDashMese('${escJs(x.ym)}')" title="${nomeMese(x.mese)}: ${x.nCorse > 0 ? formatCurrency(x.incassi) + ' · ' + x.nCorse + ' corse' : 'nessun incasso'}"
                                          class="flex-1 h-full flex flex-col justify-end cursor-pointer group">
                                         <div class="w-full rounded-t-sm transition-colors ${x.ym === meseSelezionato() ? 'bg-gray-900' : (x.incassi > 0 ? 'bg-yellow-400 group-hover:bg-yellow-500' : 'bg-gray-100')}"
                                              style="height:${x.incassi > 0 ? Math.max(3, (x.incassi / maxIncasso) * 100) : 3}%"></div>
@@ -7753,12 +7764,12 @@
 
                         ${migliore ? `
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <button onclick="setDashMese('${migliore.ym}')" class="text-left riquadro-tinto tinta-verde rounded-xl p-3">
+                                <button onclick="setDashMese('${escJs(migliore.ym)}')" class="text-left riquadro-tinto tinta-verde rounded-xl p-3">
                                     <p class="text-xs font-black uppercase tracking-wider text-green-700">Mese migliore</p>
                                     <p class="text-sm font-black text-gray-900">${nomeMese(migliore.mese)} · ${formatCurrency(migliore.incassi)}</p>
                                     <p class="text-xs font-bold text-gray-500">${migliore.nCorse} corse</p>
                                 </button>
-                                <button onclick="setDashMese('${peggiore.ym}')" class="text-left riquadro-tinto tinta-rossa rounded-xl p-3">
+                                <button onclick="setDashMese('${escJs(peggiore.ym)}')" class="text-left riquadro-tinto tinta-rossa rounded-xl p-3">
                                     <p class="text-xs font-black uppercase tracking-wider text-red-700">Mese peggiore</p>
                                     <p class="text-sm font-black text-gray-900">${nomeMese(peggiore.mese)} · ${formatCurrency(peggiore.incassi)}</p>
                                     <p class="text-xs font-bold text-gray-500">${peggiore.nCorse} corse</p>
@@ -7861,7 +7872,7 @@
                 <form onsubmit="addShift(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div>
                         <label for="sh-data" class="block text-xs font-bold text-gray-700 mb-1">Data</label>
-                        <input type="date" id="sh-data" required value="${dataFormTurno}" onchange="onDataTurnoChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none" />
+                        <input type="date" id="sh-data" required value="${esc(dataFormTurno)}" onchange="onDataTurnoChange(this.value)" class="w-full p-2.5 border rounded-lg outline-none" />
                     </div>
                     <div class="md:col-span-2">
                         <label for="sh-tipo" class="block text-xs font-bold text-gray-700 mb-1">Turno</label>
@@ -7903,14 +7914,14 @@
                     </div>
                     <div>
                         <label for="sh-kmini" class="block text-xs font-bold text-gray-700 mb-1">Km inizio <span class="text-gray-400 font-normal">facoltativo</span></label>
-                        <input type="number" inputmode="numeric" id="sh-kmini" value="${kmIniValore}" oninput="window.kmIniDraft = this.value" placeholder="Es. 45000" class="w-full p-2.5 border rounded-lg outline-none" />
+                        <input type="number" inputmode="numeric" id="sh-kmini" value="${esc(kmIniValore)}" oninput="window.kmIniDraft = this.value" placeholder="Es. 45000" class="w-full p-2.5 border rounded-lg outline-none" />
                         <p id="sh-kmini-nota" class="text-xs text-gray-400 mt-1">${kmIniSuggerito !== null
-                            ? `Km fine del turno del ${ggMm(turnoPrec.data)}: modificalo se non corrisponde.`
+                            ? `Km fine del turno del ${esc(ggMm(turnoPrec.data))}: modificalo se non corrisponde.`
                             : 'Nessun turno precedente con i km: inseriscili a mano.'}</p>
                     </div>
                     <div>
                         <label for="sh-kmfine" class="block text-xs font-bold text-gray-700 mb-1">Km fine <span class="text-gray-400 font-normal">facoltativo</span></label>
-                        <input type="number" inputmode="numeric" id="sh-kmfine" value="${kmFineValore}" oninput="window.kmFineDraft = this.value" placeholder="Puoi inserirli dopo" class="w-full p-2.5 border rounded-lg outline-none" />
+                        <input type="number" inputmode="numeric" id="sh-kmfine" value="${esc(kmFineValore)}" oninput="window.kmFineDraft = this.value" placeholder="Puoi inserirli dopo" class="w-full p-2.5 border rounded-lg outline-none" />
                     </div>
                     <div class="lg:col-span-5 -mt-2">
                         <p class="text-xs text-gray-500">Lascia vuoti i km se non li hai ancora: il turno viene salvato lo stesso e resta in elenco con il pulsante <span class="font-bold">Aggiungi km</span>.</p>
@@ -7932,7 +7943,7 @@
                         <p class="etichetta block">Turno</p>
                         <p class="text-sm font-bold text-gray-400">Non registrato</p>
                     </div>
-                    ${conPulsante ? `<button onclick="apriFormTurno('${g.iso}')" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg">+ Registra un turno</button>` : ''}
+                    ${conPulsante ? `<button onclick="apriFormTurno('${escJs(g.iso)}')" class="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black px-3 py-1.5 rounded-lg">+ Registra un turno</button>` : ''}
                 </div>`;
             const editing = !isRiposo(t) && String(window.editKmId) === String(t.id);
             // Compilando i km a posteriori, i km inizio si ereditano dal turno
@@ -7947,11 +7958,11 @@
                             <p class="text-sm font-bold text-gray-800">
                                 ${isRiposo(t)
                                     ? `<span class="${t.turno === 'Recupero festivo' ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-indigo-100 text-indigo-800 border-indigo-200'} border px-2 py-0.5 rounded-md text-xs font-black">${esc(t.turno || 'Festivo')}</span>`
-                                    : `${esc(nomeTurno(t))} <span class="font-medium text-gray-500">${orariTurno(t) ? '· ' + esc(orariTurno(t)) + ' ' : ''}· ${t.ore} ore</span>`}
+                                    : `${esc(nomeTurno(t))} <span class="font-medium text-gray-500">${orariTurno(t) ? '· ' + esc(orariTurno(t)) + ' ' : ''}· ${esc(t.ore)} ore</span>`}
                             </p>
                             ${isRiposo(t) ? '' : `
                                 <p class="text-xs font-bold ${kmMancanti(t) ? 'text-yellow-700' : 'text-gray-500'}">
-                                    ${kmMancanti(t) ? 'km da mettere' : `${t.kmInizio} → ${t.kmFine} · ${t.kmTot} km`}
+                                    ${kmMancanti(t) ? 'km da mettere' : `${esc(t.kmInizio)} → ${esc(t.kmFine)} · ${esc(t.kmTot)} km`}
                                 </p>`}
                         </div>
                         <span class="flex gap-1 ml-auto">
@@ -7966,16 +7977,16 @@
                         <div class="flex flex-wrap items-end gap-3 border-2 border-yellow-300 rounded-xl p-3 bg-white">
                             <div>
                                 <label class="block text-xs font-black uppercase tracking-wider text-gray-400 mb-1">Ore totali</label>
-                                <input type="number" step="0.1" min="0" max="24" id="ore-edit-${t.id}" value="${t.ore}" class="w-24 p-2.5 border rounded-lg text-sm outline-none font-bold text-gray-900" />
+                                <input type="number" step="0.1" min="0" max="24" id="ore-edit-${esc(t.id)}" value="${esc(t.ore)}" class="w-24 p-2.5 border rounded-lg text-sm outline-none font-bold text-gray-900" />
                             </div>
                             <div>
                                 <label class="block text-xs font-black uppercase tracking-wider text-gray-400 mb-1">Km inizio</label>
-                                <input type="number" id="km-ini-${t.id}" value="${kmIniRiga}" placeholder="inizio" class="w-24 p-2.5 border rounded-lg text-sm outline-none" />
-                                ${precRiga ? `<p class="text-xs text-gray-400 mt-1">dal turno del ${ggMm(precRiga.data)}</p>` : ''}
+                                <input type="number" id="km-ini-${esc(t.id)}" value="${esc(kmIniRiga)}" placeholder="inizio" class="w-24 p-2.5 border rounded-lg text-sm outline-none" />
+                                ${precRiga ? `<p class="text-xs text-gray-400 mt-1">dal turno del ${esc(ggMm(precRiga.data))}</p>` : ''}
                             </div>
                             <div>
                                 <label class="block text-xs font-black uppercase tracking-wider text-gray-400 mb-1">Km fine</label>
-                                <input type="number" id="km-fine-${t.id}" value="${t.kmFine || ''}" placeholder="fine" class="w-24 p-2.5 border rounded-lg text-sm outline-none" />
+                                <input type="number" id="km-fine-${esc(t.id)}" value="${esc(t.kmFine || '')}" placeholder="fine" class="w-24 p-2.5 border rounded-lg text-sm outline-none" />
                             </div>
                             <div class="flex gap-2 w-full sm:w-auto sm:ml-auto">
                                 <button onclick="salvaModificaTurno('${escJs(t.id)}')" class="flex-1 sm:flex-none bg-gray-900 hover:bg-gray-800 text-white text-sm font-bold px-4 py-2.5 rounded-lg">Salva modifiche</button>
@@ -8043,15 +8054,24 @@
         }
 
         function corsaLampoHTML(metodo) {
+        // Ridisegnando, il campo torna vuoto: una domanda rimasta in sospeso
+        // non deve far salvare d'un colpo la stessa cifra riscritta dopo.
+        window.corsaStranaInAttesa = null;
         return `
             <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5">
                 <label for="corsa-lampo" class="etichetta block">Incasso corsa</label>
                 <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-green-600 pb-2.5 transition-colors">
                     <input type="text" inputmode="decimal" id="corsa-lampo" placeholder="0,00"
                            onkeydown="if (event.key === 'Enter') { event.preventDefault(); corsaLampo(window.ultimoMetodoCorsa || 'Contanti'); }"
+                           oninput="nascondiAvvisoCorsaStrana()"
+                           aria-describedby="corsa-lampo-avviso"
                            class="flex-1 min-w-0 p-0 bg-transparent border-0 cifra text-[2.35rem] text-right text-gray-900 placeholder:text-gray-300 outline-none" />
                     <span class="text-xl font-bold text-gray-300" aria-hidden="true">€</span>
                 </div>
+                <!-- La domanda sulla corsa sopra soglia (vedi SOGLIA_CORSA_STRANA).
+                     Testo colorato e barretta rossa, non un fondo: al buio resta
+                     leggibile con le regole scure che ci sono gia'. -->
+                <p id="corsa-lampo-avviso" role="alert" class="hidden riquadro-tinto tinta-rossa chiama rounded-xl px-3 py-2 text-sm font-black text-red-700 leading-tight"></p>
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="corsaLampo('Contanti')" class="tasto-metodo bg-green-600 hover:bg-green-700 text-white shadow-sm transition-colors">
                         ${ICONE_METODO.contanti} Contanti
@@ -8142,12 +8162,12 @@
         return String(window.editRecordId) === String(r.id) ? `
             <div class="p-3 bg-green-50 space-y-2">
                 <div class="flex flex-wrap gap-2">
-                    <input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="p-2 border rounded-lg text-sm outline-none" />
-                    <input type="text" id="mv-cat-${r.id}" aria-label="Descrizione" value="${esc(r.categoria)}" placeholder="Tratta" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
+                    <input type="date" id="mv-data-${esc(r.id)}" aria-label="Data del movimento" value="${esc(r.data)}" class="p-2 border rounded-lg text-sm outline-none" />
+                    <input type="text" id="mv-cat-${esc(r.id)}" aria-label="Descrizione" value="${esc(r.categoria)}" placeholder="Tratta" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'ENTRATA')}</select>
-                    <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
+                    <select id="mv-met-${esc(r.id)}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'ENTRATA')}</select>
+                    <input type="text" inputmode="decimal" id="mv-imp-${esc(r.id)}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
                     <div class="flex gap-2 ml-auto">
                         <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
                         <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
@@ -8186,17 +8206,17 @@
         return String(window.editRecordId) === String(r.id) ? `
             <div class="p-3 bg-red-50 space-y-2">
                 <div class="flex flex-wrap gap-2">
-                    <input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="p-2 border rounded-lg text-sm outline-none" />
-                    <input type="text" id="mv-cat-${r.id}" aria-label="Tipo di spesa" value="${esc(r.categoria)}" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
+                    <input type="date" id="mv-data-${esc(r.id)}" aria-label="Data del movimento" value="${esc(r.data)}" class="p-2 border rounded-lg text-sm outline-none" />
+                    <input type="text" id="mv-cat-${esc(r.id)}" aria-label="Tipo di spesa" value="${esc(r.categoria)}" class="flex-1 min-w-[8rem] p-2 border rounded-lg text-sm outline-none" />
                 </div>
-                <input type="text" id="mv-nota-${r.id}" aria-label="Note" value="${esc(r.nota || '')}" placeholder="Note (non entrano nei conti)" class="w-full p-2 border rounded-lg text-sm outline-none text-gray-600" />
-                <label for="mv-fatt-${r.id}" class="flex items-center gap-2 cursor-pointer select-none text-sm font-bold text-gray-800">
-                    <input type="checkbox" id="mv-fatt-${r.id}" ${r.fattura ? 'checked' : ''} class="w-5 h-5 accent-red-600" />
+                <input type="text" id="mv-nota-${esc(r.id)}" aria-label="Note" value="${esc(r.nota || '')}" placeholder="Note (non entrano nei conti)" class="w-full p-2 border rounded-lg text-sm outline-none text-gray-600" />
+                <label for="mv-fatt-${esc(r.id)}" class="flex items-center gap-2 cursor-pointer select-none text-sm font-bold text-gray-800">
+                    <input type="checkbox" id="mv-fatt-${esc(r.id)}" ${r.fattura ? 'checked' : ''} class="w-5 h-5 accent-red-600" />
                     Mi fa fattura
                 </label>
                 <div class="flex flex-wrap gap-2">
-                    <select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select>
-                    <input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
+                    <select id="mv-met-${esc(r.id)}" aria-label="Metodo di pagamento" class="p-2 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select>
+                    <input type="text" inputmode="decimal" id="mv-imp-${esc(r.id)}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-2 border rounded-lg text-sm text-right outline-none font-bold" />
                     <div class="flex gap-2 ml-auto">
                         <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold px-3 py-2 rounded-lg">Salva</button>
                         <button onclick="annullaModificaRecord()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg">Annulla</button>
@@ -8247,7 +8267,7 @@
                     ? `${lavorati.length} turni · ${oreScritte(oreGiorno)} h${kmGiorno ? ' · ' + kmGiorno + ' km' : ''}`
                     : (riposo
                         ? esc(t.turno || 'Festivo')
-                        : `${esc(nomeTurno(t))}${orariTurno(t) ? ' · ' + esc(orariTurno(t)) : ''} · ${t.ore} h${t.kmTot ? ' · ' + t.kmTot + ' km' : ''}`);
+                        : `${esc(nomeTurno(t))}${orariTurno(t) ? ' · ' + esc(orariTurno(t)) : ''} · ${esc(t.ore)} h${t.kmTot ? ' · ' + esc(t.kmTot) + ' km' : ''}`);
             const dettaglio = `
                 <div class="p-3 space-y-3">
                     ${g.corse.length ? `
@@ -8309,7 +8329,7 @@
 
             return `
                 <div class="bg-white rounded-[1.25rem] shadow-sm border ${riposo ? 'border-indigo-200' : 'border-gray-100'} overflow-hidden">
-                    <button onclick="alternaGiornata('${g.iso}')" class="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 hover:bg-gray-50 transition-colors">
+                    <button onclick="alternaGiornata('${escJs(g.iso)}')" class="w-full text-left px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1 hover:bg-gray-50 transition-colors">
                         <div class="min-w-0 flex-1 basis-40">
                             <p class="font-black text-gray-900 prima-maiuscola leading-tight">${dataEstesa(g.iso)}</p>
                             <p class="text-xs font-bold text-gray-500">
@@ -8594,7 +8614,7 @@
                                 <label class="relative min-w-0 px-0.5 cursor-pointer">
                                     <span class="block text-sm font-black prima-maiuscola truncate leading-tight">${giorno ? dataDueRighe(giorno).su : etichettaPeriodo}</span>
                                     <span class="block text-[11px] font-medium text-white/45 truncate leading-tight">${giorno ? dataDueRighe(giorno).giu : 'tutte le giornate'}</span>
-                                    <input type="date" value="${giorno}" onchange="applyFilterGiornoGiornate(this.value)" aria-label="Giorno da vedere" class="data-coperta" />
+                                    <input type="date" value="${esc(giorno)}" onchange="applyFilterGiornoGiornate(this.value)" aria-label="Giorno da vedere" class="data-coperta" />
                                 </label>
                                 <button onclick="scorriGiornoGiornate(1)" title="Giorno successivo" aria-label="Giorno successivo" class="tasto-icona w-9 h-9 flex-shrink-0 rounded-xl eroe-campo text-yellow-400 flex items-center justify-center text-lg">›</button>
                             </div>
@@ -8671,7 +8691,7 @@
                                 <strong>${esc(riposoDelGiorno.turno)}</strong>, quindi il registro non accetta incassi in questa data.
                                 Se quel giorno hai lavorato lo stesso, cambia il tipo di giornata dal calendario.
                             </p>
-                            <button onclick="apriNelCalendario('${giorno}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Apri nel calendario</button>
+                            <button onclick="apriNelCalendario('${escJs(giorno)}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Apri nel calendario</button>
                         </div>
                         ${!aperto ? riquadroTurnoChiuso(giornoReg) : (window.mostraSpesaLampo ? '' : `
                         <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
@@ -8935,7 +8955,7 @@
             const lavorati = delMese.filter(t => !isRiposo(t));
             const festivi = delMese.filter(t => isRiposo(t) && t.turno === 'Festivo');
             const recuperi = delMese.filter(t => t.turno === 'Recupero festivo');
-            const oreMese = lavorati.reduce((tot, t) => tot + parseFloat(t.ore || 0), 0);
+            const oreMese = lavorati.reduce((tot, t) => tot + importoDi(t.ore), 0);
 
             const inSpostamento = (window.shifts || []).find(t => String(t.id) === String(window.spostaTurnoId));
 
@@ -8950,10 +8970,10 @@
                 const incasso = t && !isRiposo(t) ? incassoDi(iso) : 0;
 
                 return `
-                    <button onclick="toccaGiornoCalendario('${iso}')"
+                    <button onclick="toccaGiornoCalendario('${escJs(iso)}')"
                             class="aspect-square w-full rounded-lg border ${stile.cella} ${aperto ? 'ring-2 ring-gray-900' : ''} ${isOggi ? 'ring-2 ring-yellow-500' : ''} p-1 flex flex-col items-center justify-center gap-0.5 transition-colors hover:brightness-95">
                         <span class="text-sm font-black ${t ? stile.testo : (rossa ? 'text-red-500' : 'text-gray-500')} leading-none">${giorno}</span>
-                        ${t ? `<span class="text-[9px] font-bold ${stile.testo} leading-none truncate max-w-full px-0.5">${isRiposo(t) ? stile.breve : (t.ore ? t.ore + 'h' : '·')}</span>` : ''}
+                        ${t ? `<span class="text-[9px] font-bold ${stile.testo} leading-none truncate max-w-full px-0.5">${isRiposo(t) ? stile.breve : (t.ore ? esc(t.ore) + 'h' : '·')}</span>` : ''}
                         ${incasso > 0 ? `<span class="text-[8px] font-black text-green-700 leading-none">${Math.round(incasso)}€</span>` : ''}
                     </button>`;
             };
@@ -8976,14 +8996,14 @@
                                         ${formatCurrency(incassoDi(iso))}
                                     </p>` : ''}
                             </div>
-                            <button onclick="toccaGiornoCalendario('${iso}')" class="text-gray-400 hover:text-white text-xl leading-none px-2">×</button>
+                            <button onclick="toccaGiornoCalendario('${escJs(iso)}')" class="text-gray-400 hover:text-white text-xl leading-none px-2">×</button>
                         </div>
 
                         <div>
                             <p class="text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Turno di lavoro</p>
                             <div class="flex flex-wrap gap-1.5">
                                 ${lavoro.map(k => `
-                                    <button onclick="segnaTurnoLavoro('${iso}', '${k}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg ${k === 'rinforzo' ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white' : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'}">${SHIFT_PRESETS[k].label.split(' (')[0]}</button>
+                                    <button onclick="segnaTurnoLavoro('${escJs(iso)}', '${escJs(k)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg ${k === 'rinforzo' ? 'bg-fuchsia-600 hover:bg-fuchsia-700 text-white' : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'}">${SHIFT_PRESETS[k].label.split(' (')[0]}</button>
                                 `).join('')}
                             </div>
                         </div>
@@ -8992,7 +9012,7 @@
                             <p class="text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Giornata non lavorata</p>
                             <div class="flex flex-wrap gap-1.5">
                                 ${nonLavorate.map(k => `
-                                    <button onclick="segnaGiornataNonLavorata('${iso}', '${k}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg ${k === 'recupero' ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}">${SHIFT_PRESETS[k].label}</button>
+                                    <button onclick="segnaGiornataNonLavorata('${escJs(iso)}', '${escJs(k)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg ${k === 'recupero' ? 'bg-orange-500 hover:bg-orange-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'}">${SHIFT_PRESETS[k].label}</button>
                                 `).join('')}
                             </div>
                         </div>
@@ -9008,7 +9028,7 @@
                         <div class="flex flex-wrap gap-1.5 pt-1 border-t border-gray-800">
                             ${t ? `<button onclick="iniziaSpostamento('${escJs(t.id)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-white hover:bg-gray-100 text-gray-900">Sposta ad altro giorno</button>` : ''}
                             ${t ? `<button onclick="deleteShift('${escJs(t.id)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white">Elimina</button>` : ''}
-                            <button onclick="apriNellElenco('${iso}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">Apri nelle giornate</button>
+                            <button onclick="apriNellElenco('${escJs(iso)}')" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">Apri nelle giornate</button>
                         </div>
                         <p class="text-xs text-gray-500 leading-tight">I chilometri si completano qui sopra in qualsiasi momento. Per un orario diverso da questi usare «+ Registra un turno».</p>
                     </div>`;
@@ -9057,7 +9077,7 @@
 
                         ${inSpostamento ? `
                             <div class="bg-gray-900 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
-                                <p class="text-xs font-bold text-white">Sto spostando <span class="text-yellow-400 font-black">${esc(inSpostamento.turno)}</span> del ${ggMm(inSpostamento.data)}: tocca il giorno di destinazione.</p>
+                                <p class="text-xs font-bold text-white">Sto spostando <span class="text-yellow-400 font-black">${esc(inSpostamento.turno)}</span> del ${esc(ggMm(inSpostamento.data))}: tocca il giorno di destinazione.</p>
                                 <button onclick="annullaSpostamento()" class="text-xs font-black px-2.5 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white">Annulla</button>
                             </div>
                         ` : ''}
@@ -9251,7 +9271,7 @@
             const dove = genitore || 'altro';
             return `
                 <div class="space-y-3 no-print">
-                    <button onclick="switchTab('${dove}')" class="flex items-center gap-1 text-sm font-black text-gray-500 hover:text-gray-900 transition-colors">
+                    <button onclick="switchTab('${escJs(dove)}')" class="flex items-center gap-1 text-sm font-black text-gray-500 hover:text-gray-900 transition-colors">
                         <span class="text-xl leading-none" aria-hidden="true">‹</span> ${esc(padre)}
                     </button>
                     <div data-schede-scorrevoli class="-mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto">
@@ -9624,17 +9644,17 @@
                                         </tr>` : ''}
                                     ${usciteVisibili.slice(0, LIMITE_RIGHE).map(r => String(window.editRecordId) === String(r.id) ? `
                                         <tr class="bg-red-50">
-                                            <td class="p-3"><input type="date" id="mv-data-${r.id}" aria-label="Data del movimento" value="${r.data}" class="w-full p-1.5 border rounded-lg text-sm outline-none" /></td>
+                                            <td class="p-3"><input type="date" id="mv-data-${esc(r.id)}" aria-label="Data del movimento" value="${esc(r.data)}" class="w-full p-1.5 border rounded-lg text-sm outline-none" /></td>
                                             <td class="p-3">
-                                                <input type="text" id="mv-cat-${r.id}" aria-label="Descrizione" value="${esc(r.categoria)}" class="w-full p-1.5 border rounded-lg text-sm outline-none" />
-                                                <input type="text" id="mv-nota-${r.id}" aria-label="Note" value="${esc(r.nota || '')}" placeholder="Note (non entrano nei conti)" class="w-full mt-1 p-1.5 border rounded-lg text-xs outline-none text-gray-600" />
-                                                <label for="mv-fatt-${r.id}" class="flex items-center gap-2 mt-1.5 cursor-pointer select-none text-xs font-bold text-gray-700">
-                                                    <input type="checkbox" id="mv-fatt-${r.id}" ${r.fattura ? 'checked' : ''} class="w-4 h-4 accent-red-600" />
+                                                <input type="text" id="mv-cat-${esc(r.id)}" aria-label="Descrizione" value="${esc(r.categoria)}" class="w-full p-1.5 border rounded-lg text-sm outline-none" />
+                                                <input type="text" id="mv-nota-${esc(r.id)}" aria-label="Note" value="${esc(r.nota || '')}" placeholder="Note (non entrano nei conti)" class="w-full mt-1 p-1.5 border rounded-lg text-xs outline-none text-gray-600" />
+                                                <label for="mv-fatt-${esc(r.id)}" class="flex items-center gap-2 mt-1.5 cursor-pointer select-none text-xs font-bold text-gray-700">
+                                                    <input type="checkbox" id="mv-fatt-${esc(r.id)}" ${r.fattura ? 'checked' : ''} class="w-4 h-4 accent-red-600" />
                                                     Mi fa fattura
                                                 </label>
                                             </td>
-                                            <td class="p-3"><select id="mv-met-${r.id}" aria-label="Metodo di pagamento" class="w-full p-1.5 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select></td>
-                                            <td class="p-3"><input type="text" inputmode="decimal" id="mv-imp-${r.id}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-1.5 border rounded-lg text-sm text-right outline-none" /></td>
+                                            <td class="p-3"><select id="mv-met-${esc(r.id)}" aria-label="Metodo di pagamento" class="w-full p-1.5 border rounded-lg text-sm outline-none bg-white">${opzioniMetodo(r.metodo, 'USCITA')}</select></td>
+                                            <td class="p-3"><input type="text" inputmode="decimal" id="mv-imp-${esc(r.id)}" value="${importoScritto(r.importo)}" aria-label="Importo in euro" class="w-24 p-1.5 border rounded-lg text-sm text-right outline-none" /></td>
                                             <td class="p-3 text-center whitespace-nowrap">
                                                 <button onclick="salvaModificaRecord('${escJs(r.id)}')" class="text-white bg-gray-900 hover:bg-gray-800 text-xs font-bold px-3 py-1.5 rounded mr-1">Salva</button>
                                                 <button onclick="annullaModificaRecord()" class="text-gray-600 text-xs font-bold bg-gray-100 hover:bg-gray-200 px-2 py-1.5 rounded">Annulla</button>
@@ -9707,14 +9727,14 @@
 
                     ${rd.giornoRecord ? `
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <button onclick="vaiAlGiorno('${rd.giornoRecord.data}')" class="text-left riquadro-tinto tinta-verde rounded-2xl p-5">
+                            <button onclick="vaiAlGiorno('${escJs(rd.giornoRecord.data)}')" class="text-left riquadro-tinto tinta-verde rounded-2xl p-5">
                                 <p class="text-xs text-green-700 font-black uppercase tracking-wider mb-1">Giornata record dell'anno</p>
                                 <p class="text-2xl font-black text-gray-900 leading-tight">${formatCurrency(rd.giornoRecord.tot)}</p>
                                 <p class="text-sm font-bold text-gray-700 capitalize">${dataEstesa(rd.giornoRecord.data)}</p>
                                 <p class="text-xs font-bold text-gray-500">${rd.giornoRecord.nCorse} corse${rd.giornoRecord.turno ? ' · ' + esc(rd.giornoRecord.turno) : ''}${rd.giornoRecord.ore ? ' · ' + formatCurrency(rd.giornoRecord.tot / rd.giornoRecord.ore) + '/ora' : ''}</p>
                             </button>
                             ${rd.giornoPeggiore ? `
-                                <button onclick="vaiAlGiorno('${rd.giornoPeggiore.data}')" class="text-left riquadro-tinto tinta-rossa rounded-2xl p-5">
+                                <button onclick="vaiAlGiorno('${escJs(rd.giornoPeggiore.data)}')" class="text-left riquadro-tinto tinta-rossa rounded-2xl p-5">
                                     <p class="text-xs text-red-700 font-black uppercase tracking-wider mb-1">Giornata peggiore</p>
                                     <p class="text-2xl font-black text-gray-900 leading-tight">${formatCurrency(rd.giornoPeggiore.tot)}</p>
                                     <p class="text-sm font-bold text-gray-700 capitalize">${dataEstesa(rd.giornoPeggiore.data)}</p>
@@ -10364,7 +10384,7 @@
                                                 <span title="Si spunta da sola quando registri il pagamento"
                                                       class="w-6 h-6 rounded-md border-2 flex-shrink-0 text-xs font-black flex items-center justify-center ${v.fatta ? 'bg-green-500 border-green-500 text-white' : 'border-gray-200 bg-gray-50 text-gray-300'}">${v.fatta ? '✓' : ''}</span>`
                                               : `
-                                                <button onclick="spuntaOccorrenza('${escJs(v.id)}', '${v.teorica}')" title="${v.fatta ? 'Segna come da fare' : 'Segna come fatta'}"
+                                                <button onclick="spuntaOccorrenza('${escJs(v.id)}', '${escJs(v.teorica)}')" title="${v.fatta ? 'Segna come da fare' : 'Segna come fatta'}"
                                                     class="w-6 h-6 rounded-md border-2 flex-shrink-0 text-xs font-black flex items-center justify-center ${v.fatta ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 bg-white hover:border-green-400'}">${v.fatta ? '✓' : ''}</button>`}
                                             <div class="min-w-0 flex-1 basis-32">
                                                 <p class="font-bold text-sm truncate ${v.fatta ? 'text-gray-400 line-through' : 'text-gray-800'}">${esc(v.nome)}</p>
@@ -10375,7 +10395,7 @@
                                             ${v.dalBudget ? `
                                                 <span class="p-1.5 text-xs font-bold text-gray-500 whitespace-nowrap">${ggMmAaaa(v.data)}</span>`
                                               : `
-                                                <input type="date" value="${v.data}" onchange="spostaOccorrenza('${escJs(v.id)}', '${v.teorica}', this.value)" aria-label="Quando l'hai fatta"
+                                                <input type="date" value="${esc(v.data)}" onchange="spostaOccorrenza('${escJs(v.id)}', '${escJs(v.teorica)}', this.value)" aria-label="Quando l'hai fatta"
                                                     title="Quest'anno cade in un altro giorno? Cambia solo questa data."
                                                     class="p-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-yellow-400" />`}
                                             ${v.fatta ? '' : `
@@ -10405,11 +10425,11 @@
                                             <div data-riproponi data-nome="${esc(r.nome)}" class="flex flex-wrap items-center gap-2 bg-white border border-yellow-200 rounded-lg px-3 py-2">
                                                 <input type="checkbox" checked class="w-4 h-4 accent-yellow-500 flex-shrink-0" />
                                                 <span class="font-bold text-sm text-gray-800 min-w-0 flex-1 basis-32 truncate">${esc(r.nome)}</span>
-                                                <input type="date" aria-label="Data della scadenza" value="${r.data}" class="p-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-yellow-400" />
+                                                <input type="date" aria-label="Data della scadenza" value="${esc(r.data)}" class="p-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-yellow-400" />
                                             </div>
                                         `).join('')}
                                     </div>
-                                    <button onclick="riproponiSelezionate('${anno}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Aggiungi le selezionate</button>
+                                    <button onclick="riproponiSelezionate('${escJs(anno)}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Aggiungi le selezionate</button>
                                 </div>
                             ` : ''}
                         </div>`;
@@ -11856,7 +11876,9 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'USCITA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`${esc(categoria)} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`);
+            // showToast scrive con textContent: qui esc() farebbe vedere «&amp;»
+            // al posto di «&» nel nome della spesa.
+            showToast(`${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`);
             renderContent();
             setTimeout(() => {
                 const nuovo = document.getElementById('spesa-lampo');
@@ -11889,6 +11911,48 @@
             return `Corsa #${gia + 1}`;
         }
 
+        // UNA CORSA DA DUEMILA EURO E' UNA VIRGOLA DIMENTICATA
+        // Con la tastiera del telefono «23,50» scritto di fretta diventa «2350»,
+        // e il tasto del metodo salvava 2.350 € con un tocco solo: un incasso
+        // finto che finisce nei corrispettivi e nella stima delle tasse. Una
+        // corsa vera in citta' sta molto sotto i trecento euro, e quella lunga
+        // che li supera e' rara: per lei un secondo tocco costa poco. Oltre
+        // questa cifra il primo tocco non salva e chiede di ritoccare lo
+        // stesso metodo. Le
+        // spese non c'entrano: un'assicurazione da duemila euro e' normale.
+        const SOGLIA_CORSA_STRANA = 300;
+
+        // Il primo tocco sopra soglia lascia qui importo e metodo. Il secondo
+        // salva solo se sono gli stessi: cambiare la cifra o toccare un altro
+        // metodo riparte da capo, perche' e' un'altra corsa da confermare.
+        window.corsaStranaInAttesa = null;
+
+        // Con touch-action: manipulation Safari non aspetta piu' il doppio tocco
+        // per ingrandire: un doppio tocco nervoso sul tasto arriva come due click
+        // a pochi millisecondi, e il secondo confermava i 2.350 € prima che
+        // l'avviso si potesse leggere. La conferma vale solo se arriva almeno
+        // dopo questo tempo dal primo tocco; quella troppo rapida si ignora
+        // lasciando l'avviso, e il conto non riparte: il tocco calmo dopo salva.
+        // Il tempo si misura con performance.now() e non con l'ora: se il
+        // telefono risistema l'orologio fra i due tocchi, la conferma non
+        // resta bloccata.
+        const ATTESA_CONFERMA_CORSA_MS = 600;
+
+        // I nomi come sono scritti sui tasti, per dire «tocca di nuovo X»
+        // con le stesse parole che si leggono sotto il pollice.
+        function nomeTastoMetodo(metodo) {
+            return metodo === 'App/Nexi' ? 'App / Voucher' : metodo;
+        }
+
+        function nascondiAvvisoCorsaStrana() {
+            window.corsaStranaInAttesa = null;
+            const riga = document.getElementById('corsa-lampo-avviso');
+            if (riga && !riga.classList.contains('hidden')) {
+                riga.classList.add('hidden');
+                riga.textContent = '';
+            }
+        }
+
         // Il metodo di pagamento e' il pulsante di conferma: un tocco scrive
         // la corsa e rimette il campo a zero, pronto per la successiva.
         function corsaLampo(metodo) {
@@ -11896,6 +11960,7 @@
             if (!campo) return;
             const importo = numeroScritto(campo.value);
             if (!Number.isFinite(importo) || importo <= 0) {
+                nascondiAvvisoCorsaStrana();
                 showToast('Scrivi prima quanto hai incassato.');
                 campo.focus();
                 return;
@@ -11903,9 +11968,33 @@
             const data = giornoGiornate() || oggiISO();
             const riposo = giornataNonLavorata(data);
             if (riposo) {
+                nascondiAvvisoCorsaStrana();
                 showToast(`Il ${ggMmAaaa(data)} è segnato come ${riposo.turno}: cambia il tipo di giornata dal calendario.`);
                 return;
             }
+            if (importo > SOGLIA_CORSA_STRANA) {
+                const attesa = window.corsaStranaInAttesa;
+                const confermata = attesa && attesa.metodo === metodo && attesa.importo === importo;
+                if (confermata && performance.now() - attesa.momento < ATTESA_CONFERMA_CORSA_MS) {
+                    // Secondo tocco troppo vicino al primo: e' lo stesso dito
+                    // che rimbalza, non una risposta. Avviso e momento restano.
+                    campo.focus();
+                    return;
+                }
+                if (!confermata) {
+                    // Niente confirm(): la domanda resta sotto il campo e la
+                    // risposta e' lo stesso tasto, senza togliere il pollice.
+                    window.corsaStranaInAttesa = { importo, metodo, momento: performance.now() };
+                    const riga = document.getElementById('corsa-lampo-avviso');
+                    if (riga) {
+                        riga.textContent = `${formatCurrency(importo)} per una corsa sola? Tocca di nuovo ${nomeTastoMetodo(metodo)} per confermare.`;
+                        riga.classList.remove('hidden');
+                    }
+                    campo.focus();
+                    return;
+                }
+            }
+            window.corsaStranaInAttesa = null;
             const record = {
                 id: nuovoId(), data, tipo: 'ENTRATA',
                 categoria: etichettaCorsaAutomatica(data), metodo, importo,
@@ -11936,13 +12025,24 @@
             const metodo = document.getElementById('corsa-metodo').value;
             const importo = numeroScritto(document.getElementById('corsa-imp').value);
 
-            if (!data || isNaN(importo)) return;
+            if (!data) return;
+            // «abc» non diceva niente e «0», «Infinity» o «1e400» passavano:
+            // una corsa a zero o infinita non e' un incasso, e l'infinito
+            // avrebbe mandato in fumo ogni totale dell'anno.
+            if (!Number.isFinite(importo)) { showToast('Scrivi l\'importo in cifre, per esempio 18,50.'); return; }
             if (importo < 0) { showToast('L\'importo non può essere negativo.'); return; }
+            if (importo === 0) { showToast('Una corsa non può valere zero: scrivi quanto hai incassato.'); return; }
             const riposo = giornataNonLavorata(data);
             if (riposo) {
                 showToast(`Il ${ggMmAaaa(data)} è segnato come ${riposo.turno}: cambia il tipo di giornata dal calendario.`);
                 return;
             }
+            // Stessa guardia del tasto veloce (SOGLIA_CORSA_STRANA): qui siamo
+            // gia' in un modulo completo, e basta la domanda classica. Viene
+            // dopo i controlli che rifiutano: chiedere conferma di una corsa
+            // che poi non si puo' salvare era una domanda inutile.
+            if (importo > SOGLIA_CORSA_STRANA
+                && !confirm(`${formatCurrency(importo)} per una corsa sola? Confermi l'importo?`)) return;
 
             const categoria = scritta || etichettaCorsaAutomatica(data);
             const record = { id: nuovoId(), data, tipo: 'ENTRATA', categoria, metodo, importo, ora: oraDiAdesso() };
@@ -12096,7 +12196,12 @@
                 }
             }
 
-            if (!data || !categoria || isNaN(importo)) return;
+            if (!data || !categoria) return;
+            // Qui lo zero resta permesso: una manutenzione fatta in garanzia
+            // si puo' registrare a 0 € solo per far ripartire il conto alla
+            // rovescia del Parco Auto. Si rifiuta solo cio' che non e' un
+            // numero («abc») o non e' finito («Infinity», «1e400»).
+            if (!Number.isFinite(importo)) { showToast('Scrivi l\'importo in cifre, per esempio 62,40.'); return; }
             if (importo < 0) { showToast('L\'importo non può essere negativo.'); return; }
 
             const conFattura = !!(document.getElementById('uscita-fattura') || {}).checked;
@@ -12344,6 +12449,29 @@
                 showToast('Controlla data e importo.');
                 return;
             }
+            // L'infinito («Infinity», «1e400») passava il controllo di sopra.
+            // Lo zero resta permesso sulle spese (manutenzione in garanzia,
+            // vedi addUscita) ma non sulle corse, come all'inserimento.
+            if (!Number.isFinite(importo)) {
+                showToast('Scrivi l\'importo in cifre, per esempio 18,50.');
+                return;
+            }
+            // Lo zero si rifiuta solo se e' la modifica a portarlo: una vecchia
+            // corsa gia' a zero (prima di questo controllo) deve restare
+            // correggibile di data o metodo senza obbligare a inventare una cifra.
+            // Stessa logica per la soglia: si chiede solo se l'importo cambia,
+            // non a ogni ritocco di una corsa lunga gia' confermata.
+            const importoPrima = Math.round((parseFloat(rec.importo) || 0) * 100) / 100;
+            const importoNuovo = Math.round(importo * 100) / 100;
+            const cambiaImporto = importoNuovo !== importoPrima;
+            if (rec.tipo === 'ENTRATA' && importo === 0 && cambiaImporto) {
+                showToast('Una corsa non può valere zero: scrivi quanto hai incassato.');
+                return;
+            }
+            // Come in addCorsa (SOGLIA_CORSA_STRANA): «23,50» scritto «2350»
+            // capita anche correggendo.
+            if (rec.tipo === 'ENTRATA' && importo > SOGLIA_CORSA_STRANA && cambiaImporto
+                && !confirm(`${formatCurrency(importo)} per una corsa sola? Confermi l'importo?`)) return;
 
             // Sulle corse la descrizione resta facoltativa anche in modifica;
             // sulle spese serve, perche' e' quella che definisce la tipologia.
@@ -12906,7 +13034,7 @@
             if (!tutte.length) { showToast('Non ci sono foto da salvare.'); return; }
             const pacco = { versione: 1, tipo: 'foto', foto: tutte, date: new Date().toISOString() };
             const blob = new Blob([JSON.stringify(pacco)], { type: 'application/json' });
-            scaricaFile(blob, `TaxiManager_Foto_${new Date().toISOString().split('T')[0]}.json`);
+            scaricaFile(blob, `TaxiManager_Foto_${oggiISO()}.json`);
             showToast(`${tutte.length} foto scaricate.`);
         }
 
@@ -12914,6 +13042,10 @@
             const file = e.target.files && e.target.files[0];
             e.target.value = '';
             if (!file) return;
+            if (file.size > FOTO_FILE_MAX) {
+                showToast(`Il file pesa ${pesoOltre(file.size)}: troppo per un file di foto di TaxiManager (al massimo ${pesoLeggibile(FOTO_FILE_MAX)}).`, 'avviso');
+                return;
+            }
             const lettore = new FileReader();
             lettore.onload = async (ev) => {
                 let pacco;
@@ -12925,15 +13057,28 @@
                 // proprio JPEG, perche' e' l'unica cosa che questa app scrive.
                 // Tutto il resto si scarta senza guardarlo, come per il backup
                 // dei dati: un file confezionato male non deve avere nessuna
-                // strada per entrare.
-                const buone = elenco.filter(f => f && f.id && typeof f.jpeg === 'string'
-                                                 && f.jpeg.startsWith('data:image/jpeg;base64,'));
+                // strada per entrare. L'identificativo segue la stessa regola
+                // del backup (finisce negli stessi posti), e una foto piu'
+                // pesante di quelle che l'app produce - con un largo margine,
+                // perche' l'ultimo tentativo di compressione puo' superare di
+                // poco il peso previsto - non e' una foto nostra.
+                const buone = elenco.filter(f => f && idBackupBuono(f.id) && typeof f.jpeg === 'string'
+                                                 && f.jpeg.startsWith('data:image/jpeg;base64,')
+                                                 && f.jpeg.length <= FOTO_PESO_MAX * 2);
                 if (!buone.length) { showToast('Nel file non c\'e\' nessuna foto valida.', 'avviso'); return; }
                 let messe = 0;
                 for (const f of buone) {
-                    const rec = { id: String(f.id), jpeg: f.jpeg, larghezza: f.larghezza || null,
-                                  altezza: f.altezza || null, byte: f.byte || f.jpeg.length,
-                                  creata: f.creata || new Date().toISOString() };
+                    // Il resto della foto non si prende per buono: il peso
+                    // finisce nell'indice in localStorage e si ricalcola sempre
+                    // dalla foto (e' quello che scrive l'app, jpeg.length); i
+                    // lati solo se sono misure possibili, altrimenti null come
+                    // quando mancano; la data solo se e' una data.
+                    const lato = (v) => Number.isInteger(v) && v >= 1 && v <= 10000 ? v : null;
+                    const creata = typeof f.creata === 'string' && f.creata.length <= 30
+                                   && /^\d{4}-\d{2}-\d{2}T/.test(f.creata) && !isNaN(Date.parse(f.creata))
+                        ? f.creata : new Date().toISOString();
+                    const rec = { id: String(f.id), jpeg: f.jpeg, larghezza: lato(f.larghezza),
+                                  altezza: lato(f.altezza), byte: f.jpeg.length, creata };
                     if (await fotoScrivi(rec)) { segnaFoto(rec.id, rec.byte); messe++; }
                 }
                 const scartate = elenco.length - buone.length;
@@ -12945,7 +13090,7 @@
 
         function exportBackup() {
             const blob = new Blob([JSON.stringify(datiDaSalvare(), null, 2)], { type: 'application/json' });
-            scaricaFile(blob, `TaxiManager_Backup_${new Date().toISOString().split('T')[0]}.json`);
+            scaricaFile(blob, `TaxiManager_Backup_${oggiISO()}.json`);
             showToast('Backup scaricato!');
         }
 
@@ -13120,14 +13265,23 @@
         function exportCSV() {
             const recs = recordsAnno().slice().sort(perDataCrescente);
             const righe = [['Data', 'Ora', 'Tipo', 'Categoria', 'Note', 'Metodo', 'Importo (EUR)']];
+            // Una nota che comincia con «=», «+», «-» o «@» Excel e Numbers la
+            // prendono per una formula, e una formula in un file che gira fra
+            // commercialisti puo' fare danni veri. L'apostrofo davanti la
+            // lascia testo, ed e' il modo che i fogli di calcolo stessi usano.
+            // Solo per le celle di testo: l'importo resta un numero.
+            const testo = (v) => {
+                const t = String(v === null || v === undefined ? '' : v);
+                return /^[=+\-@\t\r\n]/.test(t) ? "'" + t : t;
+            };
             recs.forEach(r => {
                 righe.push([
-                    r.data || '',
-                    r.ora || '',
+                    testo(r.data || ''),
+                    testo(r.ora || ''),
                     r.tipo === 'ENTRATA' ? 'Incasso' : 'Spesa',
-                    (r.categoria || '').replace(/;/g, ','),
-                    (r.nota || '').replace(/;/g, ','),
-                    r.metodo || '',
+                    testo(String(r.categoria || '').replace(/;/g, ',')),
+                    testo(String(r.nota || '').replace(/;/g, ',')),
+                    testo(r.metodo || ''),
                     (importoDi(r.importo)).toFixed(2).replace('.', ',')
                 ]);
             });
@@ -13135,6 +13289,311 @@
             const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
             scaricaFile(blob, `TaxiManager_Movimenti_${annoAttivo()}.csv`);
             showToast(`CSV ${annoAttivo()} scaricato!`);
+        }
+
+        // L'identificativo di una riga che arriva da un file: solo quello che un
+        // id nostro puo' davvero contenere (cifre, lettere, il trattino delle
+        // serie). Sta qui fuori perche' lo usano il ripristino del backup, il
+        // suo riepilogo prima della conferma e il file delle foto: tre porte,
+        // una regola sola.
+        function idBackupBuono(v) {
+            return v !== undefined && v !== null && /^[A-Za-z0-9_-]{1,64}$/.test(String(v));
+        }
+        function rigaBackupValida(x) {
+            return !!x && idBackupBuono(x.id) && /^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''));
+        }
+
+        // GLI ORARI E I NUMERI DI UN TURNO SI CONTROLLANO UNO PER UNO
+        // Inizio, fine, ore e km finiscono a video cosi' come sono. I
+        // nostri li scrivono solo i moduli dei turni e il calendario:
+        // l'orario come «08:00» (o vuoto, nei giorni non lavorati), le ore
+        // e i km come cifre, o null quando non ci sono ancora. Un valore
+        // diverso da questi in un file arrivato da fuori si toglie da quel
+        // turno - lasciandolo vuoto come lo lascia l'app - e il resto del
+        // turno entra lo stesso: buttarlo intero vorrebbe dire perdere la
+        // giornata per un campo storto. Un valore giusto non si tocca,
+        // nemmeno nel tipo: «12» resta stringa, 12 resta numero.
+        function orarioBackupBuono(v) {
+            return v === undefined || v === null || v === ''
+                || (typeof v === 'string' && /^\d{1,2}:\d{2}(:\d{2})?$/.test(v));
+        }
+        function cifraBackupBuona(v) {
+            return v === undefined || v === null || v === ''
+                || (typeof v === 'number' && Number.isFinite(v))
+                || (typeof v === 'string' && /^\s*[-+]?\d+([.,]\d+)?\s*$/.test(v));
+        }
+        function pulisciTurnoBackup(t) {
+            let pulito = null;
+            const togli = (k, vuoto) => {
+                if (!pulito) pulito = Object.assign({}, t);
+                pulito[k] = vuoto;
+            };
+            ['inizio', 'fine', 'pausaInizio', 'pausaFine'].forEach(k => {
+                if (!orarioBackupBuono(t[k])) togli(k, '');
+            });
+            // Oltre al tipo, un tetto: le ore di un turno stanno fra 0 e 24
+            // (lo stesso limite dei moduli), i km fra zero e un miliardo: i
+            // moduli non hanno un massimo, e un «12345678» battuto per sbaglio
+            // e salvato deve rientrare com'era, per poterlo correggere. I
+            // contachilometri di inizio e fine possono essere negativi: i
+            // moduli accettano «-5» e lo scrivono cosi' com'e', quindi un
+            // backup legittimo puo' averlo e deve rientrare uguale. I km
+            // percorsi invece l'app non li scrive mai sotto zero.
+            const tetti = { ore: [0, 24], kmTot: [0, KM_BACKUP_MAX],
+                            kmInizio: [-KM_BACKUP_MAX, KM_BACKUP_MAX], kmFine: [-KM_BACKUP_MAX, KM_BACKUP_MAX] };
+            Object.keys(tetti).forEach(k => {
+                const v = t[k];
+                if (!cifraBackupBuona(v)) { togli(k, null); return; }
+                if (v === undefined || v === null || v === '') return;
+                const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+                if (!(n >= tetti[k][0] && n <= tetti[k][1])) togli(k, null);
+            });
+            return pulito || t;
+        }
+        const KM_BACKUP_MAX = 1e9;
+
+        // I CAMPI DI TESTO SI CONTROLLANO ANCHE LORO
+        // Categoria, metodo, nome di una scadenza, modello di una vettura:
+        // l'app li scrive sempre come stringhe, e il resto del codice li
+        // tratta da stringhe - un «(metodo || '').toLowerCase()» con un
+        // numero dentro si ferma, e con un oggetto si ferma anche String().
+        // Da un file arrivato da fuori: una stringa resta com'e', una cifra
+        // diventa la stessa cifra scritta (si legge uguale), qualsiasi altra
+        // cosa diventa vuota. Un campo che manca resta mancante.
+        // I «segni» (la serie di un movimento, l'intervento di una spesa,
+        // lo slug di una voce) si confrontano sempre con String(): li si
+        // lascia anche come numeri, perche' un numero li' non rompe niente.
+        function pulisciCampiBackup(x, testi, segni, cifre) {
+            let pulito = null;
+            const metti = (k, v) => {
+                if (!pulito) pulito = Object.assign({}, x);
+                pulito[k] = v;
+            };
+            (testi || []).forEach(k => {
+                const v = x[k];
+                if (v === undefined || v === null || typeof v === 'string') return;
+                metti(k, typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
+            });
+            (segni || []).forEach(k => {
+                const v = x[k];
+                if (v === undefined || v === null || typeof v === 'string'
+                    || (typeof v === 'number' && Number.isFinite(v))) return;
+                metti(k, '');
+            });
+            (cifre || []).forEach(k => {
+                if (!cifraBackupBuona(x[k])) metti(k, null);
+            });
+            return pulito || x;
+        }
+
+        // Un importo da file: una cifra (numero o scritta), oppure assente.
+        // Assente vuol dire null o mancante: la prima versione dell'app
+        // scriveva NaN quando il campo era vuoto, e NaN nel JSON diventa
+        // null; l'app lo legge come zero (importoDi) e non si rompe niente.
+        // Un oggetto, un vero/falso, delle lettere: quella riga non e' un
+        // movimento nostro e si scarta - parseFloat su certi oggetti si
+        // ferma, e un importo inventato sposterebbe i conti.
+        function importoBackupBuono(v) {
+            return v === undefined || v === null || (v !== '' && cifraBackupBuona(v));
+        }
+
+        // QUELLO CHE ENTRA DA UN BACKUP, IN UN POSTO SOLO
+        // Lo usano il ripristino e la domanda che lo precede: cosi' la
+        // domanda conta esattamente le righe che poi entrano, con gli
+        // stessi scarti e gli stessi campi ripuliti. Le righe buone non si
+        // toccano, nemmeno nel tipo: escono identiche a come sono entrate.
+        function righeDelBackup(data) {
+            const elenco = (k) => (Array.isArray(data[k]) ? data[k] : []);
+            const valida = rigaBackupValida;
+            const records = elenco('records')
+                .filter(r => valida(r) && importoBackupBuono(r.importo))
+                .map(r => pulisciCampiBackup(r, ['tipo', 'categoria', 'metodo', 'nota', 'ora'], ['serie', 'manutenzione']));
+            const shifts = elenco('shifts').filter(valida)
+                .map(t => pulisciCampiBackup(pulisciTurnoBackup(t), ['turno']));
+            const scadenze = elenco('scadenze').filter(valida)
+                .map(s => pulisciCampiBackup(s, ['nome', 'cadenza', 'ancora']));
+            const veicoli = elenco('veicoli')
+                .filter(v => v && idBackupBuono(v.id))
+                .map(v => {
+                    let p = pulisciCampiBackup(v,
+                        ['modello', 'targa', 'anno', 'alimentazione', 'telaio', 'uscita', 'dataAcquisto', 'dataUscita', 'note'],
+                        [], ['kmAcquisto', 'prezzoAcquisto', 'kmUscita', 'valoreUscita', 'valoreStimato']);
+                    // Gli interventi del libretto: stesso trattamento, uno per uno.
+                    if (Array.isArray(p.manutenzioni)) {
+                        const lista = p.manutenzioni.filter(m => m && typeof m === 'object')
+                            .map(m => pulisciCampiBackup(m, ['nome'], ['slug'], ['ogniKm', 'kmBase']));
+                        if (lista.length !== p.manutenzioni.length || lista.some((m, i) => m !== p.manutenzioni[i])) {
+                            p = Object.assign({}, p, { manutenzioni: lista });
+                        }
+                    }
+                    return p;
+                })
+                .filter(v => typeof v.modello === 'string' && v.modello.trim());
+            const vociFisse = elenco('vociFisse')
+                .filter(v => v && idBackupBuono(v.slug))
+                .map(v => {
+                    const p = pulisciCampiBackup(v, ['nome', 'unita', 'tipo', 'scadenza', 'dataInizio', 'dataFine']);
+                    // Un importo illeggibile vale zero, come quando il campo
+                    // del budget si lascia vuoto.
+                    return cifraBackupBuona(p.importo) ? p : Object.assign({}, p, { importo: 0 });
+                })
+                .filter(v => typeof v.nome === 'string' && v.nome.trim());
+            const note = elenco('note')
+                .filter(valida)
+                .map(n => {
+                    let p = pulisciCampiBackup(n, ['tipo', 'testo', 'creata']);
+                    // Gli identificativi delle foto finiscono in un onclick,
+                    // come quelli delle righe: stessa regola.
+                    if (Array.isArray(p.foto) && !p.foto.every(idBackupBuono)) {
+                        p = Object.assign({}, p, { foto: p.foto.filter(idBackupBuono) });
+                    }
+                    return p;
+                })
+                .filter(n => typeof n.testo === 'string' && n.testo.trim());
+            // I versamenti pesano sulla base delle tasse, quindi si accetta
+            // solo quello che e' davvero un versamento: data buona e una cifra
+            // positiva. Una riga storta qui dentro sposterebbe l'imponibile.
+            const versamenti = elenco('versamenti')
+                .filter(x => valida(x) && (typeof x.importo === 'number' || typeof x.importo === 'string')
+                             && Number.isFinite(parseFloat(x.importo)) && parseFloat(x.importo) > 0)
+                .map(x => pulisciCampiBackup(x, ['dove', 'nota', 'creato']));
+            return {
+                records, shifts, scadenze, veicoli, vociFisse, note, versamenti,
+                scartati: elenco('records').length - records.length + elenco('shifts').length - shifts.length
+            };
+        }
+
+        // I file oltre questo peso non si aprono nemmeno: un backup di dieci
+        // anni di lavoro pesa pochi megabyte, e leggere per intero un file
+        // enorme sbagliato blocca il telefono. Le foto pesano di piu', perche'
+        // sono tante e ognuna e' gia' compressa: 250 MB sono quasi mille
+        // foto alla qualita' piu' alta, e di piu' con quelle normali. Si e'
+        // provato a scendere a 120, ma un file di foto vero e grande non
+        // sarebbe piu' rientrato: meglio un telefono che ricarica la pagina
+        // che un archivio di foto che non si puo' rimettere.
+        const BACKUP_FILE_MAX = 50 * 1024 * 1024;
+        const FOTO_FILE_MAX = 250 * 1024 * 1024;
+
+        // Il peso di un file che ha superato il limite. Arrotondato per
+        // eccesso al decimo di mega: arrotondato al piu' vicino, un file di
+        // 50 MB e un byte diventava «pesa 50 MB (al massimo 50 MB)» - e non
+        // si capiva cosa ci fosse di sbagliato.
+        function pesoOltre(byte) {
+            const mb = Math.ceil((byte || 0) / (1024 * 102.4)) / 10;
+            return mb < 1 ? pesoLeggibile(byte) : `${numeroIT(mb)} MB`;
+        }
+
+        // ============================================================
+        //  PRIMA DI RIMETTERE UN BACKUP, SI DICE COSA SUCCEDE
+        //  Il ripristino unisce per identificativo: una riga del backup che
+        //  c'e' anche adesso prende il posto di quella di adesso, una che
+        //  adesso non c'e' piu' torna. Quindi le correzioni fatte dopo il
+        //  backup tornano indietro, e le righe cancellate dopo ricompaiono -
+        //  ed e' giusto, se e' quello che si vuole, ma va detto prima.
+        //  Qui si contano, con le stesse righe del ripristino (righeDelBackup).
+        // ============================================================
+        // L'identificativo si confronta come testo: lo stesso movimento puo'
+        // avere 123 da una parte e «123» dall'altra (la prima versione li
+        // scriveva come numeri), e il ripristino li unisce come la stessa riga.
+        function rigaUguale(a, b) {
+            const ordinato = (x) => {
+                if (Array.isArray(x)) return x.map(ordinato);
+                if (x && typeof x === 'object') {
+                    const o = {};
+                    Object.keys(x).sort().forEach(k => { o[k] = ordinato(x[k]); });
+                    return o;
+                }
+                return x;
+            };
+            const conId = (x) => Object.assign({}, x, { id: String(x.id) });
+            return JSON.stringify(ordinato(conId(a))) === JSON.stringify(ordinato(conId(b)));
+        }
+
+        function riepilogoBackup(data) {
+            const righe = righeDelBackup(data);
+            // Le righe del backup che, rimesse, cambierebbero l'archivio di
+            // adesso, divise in due: quelle che adesso non ci sono (entrano)
+            // e quelle che ci sono ma sono diverse (tornano com'erano).
+            const conta = (nelBackup, elencoOra) => {
+                const adesso = new Map((elencoOra || []).map(x => [String(x.id), x]));
+                let nuove = 0, diverse = 0;
+                nelBackup.forEach(x => {
+                    const c = adesso.get(String(x.id));
+                    if (!c) nuove++;
+                    else if (!rigaUguale(c, x)) diverse++;
+                });
+                return { nuove, diverse };
+            };
+            const mov = conta(righe.records, window.dailyRecords);
+            const tur = conta(righe.shifts, window.shifts);
+            // Le altre categorie si uniscono allo stesso modo: si nominano
+            // quelle che il backup porta davvero.
+            const imp = data.impostazioniFiscali;
+            const chiaviFiscali = ['inpsPerc', 'addizionaliPerc', 'sogliaForfettario', 'accantonamentoPerc',
+                                   'inpsRata', 'inpsNumeroRate', 'inpsMinimale'];
+            const altre = [];
+            if (righe.scadenze.length) altre.push('scadenze');
+            if (righe.note.length) altre.push('note');
+            if (righe.versamenti.length) altre.push('versamenti');
+            if (righe.veicoli.length) altre.push('vetture');
+            if (righe.vociFisse.length) altre.push('voci di budget');
+            if (imp && typeof imp === 'object' && chiaviFiscali.some(k => k in imp)) altre.push('impostazioni');
+            const quando = new Date(data.date);
+            return {
+                data: data.date && !isNaN(quando.getTime()) ? quando.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+                movimenti: righe.records.length,
+                turni: righe.shifts.length,
+                movimentiOra: (window.dailyRecords || []).length,
+                turniOra: (window.shifts || []).length,
+                movimentiNuovi: mov.nuove,
+                turniNuovi: tur.nuove,
+                movimentiDiversi: mov.diverse,
+                turniDiversi: tur.diverse,
+                altre
+            };
+        }
+
+        function testoConfermaBackup(r) {
+            const n = numeroIT;
+            const mov = (k) => k === 1 ? '1 movimento' : `${n(k)} movimenti`;
+            const tur = (k) => k === 1 ? '1 turno' : `${n(k)} turni`;
+            // «3 movimenti e 1 turno», senza la parte che vale zero.
+            const coppia = (m, t) => [m ? mov(m) : '', t ? tur(t) : ''].filter(Boolean).join(' e ');
+            const chi = r.data ? `Il backup del ${r.data}` : 'Il backup';
+            let testo = `${chi} contiene ${mov(r.movimenti)} e ${tur(r.turni)}. `
+                + `Adesso ne hai ${n(r.movimentiOra)} e ${n(r.turniOra)}.\n\n`;
+            const frasi = [];
+            const nuove = r.movimentiNuovi + r.turniNuovi;
+            if (nuove) {
+                frasi.push(nuove === 1
+                    ? `Entra ${coppia(r.movimentiNuovi, r.turniNuovi)} che adesso non c'è.`
+                    : `Entrano ${coppia(r.movimentiNuovi, r.turniNuovi)} che adesso non ci sono.`);
+            }
+            const diverse = r.movimentiDiversi + r.turniDiversi;
+            if (diverse) {
+                const dopo = r.data ? 'dopo quella data' : 'dopo il backup';
+                frasi.push(diverse === 1
+                    ? `${coppia(r.movimentiDiversi, r.turniDiversi)} che hai cambiato ${dopo} torna com'era nel backup.`
+                    : `${coppia(r.movimentiDiversi, r.turniDiversi)} che hai cambiato ${dopo} tornano com'erano nel backup.`);
+            }
+            testo += frasi.length
+                ? frasi.join(' ')
+                : 'Ripristinando, nessun movimento e nessun turno di adesso cambia.';
+            // Il resto del backup non si conta riga per riga, ma si dice che
+            // c'e': anche li' una riga del backup prende il posto di quella
+            // di adesso con lo stesso identificativo.
+            const altre = r.altre || [];
+            if (altre.length) {
+                const articolo = { scadenze: 'le scadenze', note: 'le note', versamenti: 'i versamenti',
+                                   vetture: 'le vetture', 'voci di budget': 'le voci di budget', impostazioni: 'le impostazioni' };
+                const elenco = altre.length === 1
+                    ? articolo[altre[0]]
+                    : altre.slice(0, -1).join(', ') + ' e ' + altre[altre.length - 1];
+                // Non «prendono il posto di quelle di adesso»: si leggeva come
+                // una cancellazione, e invece quello che manca nel backup resta.
+                testo += `\n\nAnche ${elenco} tornano come nel backup; quello che hai aggiunto dopo resta.`;
+            }
+            return testo + '\n\nContinuare?';
         }
 
         // Rimette in circolo un backup, da file o da un'istantanea del Cloud.
@@ -13150,26 +13609,15 @@
             // apice, quell'apice chiuderebbe la stringa e quello che segue
             // verrebbe eseguito. Qui si accetta solo quello che un id nostro
             // puo' davvero contenere, e il resto si scarta.
-            const idBuono = (v) => v !== undefined && v !== null
-                && /^[A-Za-z0-9_-]{1,64}$/.test(String(v));
-            const valida = (x) => !!x && idBuono(x.id)
-                && /^\d{4}-\d{2}-\d{2}$/.test(String(x.data || ''));
-            const records = (Array.isArray(data.records) ? data.records : []).filter(valida);
-            const shifts = (Array.isArray(data.shifts) ? data.shifts : []).filter(valida);
-            const scadenze = (Array.isArray(data.scadenze) ? data.scadenze : []).filter(valida);
-            const veicoli = (Array.isArray(data.veicoli) ? data.veicoli : [])
-                .filter(v => v && idBuono(v.id) && String(v.modello || '').trim());
-            const vociImportate = (Array.isArray(data.vociFisse) ? data.vociFisse : [])
-                .filter(v => v && idBuono(v.slug) && String(v.nome || '').trim());
-            const noteImportate = (Array.isArray(data.note) ? data.note : [])
-                .filter(n => valida(n) && String(n.testo || '').trim());
-            // I versamenti pesano sulla base delle tasse, quindi si accetta
-            // solo quello che e' davvero un versamento: data buona e una cifra
-            // positiva. Una riga storta qui dentro sposterebbe l'imponibile.
-            const versamentiImportati = (Array.isArray(data.versamenti) ? data.versamenti : [])
-                .filter(x => valida(x) && Number.isFinite(parseFloat(x.importo)) && parseFloat(x.importo) > 0);
-            const scartati = (Array.isArray(data.records) ? data.records.length : 0) - records.length
-                + (Array.isArray(data.shifts) ? data.shifts.length : 0) - shifts.length;
+            // Le righe si scelgono e si ripuliscono in righeDelBackup: la
+            // stessa funzione che conta quelle della domanda prima del
+            // ripristino.
+            const righe = righeDelBackup(data);
+            const { records, shifts, scadenze, veicoli } = righe;
+            const vociImportate = righe.vociFisse;
+            const noteImportate = righe.note;
+            const versamentiImportati = righe.versamenti;
+            const scartati = righe.scartati;
 
             // La scheda del tassista si rimette per prima, e fuori dal controllo
             // qui sotto: un backup fatto appena installata l'app contiene la
@@ -13281,6 +13729,18 @@
                 if (add !== null) { nuove.addizionaliPerc = add; impostazioni = true; }
                 if (soglia !== null) { nuove.sogliaForfettario = soglia; impostazioni = true; }
                 if ('accantonamentoPerc' in imp) { nuove.accantonamentoPerc = acc; impostazioni = true; }
+                // La quota fissa dell'INPS (rata, quante rate, minimale) stava
+                // nel backup ma restava fuori anche lei: su un telefono nuovo
+                // tornavano i valori di fabbrica e il conto dei contributi
+                // cambiava. Stessi limiti del modulo delle impostazioni, che
+                // accetta qualsiasi cifra da zero in su; il tetto serve solo a
+                // tenere fuori i numeri assurdi di un file confezionato male.
+                const rata = numero(imp.inpsRata, 0, 10000000);
+                const nRate = numero(imp.inpsNumeroRate, 0, 1000);
+                const minimale = numero(imp.inpsMinimale, 0, 10000000);
+                if (rata !== null) { nuove.inpsRata = rata; impostazioni = true; }
+                if (nRate !== null) { nuove.inpsNumeroRate = nRate; impostazioni = true; }
+                if (minimale !== null) { nuove.inpsMinimale = minimale; impostazioni = true; }
                 if (impostazioni) {
                     window.fiscalSettings = nuove;
                     try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(nuove)); }
@@ -13311,19 +13771,36 @@
         }
 
         function importBackup(e) {
-            const file = e.target.files[0];
+            const file = e.target.files && e.target.files[0];
+            // Il campo si svuota subito, come per le foto: il file e' gia'
+            // in mano, e cosi' dopo un «no», un errore o un ripristino
+            // riuscito lo stesso file si puo' scegliere di nuovo (un campo
+            // che ha gia' quel file non avvisa se lo si sceglie un'altra volta).
+            e.target.value = '';
             if (!file) return;
+            if (file.size > BACKUP_FILE_MAX) {
+                showToast(`Il file pesa ${pesoOltre(file.size)}: troppo per un backup di TaxiManager (al massimo ${pesoLeggibile(BACKUP_FILE_MAX)}). Controlla di aver scelto il file giusto.`, 'avviso');
+                return;
+            }
             const reader = new FileReader();
             reader.onload = async (evt) => {
                 try {
-                    await applicaBackup(JSON.parse(evt.target.result));
+                    const data = JSON.parse(evt.target.result);
+                    // La conferma sta qui, sul tasto, e non dentro applicaBackup:
+                    // il ripristino dal Cloud ha gia' la sua domanda, e chi chiama
+                    // applicaBackup da codice ha gia' deciso.
+                    if (data && typeof data === 'object'
+                        && !confirm(testoConfermaBackup(riepilogoBackup(data)))) {
+                        showToast('Ripristino annullato: non ho cambiato niente.');
+                        return;
+                    }
+                    await applicaBackup(data);
                 } catch (err) {
                     console.error(err);
                     showToast('Errore nel file di backup.');
                 }
             };
             reader.readAsText(file);
-            e.target.value = '';
         }
 
         // ============================================================
