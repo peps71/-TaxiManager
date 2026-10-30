@@ -7,10 +7,28 @@
 //     e sotto il campo compare la domanda; lo stesso metodo ritoccato salva,
 //     un altro metodo o un'altra cifra ripartono da capo; 300 e 299 salvano
 //     subito, come sempre;
+//   - il doppio tocco nervoso: con touch-action: manipulation Safari non
+//     aspetta piu' il doppio tocco per ingrandire, e due click a 50 ms
+//     confermavano i 2.350 € prima che l'avviso si potesse leggere. Ora la
+//     conferma vale solo ATTESA_CONFERMA_CORSA_MS (600 ms) dopo il tocco che
+//     ha acceso l'avviso, misurati con performance.now() (che l'orologio
+//     fermo di setFixedTime non ferma); un tocco piu' rapido non salva,
+//     lascia l'avviso e NON riparte il conto (se ripartisse, il tocco calmo
+//     dopo un rimbalzo chiederebbe ancora). Il tempo e' quello vero: ogni
+//     tocco normale aspetta 650 ms prima di cadere, quelli del dito che
+//     rimbalza arrivano subito, e quanto e' passato davvero si misura nella
+//     pagina - se la macchina fosse cosi' lenta da rendere il caso senza
+//     senso, la prova lo dice invece di passare;
 //   - modulo completo: «0», «abc», «Infinity», «1e400» non entrano (lo zero
 //     e l'infinito entravano, e l'infinito manda in fumo ogni totale
 //     dell'anno); sopra soglia chiede conferma, e «no» vuol dire no;
-//   - la modifica in riga: infinito e zero non entrano nemmeno da li';
+//   - la modifica in riga: infinito e zero non entrano nemmeno da li'; ma una
+//     vecchia corsa gia' a zero si puo' correggere di metodo senza inventare
+//     una cifra, da 20 a 2.350 chiede conferma (e «no» lascia 20), e una corsa
+//     da 500 toccata solo nel metodo non fa domande;
+//   - il modulo completo in un giorno di riposo: la corsa si rifiuta PRIMA di
+//     chiedere «2.350 € per una corsa sola?» - la domanda prima, e il rifiuto
+//     dopo il si', era una domanda inutile;
 //   - spese: 2.000 € entrano senza domande (un'assicurazione e' normale), lo
 //     zero resta permesso (manutenzione in garanzia), «abc» e l'infinito no;
 //   - la domanda a 320 px non esce dalla scheda, e si legge di giorno e al buio.
@@ -62,21 +80,22 @@ const b = await chromium.launch();
 // Le finestre di dialogo: si registrano tutte, e si risponde come dice la prova.
 let risposta = 'accept';
 let domande = [];
-async function apri(larghezza, tema) {
+async function apri(larghezza, tema, altro = {}) {
   const p = await b.newPage({ viewport: { width: larghezza, height: 900 }, locale: 'it-IT', timezoneId: 'Europe/Rome' });
   await p.clock.setFixedTime(ORA_FISSA);
   p.__errori = [];
   p.on('pageerror', e => p.__errori.push(String(e)));
   p.on('dialog', d => { domande.push(d.message()); return risposta === 'accept' ? d.accept() : d.dismiss(); });
   await p.goto(APP);
-  await p.evaluate(({ oggi, tema }) => {
+  await p.evaluate(({ oggi, tema, altro }) => {
     localStorage.clear();
     localStorage.setItem('taxi_voci_fisse_avviato', 'si');
     localStorage.setItem('taxi_tema', tema);
     localStorage.setItem('taxi_shifts', JSON.stringify([
       { id: 'toggi', data: oggi, turno: 'Le otto', inizio: '08:00', fine: '20:00', ore: 12, lavorato: true }
-    ]));
-  }, { oggi: OGGI, tema });
+    ].concat(altro.turni || [])));
+    if (altro.movimenti) localStorage.setItem('taxi_records', JSON.stringify(altro.movimenti));
+  }, { oggi: OGGI, tema, altro });
   await p.goto(APP);
   await p.waitForFunction(() => typeof window.switchTab === 'function');
   await p.evaluate(AIUTI);
@@ -102,9 +121,19 @@ const avviso = p => p.evaluate(() => {
 });
 const toast = p => p.evaluate(() => (document.getElementById('toast-text') || {}).textContent || '');
 const scrivi = async (p, v) => { await p.fill('#corsa-lampo', v); };
+// Il tocco normale: un dito che legge l'avviso e poi conferma, quindi
+// almeno 650 ms dopo il tocco prima (la soglia e' 600, misurata in pagina
+// con performance.now()).
 const tocca = async (p, metodo) => {
+  await p.waitForTimeout(650);
   await p.click(`button[onclick="corsaLampo('${metodo}')"]`);
   await p.waitForTimeout(120);
+};
+// Il dito che rimbalza: il click parte subito, e si torna l'istante in
+// pagina (performance.now()) subito dopo.
+const toccaSubito = async (p, metodo) => {
+  await p.click(`button[onclick="corsaLampo('${metodo}')"]`);
+  return p.evaluate(() => performance.now());
 };
 const domanda = (cifra, metodo) => `${cifra}${NBSP}€ per una corsa sola? Tocca di nuovo ${metodo} per confermare.`;
 
@@ -199,9 +228,44 @@ c = await corse(p);
 ok(c.length === 7 && c[6].importo === 23.5, 'la cifra giusta, 23,50: salvata al primo tocco', JSON.stringify(c.slice(6)));
 ok(domande.length === 0, 'il tasto veloce non apre nessuna finestra di dialogo', JSON.stringify(domande));
 
+// Il doppio tocco nervoso: il secondo click arriva a pochi millisecondi dal
+// primo. Non e' una risposta all'avviso, e' lo stesso dito.
+await scrivi(p, '2350');
+const T = await toccaSubito(p, 'Contanti');    // accende l'avviso: istante T
+const t1 = await toccaSubito(p, 'Contanti');   // subito dopo
+c = await corse(p);
+a = await avviso(p);
+ok(t1 - T < 300, `il secondo tocco e' arrivato davvero di corsa (${Math.round(t1 - T)} ms dopo il primo)`);
+ok(c.length === 7, 'doppio tocco: il secondo non salva', JSON.stringify(c.slice(7)));
+ok(a.visibile && a.testo === domanda('2.350,00', 'Contanti'), '  e l\'avviso resta li\', con le stesse parole', JSON.stringify(a));
+ok(await p.inputValue('#corsa-lampo') === '2350', '  e la cifra resta nel campo');
+// Un terzo tocco a meta' strada (300 ms dal primo): ancora troppo presto.
+await p.waitForFunction(t => performance.now() >= t + 300, T, { polling: 10 });
+const t2 = await toccaSubito(p, 'Contanti');
+c = await corse(p);
+a = await avviso(p);
+ok(t2 - T < 600, `terzo tocco a ${Math.round(t2 - T)} ms dal primo: ancora sotto i 600`);
+ok(c.length === 7, '  non salva', JSON.stringify(c.slice(7)));
+ok(a.visibile, '  e l\'avviso resta visibile');
+// Il tocco calmo: 650 ms dopo il PRIMO, ma meno di 600 dall'ultimo
+// rimbalzo. Se i rimbalzi avessero fatto ripartire il conto, non salverebbe.
+await p.waitForFunction(t => performance.now() >= t + 650, T, { polling: 10 });
+const t3 = await toccaSubito(p, 'Contanti');
+c = await corse(p);
+a = await avviso(p);
+ok(t3 - t2 < 600, `il tocco calmo cade ${Math.round(t3 - T)} ms dopo il primo e ${Math.round(t3 - t2)} dall'ultimo rimbalzo: il caso dice qualcosa`);
+ok(c.length === 8 && c[7].importo === 2350 && c[7].metodo === 'Contanti',
+   'il tocco calmo salva UNA corsa: i rimbalzi non hanno fatto ripartire il conto', JSON.stringify(c.slice(7)));
+ok(!a.visibile, '  e l\'avviso se ne va');
+await p.waitForTimeout(120);
+await toccaSubito(p, 'Contanti');
+await p.waitForTimeout(120);
+c = await corse(p);
+ok(c.length === 8, 'un tocco subito dopo, a campo vuoto, non salva una seconda corsa', JSON.stringify(c.slice(7)));
+
 // Il totale della giornata a video segue le corse vere.
 const totale = await p.evaluate(() => (window.dailyRecords || []).filter(r => r.tipo === 'ENTRATA').reduce((t, r) => t + r.importo, 0));
-ok(Math.abs(totale - (2350 + 2350 + 2351 + 999 + 300 + 299 + 23.5)) < 0.001, 'nell\'archivio solo le corse confermate', String(totale));
+ok(Math.abs(totale - (2350 + 2350 + 2351 + 999 + 300 + 299 + 23.5 + 2350)) < 0.001, 'nell\'archivio solo le corse confermate', String(totale));
 ok(p.__errori.length === 0, 'nessun errore JS', p.__errori.join(' | '));
 await p.close();
 
@@ -261,6 +325,81 @@ for (const v of ['Infinity', '1e400', '0']) {
   const imp = await p.evaluate(id => (window.dailyRecords || []).find(r => r.id === id).importo, idCorsa);
   ok(imp === 300, `modifica della corsa a «${v}»: resta 300`, String(imp));
 }
+ok(p.__errori.length === 0, 'nessun errore JS', p.__errori.join(' | '));
+await p.close();
+
+// ------------------------------------------------------------------
+console.log('\n2b. LA MODIFICA DI UNA CORSA GIA\' REGISTRATA');
+// ------------------------------------------------------------------
+// Tre corse di oggi: una a zero (registrata prima che lo zero si
+// rifiutasse), una da 20, una da 500 gia' confermata.
+const vecchia = (id, importo, metodo) => ({ id, data: OGGI, tipo: 'ENTRATA', categoria: 'Corsa', metodo, importo, ora: '09:00' });
+p = await apri(390, 'chiaro', { movimenti: [vecchia('czero', 0, 'Contanti'), vecchia('cventi', 20, 'POS'), vecchia('ccinquecento', 500, 'Contanti')] });
+const riga = id => p.evaluate(id => { const r = (window.dailyRecords || []).find(x => x.id === id); return r && { importo: r.importo, metodo: r.metodo }; }, id);
+// La modifica si apre e si salva dai suoi campi e dal suo tasto «Salva».
+const modifica = async (id, { metodo, importo }) => {
+  await p.evaluate(id => { window.editRecordId = null; apriModificaRecord(id); }, id);
+  await p.waitForTimeout(150);
+  if (metodo) await p.selectOption('#mv-met-' + id, metodo);
+  if (importo !== undefined) await p.fill('#mv-imp-' + id, importo);
+  await p.locator(`button[onclick="salvaModificaRecord('${id}')"]`).first().click();
+  await p.waitForTimeout(200);
+};
+domande = []; risposta = 'accept';
+await modifica('czero', { metodo: 'POS' });
+let rr = await riga('czero');
+ok(rr.metodo === 'POS' && rr.importo === 0, 'corsa gia\' a zero cambiata solo di metodo: si salva (POS, sempre 0)', JSON.stringify(rr));
+ok(domande.length === 0, '  senza domande', JSON.stringify(domande));
+await p.evaluate(() => { window.editRecordId = null; renderContent(); });
+
+await modifica('cventi', { importo: '0' });
+rr = await riga('cventi');
+ok(rr.importo === 20, 'da 20 a 0: rifiutata, resta 20', JSON.stringify(rr));
+ok(/zero/.test(await toast(p)), '  e dice che una corsa non vale zero', JSON.stringify(await toast(p)));
+await p.evaluate(() => { window.editRecordId = null; renderContent(); });
+
+domande = []; risposta = 'dismiss';
+await modifica('cventi', { importo: '2350' });
+rr = await riga('cventi');
+ok(domande.length === 1 && domande[0] === `2.350,00${NBSP}€ per una corsa sola? Confermi l'importo?`, 'da 20 a 2350: chiede conferma con la cifra', JSON.stringify(domande));
+ok(rr.importo === 20, '  rispondendo no resta 20', JSON.stringify(rr));
+domande = []; risposta = 'accept';
+// Dicendo no la modifica resta aperta, con 2350 scritto: si riprova dal
+// suo «Salva». (Se si fosse chiusa, l'importo era gia' passato senza domande.)
+const ancoraAperta = p.locator(`button[onclick="salvaModificaRecord('cventi')"]`);
+ok(await ancoraAperta.count() > 0, '  e la modifica resta aperta, per correggere o confermare');
+if (await ancoraAperta.count()) await ancoraAperta.first().click();
+else await modifica('cventi', { importo: '2350' });
+await p.waitForTimeout(200);
+rr = await riga('cventi');
+ok(domande.length === 1, '  riprovando chiede di nuovo', JSON.stringify(domande));
+ok(rr.importo === 2350, '  rispondendo si\' diventa 2350', JSON.stringify(rr));
+
+domande = [];
+await modifica('ccinquecento', { metodo: 'Satispay' });
+rr = await riga('ccinquecento');
+ok(domande.length === 0, 'corsa da 500 cambiata solo di metodo: nessuna domanda', JSON.stringify(domande));
+ok(rr.importo === 500 && rr.metodo === 'Satispay', '  e si salva (500, Satispay)', JSON.stringify(rr));
+ok(p.__errori.length === 0, 'nessun errore JS', p.__errori.join(' | '));
+await p.close();
+
+// ------------------------------------------------------------------
+console.log('\n2c. IL MODULO COMPLETO IN UN GIORNO DI RIPOSO');
+// ------------------------------------------------------------------
+// Il modulo si apre oggi (turno vivo) e la data si cambia a ieri, segnato
+// come riposo: la corsa non si puo' salvare, quindi non si chiede niente.
+p = await apri(390, 'chiaro', { turni: [{ id: 'tieri', data: '2026-03-10', turno: 'Riposo', inizio: '', fine: '', ore: 0, lavorato: false }] });
+await p.evaluate(() => { window.showCorsaForm = true; renderContent(); });
+await p.waitForTimeout(150);
+domande = []; risposta = 'accept';
+await p.fill('#corsa-data', '2026-03-10');
+await p.fill('#corsa-imp', '2350');
+await p.click('form[onsubmit*="addCorsa"] button[value="chiudi"]');
+await p.waitForTimeout(200);
+c = await corse(p);
+ok(domande.length === 0, '2350 in un giorno di riposo: nessuna domanda', JSON.stringify(domande));
+ok(c.length === 0, '  e nessuna corsa salvata', JSON.stringify(c));
+ok(/segnato come Riposo/.test(await toast(p)), '  e dice perche\'', JSON.stringify(await toast(p)));
 ok(p.__errori.length === 0, 'nessun errore JS', p.__errori.join(' | '));
 await p.close();
 

@@ -10,6 +10,8 @@
 //     scrive (orario «08:00», ore e km in cifre): l'orario storto diventa '',
 //     il numero storto null, e il resto del turno entra lo stesso. I valori
 //     giusti («7:30», «8,5», 12, «1200») restano identici, anche nel tipo;
+//     ore oltre 0..24 e km oltre il miliardo diventano null, ma un
+//     contachilometri da 12.345.678 rientra uguale;
 //   - un turno storto scritto DIRETTAMENTE in taxi_shifts (dove nessuno
 //     pulisce: e' la strada del Cloud e dei dati vecchi) a video non deve
 //     far partire niente, in nessuna scheda e nemmeno nella modifica in riga.
@@ -115,6 +117,31 @@ for (const atteso of [BUONO, ALTRO_BUONO]) {
   const t = dopo.memoria.find(x => x.id === atteso.id);
   const uguali = !!t && Object.keys(atteso).every(k => JSON.stringify(t[k]) === JSON.stringify(atteso[k]));
   ok(uguali, `turno giusto ${atteso.id}: ogni campo identico, tipo compreso`, JSON.stringify(t));
+}
+
+console.log('\n  -- i tetti di ore e km --');
+// Oltre al tipo, la misura: le ore stanno fra 0 e 24 (lo stesso limite dei
+// moduli), i km sotto il miliardo. Il tetto dei km era a due milioni, ma un
+// contachilometri scritto con le cifre di un altro strumento (12.345.678)
+// e' un dato che l'app accetta dal modulo: un backup che lo contiene deve
+// rientrare identico, non perdere il chilometraggio. Sopra il tetto, o
+// fuori misura, il campo diventa null e il turno entra lo stesso.
+const KM_LUNGHI = { id: 'tkmlunghi', data: '2026-03-12', turno: 'Le otto', inizio: '08:00', fine: '20:00',
+                    ore: 24, kmInizio: '12345500', kmFine: 12345678, kmTot: 178, lavorato: true };
+const FUORI = [
+  ['ore', 25], ['ore', -1], ['kmTot', -5], ['kmFine', 2e9], ['kmInizio', -2e9], ['kmTot', 1e10]
+].map(([k, v], i) => ({ k, v, t: Object.assign({}, BASE, { id: `tfuori-${i}`, data: `2026-03-2${i}`, [k]: v }) }));
+const tetti = await p.evaluate(async (turni) => {
+  window.dailyRecords = []; window.shifts = [];
+  await applicaBackup({ records: [], shifts: turni });
+  return window.shifts;
+}, [KM_LUNGHI, ...FUORI.map(f => f.t)]);
+const lunghi = tetti.find(x => x.id === 'tkmlunghi');
+ok(!!lunghi && Object.keys(KM_LUNGHI).every(k => JSON.stringify(lunghi[k]) === JSON.stringify(KM_LUNGHI[k])),
+   'un turno con kmFine 12.345.678 e 24 ore rientra identico, tipo compreso', JSON.stringify(lunghi));
+for (const f of FUORI) {
+  const t = tetti.find(x => x.id === f.t.id);
+  ok(!!t && t[f.k] === null, `${f.k} ${f.v}: fuori misura, diventa null e il turno entra`, JSON.stringify(t && t[f.k]));
 }
 
 console.log('\n  -- turni storti scritti direttamente in taxi_shifts --');

@@ -71,6 +71,8 @@ titolo "incasso coperto";         giro testCoperto.mjs
 titolo "spazio e archivio";       giro testSpazio.mjs
 titolo "media fuori budget";      giro mediaAltre.mjs
 titolo "iniezione dal backup";    giro testIniezione.mjs
+titolo "iniezione da id e date";  giro testIniezioneDate.mjs
+titolo "backup coi tipi storti";  giro testBackupTipi.mjs
 titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "archivi sincronizzati";   giro testArchivi.mjs
 titolo "grafica e misure";        giro testGrafica.mjs

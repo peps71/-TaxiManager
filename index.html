@@ -5678,7 +5678,7 @@
             const colore = classeEvidenziaGiorno(iso);
             const evidenziato = colore !== 'text-gray-400';
             const dettaglio = festivo ? `${giornoBreve(iso)} · ${festivo}` : `${giornoBreve(iso)} · sett. ${numeroSettimana(iso)}`;
-            return `<div class="${evidenziato ? colore + ' font-bold' : ''}">${iso}</div><div class="text-xs ${colore} font-bold uppercase tracking-wide">${dettaglio}</div>`;
+            return `<div class="${evidenziato ? colore + ' font-bold' : ''}">${esc(iso)}</div><div class="text-xs ${colore} font-bold uppercase tracking-wide">${esc(dettaglio)}</div>`;
         }
 
         // ============================================================

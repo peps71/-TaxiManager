@@ -6,8 +6,19 @@
 // tocco sul file sbagliato e i conti di settimane tornavano vecchi.
 // Qui si usa il tasto vero (il campo «Scegli un file di backup») e si guarda:
 //   - la domanda c'e', comincia con «Il backup», finisce con «Continuare?», e
-//     i conti che dice sono quelli giusti (righe nel backup, righe adesso,
-//     quante tornerebbero com'erano), al plurale e al singolare;
+//     i conti che dice sono quelli giusti (righe nel backup, righe adesso),
+//     divisi in due: quelle che ENTRANO perche' adesso non ci sono, e quelle
+//     che hai cambiato dopo e TORNANO com'erano nel backup; al plurale e al
+//     singolare, con la data e senza;
+//   - il telefono vuoto (quello nuovo, o quello azzerato): prima la domanda
+//     diceva «4 movimenti e 2 turni cambiati o cancellati dopo quella data
+//     tornano com'erano», su un telefono dove non c'era niente da cambiare.
+//     Era il caso piu' comune di tutti, e la frase spaventava a torto. Ora
+//     dice «Entrano...» e basta, senza nessun «hai cambiato»;
+//   - le altre categorie del backup (scadenze, note, versamenti, vetture,
+//     voci di budget, impostazioni) si nominano, e solo quelle che ci sono:
+//     «Anche le scadenze tornano come nel backup; quello che hai aggiunto
+//     dopo resta.»;
 //   - rispondendo no l'archivio resta identico, byte per byte, e lo si dice;
 //   - rispondendo si' il ripristino e' quello di prima (unisce, non cancella);
 //   - le impostazioni fiscali: rata, numero delle rate e minimale INPS
@@ -70,7 +81,7 @@ const b = await chromium.launch();
 let risposta = 'accept';
 let domande = [];
 const errori = [];
-async function apri() {
+async function apri(adesso = ADESSO) {
   const p = await b.newPage({ viewport: { width: 390, height: 900 }, locale: 'it-IT', timezoneId: 'Europe/Rome' });
   await p.clock.setFixedTime(new Date('2026-03-11T12:00:00+01:00'));
   p.on('pageerror', e => errori.push(String(e)));
@@ -82,7 +93,7 @@ async function apri() {
     localStorage.setItem('taxi_records', JSON.stringify(a.records));
     localStorage.setItem('taxi_shifts', JSON.stringify(a.shifts));
     localStorage.setItem('taxi_fiscal_settings', JSON.stringify(a.fiscali));
-  }, ADESSO);
+  }, adesso);
   await p.goto(APP);
   await p.waitForFunction(() => typeof window.switchTab === 'function');
   await p.evaluate(() => { switchTab('cloud'); });
@@ -110,8 +121,11 @@ ok(await p.locator(CAMPO).count() === 1, 'il campo del backup c\'e\' nella sched
 const prima = await fotografia(p);
 domande = []; risposta = 'dismiss';
 await carica(p, BACKUP);
+// r6 e s3 adesso non ci sono (entrano), r2 c'e' ma vale 35 (torna a 30).
 const ATTESA = 'Il backup del 01/03/2026 contiene 4 movimenti e 2 turni. Adesso ne hai 5 e 2.\n\n'
-  + 'Ripristinando, 2 movimenti e 1 turno cambiati o cancellati dopo quella data tornano com\'erano nel backup.\n\n'
+  + 'Entrano 1 movimento e 1 turno che adesso non ci sono. '
+  + '1 movimento che hai cambiato dopo quella data torna com\'era nel backup.\n\n'
+  + 'Anche le impostazioni tornano come nel backup; quello che hai aggiunto dopo resta.\n\n'
   + 'Continuare?';
 ok(domande.length === 1, 'scegliendo il file, una domanda', JSON.stringify(domande));
 const d0 = domande[0] || '';
@@ -119,7 +133,10 @@ ok(d0.startsWith('Il backup'), 'comincia con «Il backup»', JSON.stringify(d0.s
 ok(d0.endsWith('Continuare?'), 'finisce con «Continuare?»', JSON.stringify(d0.slice(-40)));
 ok(/contiene 4 movimenti e 2 turni/.test(d0), 'conta le righe buone del backup (la riga con l\'id storto no)');
 ok(/Adesso ne hai 5 e 2/.test(d0), 'e quelle di adesso');
-ok(/2 movimenti e 1 turno cambiati o cancellati/.test(d0), 'e quante tornerebbero com\'erano (r2 corretta, r6 e s3 cancellati)');
+ok(/Entrano 1 movimento e 1 turno che adesso non ci sono\./.test(d0), 'quante entrano perche\' adesso non ci sono (r6 e s3)');
+ok(/1 movimento che hai cambiato dopo quella data torna com'era nel backup\./.test(d0), 'e quante tornano com\'erano (r2 corretta dopo)');
+ok(/\n\nAnche le impostazioni tornano come nel backup; quello che hai aggiunto dopo resta\.\n\n/.test(d0),
+   'le impostazioni si nominano, in un paragrafo loro; le categorie vuote no');
 ok(d0 === ATTESA, 'testo intero come previsto', JSON.stringify(d0));
 
 console.log('\n2. RISPONDENDO NO NON CAMBIA NIENTE');
@@ -173,17 +190,94 @@ ok(/nessun movimento e nessun turno di adesso cambia/.test(domande[0] || ''), 'r
 await p.close();
 
 // ------------------------------------------------------------------
+console.log('\n3b. IL TELEFONO VUOTO: TUTTO ENTRA, NIENTE «HAI CAMBIATO»');
+// ------------------------------------------------------------------
+// Il caso di tutti i giorni: telefono nuovo, o app appena azzerata. Prima la
+// domanda diceva che 4 movimenti e 2 turni «cambiati o cancellati dopo
+// quella data» sarebbero tornati com'erano: su un archivio vuoto non c'e'
+// niente da cambiare ne' da cancellare.
+p = await apri({ records: [], shifts: [], fiscali: ADESSO.fiscali });
+domande = []; risposta = 'accept';
+await carica(p, BACKUP);
+const dv = domande[0] || '';
+ok(domande.length === 1, 'una domanda', JSON.stringify(domande));
+ok(/Entrano 4 movimenti e 2 turni che adesso non ci sono\./.test(dv), '«Entrano 4 movimenti e 2 turni che adesso non ci sono.»', JSON.stringify(dv));
+// Solo la parte su movimenti e turni: il paragrafo delle altre categorie
+// dice «tornano come nel backup» per conto suo.
+const dvRighe = dv.split('\n\nAnche')[0];
+ok(!/hai cambiato|torna|cancellat/.test(dvRighe), 'e nessuna frase su movimenti o turni cambiati o cancellati', JSON.stringify(dvRighe));
+ok(dv === 'Il backup del 01/03/2026 contiene 4 movimenti e 2 turni. Adesso ne hai 0 e 0.\n\n'
+        + 'Entrano 4 movimenti e 2 turni che adesso non ci sono.\n\n'
+        + 'Anche le impostazioni tornano come nel backup; quello che hai aggiunto dopo resta.\n\nContinuare?',
+   'testo intero come previsto', JSON.stringify(dv));
+const vuotoDopo = await p.evaluate(() => ({
+  rec: (window.dailyRecords || []).map(r => r.id + ':' + r.importo).sort(),
+  tur: (window.shifts || []).map(t => t.id).sort() }));
+ok(JSON.stringify(vuotoDopo.rec) === JSON.stringify(['r1:20', 'r2:30', 'r3:18', 'r6:55']), 'dicendo si\' entrano proprio quei 4 movimenti', JSON.stringify(vuotoDopo.rec));
+ok(JSON.stringify(vuotoDopo.tur) === JSON.stringify(['s1', 's3']), 'e quei 2 turni', JSON.stringify(vuotoDopo.tur));
+await p.close();
+
+// ------------------------------------------------------------------
+console.log('\n3c. IL PLURALE DI «TORNANO», E LE ALTRE CATEGORIE');
+// ------------------------------------------------------------------
+p = await apri();
+domande = []; risposta = 'dismiss';
+const primaC = await fotografia(p);
+const turnoCambiato = (id, data, km) => Object.assign(turno(id, data), { kmTot: km });
+// Nessuna riga nuova: r2 e r4 cambiate dopo, r5 uguale; s1 e s2 cambiati.
+const tutteLeAltre = {
+  versione: 3, date: '2026-03-01T10:00:00.000Z',
+  records: [corsa('r2', '2026-02-11', 30), corsa('r4', '2026-03-02', 41), corsa('r5', '2026-03-03', 22)],
+  shifts: [turnoCambiato('s1', '2026-02-10', 200), turnoCambiato('s2', '2026-03-02', 190)],
+  scadenze: [{ id: 'g1', data: '2026-04-01', nome: 'Bollo' }],
+  note: [{ id: 'n1', data: '2026-02-10', tipo: 'altro', testo: 'Una nota' }],
+  versamenti: [{ id: 'w1', data: '2026-02-10', importo: 100 }],
+  veicoli: [{ id: 'v1', modello: 'Toyota Prius' }],
+  vociFisse: [{ slug: 'affitto', nome: 'Affitto', importo: 100 }],
+  impostazioniFiscali: BACKUP.impostazioniFiscali
+};
+await carica(p, tutteLeAltre);
+ok(domande[0] === 'Il backup del 01/03/2026 contiene 3 movimenti e 2 turni. Adesso ne hai 5 e 2.\n\n'
+        + '2 movimenti e 2 turni che hai cambiato dopo quella data tornano com\'erano nel backup.\n\n'
+        + 'Anche scadenze, note, versamenti, vetture, voci di budget e impostazioni tornano come nel backup; quello che hai aggiunto dopo resta.\n\n'
+        + 'Continuare?',
+   'al plurale «tornano com\'erano», nessun «Entrano», e tutte e sei le categorie nominate', JSON.stringify(domande[0]));
+for (const [nome, pezzo, attesa] of [
+  ['solo le scadenze', { scadenze: tutteLeAltre.scadenze },
+   'Anche le scadenze tornano come nel backup; quello che hai aggiunto dopo resta.'],
+  ['solo i versamenti', { versamenti: tutteLeAltre.versamenti },
+   'Anche i versamenti tornano come nel backup; quello che hai aggiunto dopo resta.'],
+  ['solo le vetture', { veicoli: tutteLeAltre.veicoli },
+   'Anche le vetture tornano come nel backup; quello che hai aggiunto dopo resta.']
+]) {
+  domande = [];
+  await carica(p, Object.assign({ records: [corsa('r1', '2026-02-10', 20)], shifts: [] }, pezzo));
+  ok(domande[0] === 'Il backup contiene 1 movimento e 0 turni. Adesso ne hai 5 e 2.\n\n'
+          + 'Ripristinando, nessun movimento e nessun turno di adesso cambia.\n\n' + attesa + '\n\nContinuare?',
+     `${nome}: «${attesa}»`, JSON.stringify(domande[0]));
+}
+// Le categorie con dentro solo righe che il ripristino scarta non si nominano.
+domande = [];
+await carica(p, { records: [], shifts: [], scadenze: [{ id: "g'1", data: '2026-04-01', nome: 'Bollo' }],
+                  veicoli: [{ id: 'v2' }], note: [{ id: 'n2', data: '2026-02-10', testo: '   ' }] });
+ok(!/Anche/.test(domande[0] || ''), 'scadenza con l\'id storto, vettura senza modello, nota vuota: nessun «Anche»', JSON.stringify(domande[0]));
+ok(await fotografia(p) === primaC, 'dicendo no a tutte, l\'archivio resta identico');
+await p.close();
+
+// ------------------------------------------------------------------
 console.log('\n4. UN BACKUP VECCHIO, SENZA I CAMPI INPS');
 // ------------------------------------------------------------------
 p = await apri();
 domande = []; risposta = 'accept';
-const vecchio = { records: [corsa('r1', '2026-02-10', 20)], shifts: [turno('s9', '2026-02-15')],
+// r1 nel backup vale 21: adesso vale 20, quindi «hai cambiato dopo il backup».
+const vecchio = { records: [corsa('r1', '2026-02-10', 21)], shifts: [turno('s9', '2026-02-15')],
                   impostazioniFiscali: { inpsPerc: 25, addizionaliPerc: 2, sogliaForfettario: 85000 } };
 await carica(p, vecchio);
 const d1 = domande[0] || '';
 ok(d1 === 'Il backup contiene 1 movimento e 1 turno. Adesso ne hai 5 e 2.\n\n'
-        + 'Ripristinando, 1 turno cambiato o cancellato dopo il backup torna com\'era nel backup.\n\nContinuare?',
-   'senza data e al singolare: «Il backup contiene 1 movimento e 1 turno», «dopo il backup», «torna com\'era»', JSON.stringify(d1));
+        + 'Entra 1 turno che adesso non c\'è. 1 movimento che hai cambiato dopo il backup torna com\'era nel backup.\n\n'
+        + 'Anche le impostazioni tornano come nel backup; quello che hai aggiunto dopo resta.\n\nContinuare?',
+   'senza data e al singolare: «Entra 1 turno che adesso non c\'è», «dopo il backup», «torna com\'era»', JSON.stringify(d1));
 const f = await p.evaluate(() => window.fiscalSettings);
 ok(f.inpsPerc === 25, 'la percentuale che c\'e\' nel backup rientra', String(f.inpsPerc));
 ok(f.inpsRata === 1000 && f.inpsNumeroRate === 4 && f.inpsMinimale === 18000,
@@ -235,6 +329,8 @@ try {
   await p.waitForTimeout(1500);
   ok(await p.evaluate(() => window.__letture) === 1, 'un backup di 50 MB esatti si legge', String(await p.evaluate(() => window.__letture)));
   ok(domande.length === 1 && /contiene 1 movimento e 0 turni/.test(domande[0]), 'e chiede conferma come gli altri', JSON.stringify(domande));
+  ok(domande.length === 1 && /\n\nEntra 1 movimento che adesso non c'è\.\n\nContinuare\?$/.test(domande[0]),
+     '«Entra 1 movimento che adesso non c\'è.», e senza impostazioni nel file nessun «Anche»', JSON.stringify(domande));
   await p.close();
 } finally {
   rmSync(cartella, { recursive: true, force: true });
@@ -262,6 +358,42 @@ await p.setInputFiles(CAMPO_FOTO, { name: 'TaxiManager_Foto.json', mimeType: 'ap
                                     buffer: Buffer.from(JSON.stringify({ versione: 1, tipo: 'foto', foto: [{ id: 'fbuona-1', jpeg }] })) });
 await p.waitForFunction(() => fotoTutte().then(v => v.length === 1), null, { timeout: 10000 }).catch(() => {});
 ok(await quanteFoto() === 1, 'una foto nostra entra', String(await quanteFoto()));
+// Il resto della foto non si prende per buono. Il peso finisce nell'indice
+// in localStorage (taxi_foto_indice) e da li' nel conto dello spazio: un
+// «byte» da un file confezionato male (mille miliardi, una parola) faceva
+// dire all'app che il telefono era pieno. Si ricalcola dalla foto, come fa
+// l'app quando la scrive lei. I lati storti diventano null, come se
+// mancassero; la data storta diventa quella di adesso.
+const storte = [
+  { id: 'fbyte-enorme', jpeg, byte: 1e12, larghezza: -5, altezza: 'alta' },
+  { id: 'fbyte-parola', jpeg, byte: 'tantissimi', larghezza: 3.5, altezza: { a: 1 } },
+  { id: 'flati-enormi', jpeg, byte: 1, larghezza: 1e9, altezza: 20000, creata: '<b>ieri</b>' },
+  { id: 'fgiusta', jpeg, byte: jpeg.length, larghezza: 1200, altezza: 900, creata: '2026-02-10T08:00:00.000Z' }
+];
+await p.setInputFiles(CAMPO_FOTO, { name: 'TaxiManager_Foto.json', mimeType: 'application/json',
+                                    buffer: Buffer.from(JSON.stringify({ versione: 1, tipo: 'foto', foto: storte })) });
+// L'indice si scrive dopo ogni foto messa nel magazzino: si aspetta il
+// messaggio finale, che arriva quando sono passate tutte.
+await p.waitForFunction(() => /^4 foto rimesse/.test((document.getElementById('toast-text') || {}).textContent || ''),
+                        null, { timeout: 10000 }).catch(() => {});
+const fotoDopo = await p.evaluate(async () => ({
+  indice: JSON.parse(localStorage.getItem('taxi_foto_indice') || '{}'),
+  foto: Object.fromEntries((await fotoTutte()).map(f => [f.id, { byte: f.byte, larghezza: f.larghezza, altezza: f.altezza, creata: f.creata }]))
+}));
+ok(Object.keys(fotoDopo.foto).length === 5, 'le quattro foto entrano, accanto a quella di prima (la foto e l\'id sono buoni)', JSON.stringify(Object.keys(fotoDopo.foto)));
+for (const f of storte) {
+  const i = fotoDopo.indice[f.id], d = fotoDopo.foto[f.id] || {};
+  ok(i === jpeg.length, `${f.id}: nell'indice pesa ${jpeg.length} byte, quanto la foto (nel file: ${JSON.stringify(f.byte)})`, JSON.stringify(i));
+  ok(d.byte === jpeg.length, `${f.id}: e anche nel magazzino delle foto`, JSON.stringify(d.byte));
+}
+const lati = id => [fotoDopo.foto[id] && fotoDopo.foto[id].larghezza, fotoDopo.foto[id] && fotoDopo.foto[id].altezza];
+ok(JSON.stringify(lati('fbyte-enorme')) === '[null,null]', 'larghezza -5 e altezza «alta»: null', JSON.stringify(lati('fbyte-enorme')));
+ok(JSON.stringify(lati('fbyte-parola')) === '[null,null]', 'larghezza 3,5 e altezza oggetto: null', JSON.stringify(lati('fbyte-parola')));
+ok(JSON.stringify(lati('flati-enormi')) === '[null,null]', 'larghezza un miliardo e altezza 20.000: null', JSON.stringify(lati('flati-enormi')));
+ok(JSON.stringify(lati('fgiusta')) === '[1200,900]', 'i lati veri (1200 x 900) restano', JSON.stringify(lati('fgiusta')));
+const creataStorta = (fotoDopo.foto['flati-enormi'] || {}).creata;
+ok(typeof creataStorta === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(creataStorta), 'la data «<b>ieri</b>» diventa una data vera', JSON.stringify(creataStorta));
+ok((fotoDopo.foto.fgiusta || {}).creata === '2026-02-10T08:00:00.000Z', 'la data giusta resta', JSON.stringify((fotoDopo.foto.fgiusta || {}).creata));
 await p.close();
 
 await b.close();
