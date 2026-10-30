@@ -1611,6 +1611,8 @@
                             Object.assign({}, window.profilo, d.data()), window.profilo);
                         window.scriviLocale('taxi_profilo', window.profilo);
                     } else if (!d.metadata.fromCache && window.profiloCompilato && window.profiloCompilato()) {
+                        // Lassu' non c'e' niente: vanno tutti i campi
+                        window.segnaCampiCambiati('profilo', null, window.profilo);
                         window.saveProfiloToCloud(window.profilo);
                     }
                     if (!formConDatiNonSalvati()) window.renderDifferito();
@@ -1633,6 +1635,7 @@
                         try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings)); }
                         catch (err) { /* lo dice gia' l'avviso sul disco */ }
                     } else if (!d.metadata.fromCache && window.saveFiscaliToCloud) {
+                        window.segnaCampiCambiati('fiscali', null, window.fiscalSettings);
                         window.saveFiscaliToCloud(window.fiscalSettings);
                     }
                     if (!formConDatiNonSalvati()) window.renderDifferito();
@@ -1814,8 +1817,14 @@
         // Il profilo sta nella cartella privata come tutto il resto, quindi lo
         // vede solo chi ha fatto l'accesso con quell'account - lo dicono le
         // regole del database, non il programma.
+        // I campi cambiati li ha gia' segnati chi salva (segnaCampiCambiati):
+        // qui parte la spedizione, che li manda in unione col documento che
+        // c'e' lassu' (setDoc con merge). Cosi' un campo cambiato sul Mac e
+        // uno cambiato qui non si cancellano a vicenda, e un dispositivo
+        // ancora alla v175 continua a leggere lo stesso documento.
         window.saveProfiloToCloud = async function (profilo) {
             if (!isCloudActive || !db || !auth.currentUser) return;
+            if (registroDiQuestoAccount()) { inviaPresto(); return; }
             try {
                 await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'), profilo);
             } catch (err) {
@@ -1859,6 +1868,7 @@
         // magazzino del telefono e non si ripassano piu'.
         window.saveFiscaliToCloud = async function (impostazioni) {
             if (isCloudActive && db && auth.currentUser) {
+                if (registroDiQuestoAccount()) { inviaPresto(); return; }
                 try {
                     await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali'), impostazioni);
                 } catch (err) {
@@ -2106,8 +2116,11 @@
         window.profiloCompilato = profiloCompilato;
 
         function salvaProfilo(dati) {
+            const prima = window.profilo;
             window.profilo = Object.assign({}, PROFILO_VUOTO, window.profilo, dati || {});
             scriviLocale('taxi_profilo', window.profilo);
+            // Sul Cloud vanno solo i campi cambiati: vedi segnaCampiCambiati
+            segnaCampiCambiati('profilo', prima, window.profilo);
             if (window.saveProfiloToCloud) window.saveProfiloToCloud(window.profilo);
         }
 
@@ -3675,6 +3688,7 @@
                     return;
                 }
             }
+            const primaFiscali = window.fiscalSettings;
             window.fiscalSettings = {
                 inpsPerc: inps, inpsRata: rata, inpsNumeroRate: nRate, inpsMinimale: minimale,
                 addizionaliPerc: add, sogliaForfettario: soglia, accantonamentoPerc: accantonamento
@@ -3688,6 +3702,8 @@
                 showToast('Il telefono non ha accettato le impostazioni fiscali.', 'avviso');
                 return;
             }
+            // Sul Cloud vanno solo le voci cambiate: vedi segnaCampiCambiati
+            segnaCampiCambiati('fiscali', primaFiscali, window.fiscalSettings);
             if (window.saveFiscaliToCloud) window.saveFiscaliToCloud(window.fiscalSettings);
             showToast('Impostazioni fiscali salvate.');
             renderContent();
@@ -14081,6 +14097,7 @@
                 if (nRate !== null) { nuove.inpsNumeroRate = nRate; impostazioni = true; }
                 if (minimale !== null) { nuove.inpsMinimale = minimale; impostazioni = true; }
                 if (impostazioni) {
+                    segnaCampiCambiati('fiscali', window.fiscalSettings, nuove);
                     window.fiscalSettings = nuove;
                     try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(nuove)); }
                     catch (err) { /* spazio esaurito: pazienza */ }
