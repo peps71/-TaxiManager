@@ -4,9 +4,32 @@
 # Serve node con Playwright. Se sta in un posto suo:  PLAYWRIGHT=/percorso/index.mjs sh prove/tutte.sh
 cd "$(dirname "$0")/.." || exit 1
 P=prove
-rosso=0
+# Una prova che si interrompe a meta' (un'eccezione, un tasto che non si
+# trova, un tempo scaduto) non stampa nessun «***»: muore e basta, e nel
+# fiume dell'uscita passava per buona. Il suo codice d'uscita si perdeva nel
+# tubo verso grep, perche' sh di un tubo guarda solo l'ultimo comando. Qui
+# il codice si mette da parte in un file, prima del tubo, e si rilegge dopo.
+# Si tiene il conto anche delle prove che hanno stampato «***» senza
+# interrompersi: alla fine il riepilogo le nomina tutte, e lo script esce
+# con errore se ce n'e' anche una sola.
+ESITO=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/tutte-esito.$$")
+USCITA=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/tutte-uscita.$$")
+trap 'rm -f "$ESITO" "$USCITA"' EXIT
+trap 'exit 130' INT TERM
+rosse=0;   interrotte=""
+segnate=0; con_stelle=""
 titolo() { echo; echo "=== $1 ==="; }
-giro()   { node "$P/$1" 2>&1 | grep -v agent-proxy; }
+giro() {
+  echo 99 > "$ESITO"
+  { node "$P/$1" 2>&1; echo $? > "$ESITO"; } | grep -v agent-proxy | tee "$USCITA"
+  codice=$(cat "$ESITO")
+  if [ "$codice" != 0 ]; then
+    echo "*** $1 si e' interrotta: codice d'uscita $codice ***"
+    rosse=$((rosse + 1)); interrotte="$interrotte $1"
+  elif grep -q '[*][*][*]' "$USCITA"; then
+    segnate=$((segnate + 1)); con_stelle="$con_stelle $1"
+  fi
+}
 
 titolo "sintassi";                python3 "$P/verifica.py" || exit 1
 titolo "classi CSS";              python3 "$P/classi.py"   || exit 1
@@ -64,4 +87,15 @@ titolo "arrivo degli aggiornamenti"; giro testAggiorna.mjs
 titolo "prestazioni";             giro avvio.mjs
 titolo "profilo delle schermate"; giro profilo2.mjs
 echo
+echo "=== riepilogo ==="
+if [ "$rosse" -gt 0 ]; then
+  echo "*** $rosse prove si sono interrotte:$interrotte ***"
+fi
+if [ "$segnate" -gt 0 ]; then
+  echo "*** $segnate prove hanno segnato qualcosa che non torna:$con_stelle ***"
+fi
+if [ "$rosse" -eq 0 ] && [ "$segnate" -eq 0 ]; then
+  echo "nessuna prova interrotta, nessun «***»."
+fi
 echo "fine. Cerca «***» qui sopra: e' il segno di qualcosa che non torna."
+[ "$rosse" -eq 0 ] && [ "$segnate" -eq 0 ]

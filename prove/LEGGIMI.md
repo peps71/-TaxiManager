@@ -10,6 +10,13 @@ Si lancia dalla cartella del repository. Cerca `***` nell'uscita: è il segno di
 qualcosa che non torna. Ogni prova si può lanciare anche da sola
 (`node prove/coerenza.mjs`).
 
+Una prova che **si interrompe** a metà (un'eccezione, un tasto che non si trova,
+un tempo scaduto) non stampa `***`: muore e basta, e prima passava per buona,
+perché il suo codice d'uscita si perdeva nel filtro dell'uscita. Ora
+`tutte.sh` lo mette da parte: stampa `*** nome.mjs si e' interrotta`, in fondo
+fa il riepilogo delle prove interrotte e di quelle che hanno segnato `***`, ed
+**esce con errore** se ce n'è anche una sola. Codice 0 vuol dire giro pulito.
+
 Serve **node con Playwright**. Lo cerca da solo in
 `/opt/node22/lib/node_modules/playwright` e in `./node_modules/playwright`;
 se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
@@ -22,7 +29,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `classi.py` | **ogni classe CSS usata esiste davvero.** Una classe che non c'è non dà errore: semplicemente non fa niente, in silenzio. È già successo con la striscia in cima (v119) |
 | `smoke.mjs` | le dieci schermate si disegnano e nessuna resta vuota |
 | `sbordo.mjs` | niente esce dallo schermo **e niente esce dal proprio contenitore** (menu, striscia in cima, contenuto), da 320 a 1280 px, con un logo largo caricato. Salta chi sta dentro una fila che scorre, dove uscire dal bordo è il mestiere |
-| `testUso.mjs` | l'app **usata dai suoi pulsanti**: registra turno, corse e spesa dai moduli veri, modifica, cancella, e i totali seguono |
+| `testUso.mjs` | l'app **usata dai suoi pulsanti**: registra turno, corse e spesa dai moduli veri, modifica, cancella, e i totali seguono. Orologio e fuso fermi (11 marzo 2026, mezzogiorno a Torino): il registro si apre solo a turno vivo, e lanciata di sera la prova cadeva per un motivo che non c'entra |
 | `testLimiti.mjs` | nove situazioni scomode (archivio vuoto, zero ore, zero euro, anno bisestile, capodanno, caratteri speciali) e a video non deve comparire `NaN`, `Infinity`, `undefined` |
 | `storti.mjs` | dati storti in archivio - importi non numerici, date senza senso, identificativi doppi: nessun numero marcio, nessun «NaN» a video, e le tre strade che contano gli incassi devono dire la stessa cifra |
 | `baseUnica.mjs` | la base delle tasse si calcola in un posto solo: dieci archivi a caso, e getStats, il report, l'utile dell'anno e la somma dei dodici mesi devono dire tutti la stessa cifra |
@@ -59,9 +66,13 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testCspViva.mjs` | la protezione sugli indirizzi è davvero applicata, e l'interruttore la toglie |
 | `testArchivi.mjs` | i cinque archivi che si sincronizzano passano tutti dallo stesso codice: una cartella vuota sul Cloud non svuota il telefono, e l'elenco delle voci di budget non si cancella in nessun caso |
 | `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei |
-| `testTastiera.mjs` | si preme Tab per davvero e si guarda dove si finisce: ogni comando raggiunto mostra l'anello del fuoco, e l'anello si **misura** contro il fondo su cui è disegnato (serve 3 di contrasto), di giorno e al buio. E col mouse o col dito l'anello deve restare spento |
+| `testTastiera.mjs` | si preme Tab per davvero e si guarda dove si finisce: ogni comando raggiunto mostra l'anello del fuoco, e l'anello si **misura** contro il fondo su cui è disegnato (serve 3 di contrasto), di giorno e al buio. E col mouse o col dito l'anello deve restare spento. Orologio e fuso fermi su un giorno con un turno vivo, se no il campo dell'incasso non c'è |
 | `testOreTurno.mjs` | le ore scritte a mano chiudono il turno e fermano il €/h su quel numero (400 € in 10 ore = 40 €/h, e ci resta), **senza toccare** il turno normale a metà, lo Spezzato con la sua pausa, il turno non ancora cominciato, il riposo e i due turni nello stesso giorno |
 | `testAnnulla.mjs` | si esce dai tre moduli completi senza salvare: il tasto c'è in cima e in fondo, **non è un submit** (se lo fosse salverebbe invece di annullare, e si vedrebbe solo contando i movimenti), a modulo intonso non chiede niente, con qualcosa scritto chiede e dicendo no resta tutto, e «Salva e basta» continua a salvare come prima |
+| `testOggi.mjs` | il tasto «Oggi» della scheda Giornate: su oggi non compare, tre giorni indietro compare e riporta a oggi in un tocco, il mese scelto non si perde, su un altro anno di esercizio non si fa spegnere un istante dopo da `giornoGiornate()`, a 320 px la data non si stringe (il difetto della v157), e si legge chiaro e scuro. Le giornate si seminano attorno a oggi, così vale in qualsiasi mese |
+| `testManutenzione.mjs` | la manutenzione che si conta in chilometri (tagliando, cambio, distribuzione): il punto di partenza senza scrivere niente, il conto alla rovescia, l'avviso che si accende **a inizio turno e non prima**, dall'avviso al modulo della spesa, la spesa giusta che azzera il conto e quella di carburante che **non** lo azzera, i km di partenza che non si perdono salvando la vettura né nel giro del backup, la correzione di un intervento già registrato, il disegno stretto e al buio |
+| `testTurnoChiuso.mjs` | il registro si apre col turno e si chiude con lui: fermo senza turno, aperto mentre si lavora, richiuso a turno finito, il tasto che apre la giornata a mano, il turno di notte datato ieri ma ancora in corso, il registro spese, l'avviso di manutenzione che apre la porta da sé, il riposo. E quello che **non** deve bloccare: il modulo del turno e le modifiche a ciò che è già registrato. Orologio e fuso fermati per ogni caso |
+| `testSpezzato.mjs` | lo Spezzato (7:30-13 e 15-21:30) camminato ora per ora con l'orologio fermo: le due ore di pausa non lo chiudono alle 19:30 invece che alle 21:30 (il difetto nato con la v166), il €/h non conta la pausa, il registro resta aperto, da adesso la pausa si scrive sul turno (e quella scritta comanda su quella del modello). E quello che non deve cambiare: un turno senza pausa, uno Spezzato con gli orari cambiati a mano (la pausa non si inventa), il riposo, le ore dichiarate che chiudono il turno al minuto giusto |
 | `testLogo.mjs` | il logo dall'immagine alla striscia e ritorno: si comprime tenendo la trasparenza, prende il posto del taxi disegnato, salvando la scheda non sparisce, esce nel backup **e rientra** (è lì che si nascondeva il buco: il ripristino filtrava i campi con un elenco in cui `logo` non c'era), e un «logo» che è un copione o una pagina viene scartato |
 | `testScuro.mjs` | il modo scuro misurato **a tre larghezze** (telefono, tablet, computer) e su **tutta** la pagina, barra laterale e striscia in cima comprese: di giorno non spunta un colore che prima non c'era e ogni regola scura è prefissata, di notte ogni scritta sta sopra la soglia di leggibilità (2.256 misurate) e non resta nessun rettangolo bianco, l'interruttore tiene la scelta anche riaprendo, e il foglio da stampare resta chiaro |
 | `testGrafica.mjs` | la grafica misurata invece che guardata: il comando premuto si stringe e si scurisce (e uno spento no), la sotto-scheda aperta si vede tutta a ogni larghezza, corpi e angoli stanno nella scala prevista, e nessun riquadro grosso torna ad avere il fondo colorato fuori dagli otto motivi dichiarati (la barretta in stampa si rifà bordo, se no il foglio del commercialista esce senza tinte) |
