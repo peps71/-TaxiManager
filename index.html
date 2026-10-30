@@ -33,14 +33,31 @@
             // frame-ancestors non si puo' dare da qui (il browser la ignora in
             // un <meta>): quella va messa come intestazione HTTP dal sito che
             // ospita l'app, se un giorno servira'.
+            //
+            // GLI INDIRIZZI ESATTI, NON I JOLLY (versione 176)
+            // connect-src diceva *.googleapis.com, *.google.com, *.firebaseio.com,
+            // *.firebaseapp.com, *.cloudfunctions.net: tutti posti dove CHIUNQUE
+            // puo' affittare un indirizzo (uno script su script.google.com, un
+            // contenitore su storage.googleapis.com, un database di un altro
+            // progetto). Un copione entrato per sbaglio nella pagina poteva
+            // mandarci i dati. Adesso ci sono solo i tre servizi che l'app usa
+            // davvero: l'accesso (identitytoolkit), il rinnovo dell'accesso
+            // ogni ora (securetoken) e il database (firestore).
+            // script-src e frame-src restano larghi apposta: con 'unsafe-inline'
+            // (serve agli onclick) stringerli protegge poco, e un indirizzo in
+            // meno li' puo' rompere l'accesso con Google sull'iPhone in un modo
+            // che da qui non si puo' provare. La foto del profilo Google non si
+            // usa: googleusercontent.com esce da img-src.
+            // Se l'accesso o la sincronizzazione non vanno: Cloud & Sync ->
+            // «Protezione sugli indirizzi» -> Disattiva, e si riprova.
             var regole = [
                 "default-src 'self'",
                 "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com",
                 "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data: blob: https://*.googleusercontent.com",
+                "img-src 'self' data: blob:",
                 "font-src 'self' data:",
-                "connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.cloudfunctions.net",
-                "frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com",
+                "connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+                "frame-src https://taximanager-5ac5b.firebaseapp.com https://accounts.google.com",
                 "worker-src 'self'",
                 "manifest-src 'self'",
                 "object-src 'none'",
@@ -1389,6 +1406,12 @@
                 'auth/operation-not-allowed': 'L\'accesso con Google non è ancora attivo nella console Firebase (Authentication → Sign-in method).',
                 'auth/network-request-failed': 'Senza rete non si può fare l\'accesso: l\'app intanto continua a funzionare in locale.'
             };
+            // Con la rete accesa lo stesso errore arriva anche quando e' la
+            // protezione sugli indirizzi a fermare la richiesta: dire solo
+            // «senza rete» mandava a cercare il guasto nel posto sbagliato.
+            if (codice === 'auth/network-request-failed' && window.cspAttiva && navigator.onLine) {
+                messaggi[codice] = 'L\'accesso non è riuscito, eppure la rete c\'è: prova a spegnere la protezione sugli indirizzi (in Cloud & Sync) e riprova. L\'app intanto continua a funzionare in locale.';
+            }
             if (window.showToast) window.showToast((messaggi[codice] || ('Accesso non riuscito: ' + codice)), 'avviso');
         }
 
