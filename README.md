@@ -40,21 +40,61 @@ e scrivere i movimenti. Adesso non più.
 
 ### Cosa va fatto una volta sola nella console Firebase
 
-Sono tre cose, su [console.firebase.google.com](https://console.firebase.google.com) →
-progetto `taximanager-5ac5b`. Prima di cominciare, scarica un backup `.json` dall'app.
+Si fa dal Mac, con calma, quando non si sta lavorando. Ogni passo si può annullare.
+**Prima** l'app deve essere alla versione 176 o successiva, su tutti e due i dispositivi
+(si vede in `Cloud & Sync`): da quella versione una modifica che il Cloud rifiuta resta sul
+telefono in attesa, invece di sparire.
 
-1. **Authentication → Sign-in method → Google → Enable**, scegli l'email di supporto,
-   salva.
-2. **Authentication → Settings → Authorized domains**: verifica che ci sia
-   `peps71.github.io`; se manca, aggiungilo.
-3. **Firestore Database → Rules**: incolla il contenuto di `firestore.rules` al posto di
-   quello che c'è e premi **Publish**.
+0. **Prima di tutto, un backup.** Nell'app: `Cloud & Sync` → scarica il backup `.json` (e,
+   se ci sono foto nelle note, anche il file delle foto). Tienili sul Mac.
+1. **Fai l'accesso con Google dall'app** almeno una volta, sul telefono o sul Mac, se non
+   l'hai mai fatto.
+2. **Attiva l'accesso con Google**, se non lo è già:
+   [console.firebase.google.com](https://console.firebase.google.com) → progetto
+   `taximanager-5ac5b` → **Authentication → Sign-in method → Google → Enable**, scegli
+   l'email di supporto, salva.
+3. **Spegni l'accesso anonimo**: nella stessa pagina, se **Anonymous** risulta «Enabled»,
+   aprilo e disattivalo. L'app non lo usa più dalla versione 44.
+4. **Controlla gli indirizzi ammessi**: **Authentication → Settings → Authorized domains**.
+   Deve esserci `peps71.github.io`; se manca, aggiungilo.
+5. **Trova il tuo codice personale**: **Authentication → Users** → la riga con la tua email
+   → colonna **«User UID»**. È un codice di 28 lettere e numeri: passaci sopra e copialo con
+   l'icona che compare.
+6. **Prepara le regole**: apri il file [`firestore.rules`](firestore.rules) del repository,
+   copia tutto e incollalo in Note. Cerca `INCOLLA-QUI-IL-TUO-USER-UID` e sostituiscilo con
+   il tuo codice, **lasciando gli apici** intorno e senza spazi.
+7. **Prova prima di pubblicare** (facoltativo ma consigliato): **Firestore Database →
+   Rules**, incolla il testo e apri **Rules Playground**. Con «Authenticated», provider
+   `google.com` e il tuo codice come Firebase UID, un `get` su
+   `/artifacts/taximanager-2026/users/<il tuo codice>/taxi_records/prova` deve dire
+   *allowed*; con un codice diverso, *denied*.
+8. **Pubblica le regole**: nella stessa scheda premi **Publish**.
+9. **Prova subito**: sul telefono scrivi una nota di prova. Entro qualche secondo deve
+   comparire anche sul Mac. Poi cancellala. Se invece in `Cloud & Sync` le modifiche
+   restano «in attesa di invio», il codice del punto 6 è sbagliato: rifai i punti 5-8.
+   Le modifiche in attesa partono da sole appena le regole sono giuste.
 
-Finché il punto 3 non è fatto il database resta aperto; finché non sono fatti 1 e 2
-l'accesso non riesce e l'app lo dice con un avviso che nomina il passaggio mancante.
+**Come tornare indietro** dal punto 8: si rifà il punto 8 incollando la versione precedente
+del file `firestore.rules` (è nella storia del repository). Nessun dato viene cancellato
+dalle regole: al massimo il Cloud smette di rispondere e l'app lavora in locale.
+
+Il codice personale **non** va scritto nel repository: resta solo nella console.
 
 I vecchi dati nella cartella `public` restano lì, non più leggibili dall'app: si possono
 cancellare a mano dalla console quando il nuovo accesso funziona su tutti i dispositivi.
+
+**Facoltativo, più avanti:** restringere la chiave dell'app. console.cloud.google.com →
+progetto `taximanager-5ac5b` → **API e servizi → Credenziali** → la chiave «Browser key
+(auto created by Firebase)» → Modifica:
+- *Restrizioni dell'applicazione* → Siti web: `https://peps71.github.io/*` e
+  `https://taximanager-5ac5b.firebaseapp.com/*`. **Il secondo è indispensabile**: senza,
+  l'accesso con Google smette di funzionare.
+- *Restrizioni API* → Limita chiave: Identity Toolkit API, Token Service API, Cloud
+  Firestore API.
+
+Si torna indietro scegliendo «Nessuna» per tutte e due. La restrizione serve contro l'uso
+della chiave da siti altrui; la protezione vera restano le regole. **App Check** per ora no:
+su un'app installata sull'iPhone rischia di rifiutare l'accesso al titolare stesso.
 
 ### Un indirizzo solo: `peps71.github.io`
 
