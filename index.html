@@ -1283,6 +1283,9 @@
                         window.cloudUtente = { nome: user.displayName || '', email: user.email || '' };
                         window.showToast(`Cloud attivo per ${user.email || 'il tuo account'}`);
                         subscribeToFirestore();
+                        // Le modifiche rimaste in attesa (anche da una sessione
+                        // chiusa senza campo) partono adesso.
+                        inviaSospesi({ forza: true });
                         // I dati dal Cloud arrivano poco dopo: la copia automatica
                         // si controlla quando sono in casa, non prima, o si
                         // metterebbe da parte un archivio vuoto.
@@ -1403,6 +1406,150 @@
                 if (window.showToast) window.showToast('Caricamento sul Cloud non riuscito: i dati restano qui e riproverà da solo.', 'avviso');
             }
         }
+
+        // ============================================================
+        //  LA SPEDIZIONE DELLE MODIFICHE IN ATTESA
+        //  Il registro sta nel copione normale (LE MODIFICHE NON ANCORA
+        //  CONFERMATE DAL CLOUD); qui c'e' solo il pezzo che parla con
+        //  Firestore. Si prendono le voci che non sono gia' in viaggio, si
+        //  legge il loro contenuto dall'archivio locale di adesso, si
+        //  mandano a blocchi da 400 senza aspettarle in fila, e ogni blocco
+        //  confermato toglie le sue voci - solo se non sono cambiate nel
+        //  frattempo. Un blocco rifiutato lascia le voci dove sono: si
+        //  riprova al massimo ogni 30 secondi, al ritorno della rete, alla
+        //  riapertura dell'app e al prossimo salvataggio.
+        //  Senza campo Firestore non rifiuta: tiene la scrittura in memoria
+        //  finche' la rete torna. Le voci restano «in viaggio» e non si
+        //  rimandano; se intanto l'app viene chiusa, alla riapertura
+        //  ripartono dal registro sul disco.
+        // ============================================================
+        const inViaggio = new Set();              // 'chiave|id|valore'
+        const rifiutateAlle = new Map();          // 'chiave|id|valore' -> quando
+        const RIPROVA_MS = 30000;
+        let avvisoRifiutoDato = false;
+        let riprovaProgrammata = null;
+
+        const DOC_A_CAMPI = {
+            profilo: () => doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'),
+            fiscali: () => doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali')
+        };
+        const valoriACampi = {
+            profilo: () => Object.assign({}, window.profilo || {}, (() => { try { return JSON.parse(localStorage.getItem('taxi_profilo') || '{}') || {}; } catch (err) { return {}; } })()),
+            fiscali: () => Object.assign({}, window.fiscalSettings || {}, (() => { try { return JSON.parse(localStorage.getItem('taxi_fiscal_settings') || '{}') || {}; } catch (err) { return {}; } })())
+        };
+
+        function inviaSospesi(opz) {
+            opz = opz || {};
+            const uid = uidCorrente();
+            if (!isCloudActive || !db || !uid) return Promise.resolve([]);
+            const reg = window.leggiSospesi();
+            if (!reg.uid || reg.uid !== uid) return Promise.resolve([]);
+            const ora = Date.now();
+            const pronta = (firma) => !inViaggio.has(firma)
+                && (opz.forza || !(rifiutateAlle.get(firma) > ora - RIPROVA_MS));
+
+            const operazioni = [];      // { tipo, ref, dati, voci:[[chiave,id,valore]] }
+            const daTogliere = [];
+            Object.keys(reg.per).forEach(chiave => {
+                if (opz.chiavi && !opz.chiavi.includes(chiave)) return;
+                const voci = reg.per[chiave];
+                if (DOC_A_CAMPI[chiave]) {
+                    const valori = valoriACampi[chiave]();
+                    const campi = {};
+                    const prese = [];
+                    Object.keys(voci).forEach(campo => {
+                        const valore = voci[campo];
+                        if (!pronta(chiave + '|' + campo + '|' + valore)) return;
+                        prese.push([chiave, campo, valore]);
+                        // Vuoto e' sempre un valore esplicito ('' o null):
+                        // quello che manca del tutto non si manda.
+                        if (valori[campo] !== undefined) campi[campo] = valori[campo];
+                    });
+                    if (!prese.length) return;
+                    if (!Object.keys(campi).length) { daTogliere.push(...prese); return; }
+                    operazioni.push({ tipo: 'm', ref: DOC_A_CAMPI[chiave](), dati: campi, voci: prese });
+                    return;
+                }
+                let locale = null;      // si legge solo se c'e' qualcosa da scrivere
+                Object.keys(voci).forEach(id => {
+                    const valore = voci[id];
+                    if (!pronta(chiave + '|' + id + '|' + valore)) return;
+                    if (valore[0] === 'd') {
+                        operazioni.push({ tipo: 'd', ref: docDati(chiave, id), voci: [[chiave, id, valore]] });
+                        return;
+                    }
+                    if (!locale) locale = window.mappaLocaleSospesi(chiave);
+                    const x = locale.get(id);
+                    // Segnata come scritta ma qui non c'e' piu': l'ha tolta
+                    // qualcos'altro dopo (un ascolto, l'altra finestra). Non
+                    // c'e' niente da mandare.
+                    if (!x) { daTogliere.push([chiave, id, valore]); return; }
+                    operazioni.push({ tipo: 's', ref: docDati(chiave, id), dati: x, voci: [[chiave, id, valore]] });
+                });
+            });
+            if (daTogliere.length) window.togliSospesi(daTogliere);
+            if (!operazioni.length) return Promise.resolve([]);
+
+            const totale = operazioni.length;
+            let fatti = 0;
+            const promesse = [];
+            for (let i = 0; i < operazioni.length; i += 400) {
+                const fetta = operazioni.slice(i, i + 400);
+                const voci = [].concat(...fetta.map(o => o.voci));
+                const firme = voci.map(v => v.join('|'));
+                let commit;
+                try {
+                    const batch = writeBatch(db);
+                    fetta.forEach(o => {
+                        if (o.tipo === 'd') batch.delete(o.ref);
+                        else if (o.tipo === 'm') batch.set(o.ref, o.dati, { merge: true });
+                        else batch.set(o.ref, o.dati);
+                    });
+                    commit = batch.commit();
+                } catch (err) {
+                    commit = Promise.reject(err);
+                }
+                firme.forEach(f => inViaggio.add(f));
+                promesse.push(commit.then(() => {
+                    window.togliSospesi(voci);
+                    firme.forEach(f => rifiutateAlle.delete(f));
+                    avvisoRifiutoDato = false;
+                    fatti += fetta.length;
+                    if (opz.onProgress) opz.onProgress(fatti, totale);
+                    if (window.activeTab === 'cloud' && !formConDatiNonSalvati()) window.renderDifferito();
+                    return fetta.length;
+                }, (err) => {
+                    console.error('Il Cloud non ha accettato le modifiche in attesa:', err);
+                    const quando = Date.now();
+                    firme.forEach(f => rifiutateAlle.set(f, quando));
+                    if (!avvisoRifiutoDato && !opz.silenzioso) {
+                        avvisoRifiutoDato = true;
+                        if (window.showToast) window.showToast('Salvato sul telefono; il Cloud non l\'ha accettato, riprovo più tardi.', 'avviso');
+                    }
+                    if (!riprovaProgrammata) {
+                        riprovaProgrammata = setTimeout(() => { riprovaProgrammata = null; inviaSospesi(); }, RIPROVA_MS + 100);
+                    }
+                    throw err;
+                }).finally(() => firme.forEach(f => inViaggio.delete(f))));
+            }
+            return Promise.allSettled(promesse);
+        }
+        window.inviaSospesi = inviaSospesi;
+
+        // Dopo un salvataggio: molti salvataggi di fila (un ripristino che
+        // manda le scadenze una per una) fanno una spedizione sola.
+        let invioInCoda = null;
+        function inviaPresto() {
+            if (!invioInCoda) invioInCoda = Promise.resolve().then(() => { invioInCoda = null; return inviaSospesi(); });
+            return invioInCoda;
+        }
+
+        // Si riparte quando torna la rete e quando l'app torna in primo
+        // piano: su iPhone e' il momento in cui ci si rimette a lavorare.
+        window.addEventListener('online', () => inviaSospesi({ forza: true }));
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') inviaSospesi();
+        });
 
         function subscribeToFirestore() {
             if (!db || !auth.currentUser) return;
@@ -1632,49 +1779,31 @@
             }
         };
 
+        // TUTTE LE SCRITTURE PASSANO DAL REGISTRO
+        // Prima ognuna di queste aspettava il suo setDoc e, se falliva,
+        // diceva «salvato solo qui» - ma senza campo il setDoc non fallisce:
+        // resta appeso nella memoria della pagina, e se ne va con lei. Adesso
+        // la scrittura locale resta com'era (la fa chi chiama, o la riga qui
+        // sopra), poi il segno nel registro, poi la spedizione. Chi chiama
+        // non aspetta il Cloud: senza rete non lo aspetterebbe mai.
         window.saveScadenzaToCloud = async function(scadenza) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_scadenze', String(scadenza.id));
-                    await setDoc(docRef, scadenza);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud scadenza:", err);
-                    if (window.showToast) window.showToast('Scadenza salvata solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_scadenze', scadenza && scadenza.id, 's');
+            inviaPresto();
         };
 
         window.saveVersamentoToCloud = async function(v) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    await setDoc(docDati('taxi_versamenti', String(v.id)), v);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud versamento:", err);
-                    if (window.showToast) window.showToast('Versamento salvato solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_versamenti', v && v.id, 's');
+            inviaPresto();
         };
 
         window.deleteVersamentoFromCloud = async function(id) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    await deleteDoc(docDati('taxi_versamenti', String(id)));
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud versamento:", err);
-                    if (window.showToast) window.showToast('Eliminato solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_versamenti', id, 'd');
+            inviaPresto();
         };
 
         window.saveNotaToCloud = async function(nota) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    await setDoc(docDati('taxi_note', String(nota.id)), nota);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud nota:", err);
-                    if (window.showToast) window.showToast('Nota salvata solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_note', nota && nota.id, 's');
+            inviaPresto();
         };
 
         // LE FOTO NON SI ASCOLTANO
@@ -1727,72 +1856,33 @@
         };
 
         window.deleteNotaFromCloud = async function(id) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    await deleteDoc(docDati('taxi_note', String(id)));
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud nota:", err);
-                    if (window.showToast) window.showToast('Eliminata solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_note', id, 'd');
+            inviaPresto();
         };
 
         window.deleteScadenzaFromCloud = async function(id) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_scadenze', String(id));
-                    await deleteDoc(docRef);
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud scadenza:", err);
-                    if (window.showToast) window.showToast('Eliminata solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_scadenze', id, 'd');
+            inviaPresto();
         };
 
         window.saveVoceFissaToCloud = async function(voce) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_voci_fisse', String(voce.slug));
-                    await setDoc(docRef, voce);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud voce fissa:", err);
-                }
-            }
+            segnaSospeso('taxi_voci_fisse', voce && voce.slug, 's');
+            inviaPresto();
         };
 
         window.deleteVoceFissaFromCloud = async function(slug) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_voci_fisse', String(slug));
-                    await deleteDoc(docRef);
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud voce fissa:", err);
-                }
-            }
+            segnaSospeso('taxi_voci_fisse', slug, 'd');
+            inviaPresto();
         };
 
         window.saveVeicoloToCloud = async function(veicolo) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_veicoli', String(veicolo.id));
-                    await setDoc(docRef, veicolo);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud veicolo:", err);
-                    if (window.showToast) window.showToast('Vettura salvata solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_veicoli', veicolo && veicolo.id, 's');
+            inviaPresto();
         };
 
         window.deleteVeicoloFromCloud = async function(id) {
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_veicoli', String(id));
-                    await deleteDoc(docRef);
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud veicolo:", err);
-                    if (window.showToast) window.showToast('Eliminata solo su questo dispositivo.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_veicoli', id, 'd');
+            inviaPresto();
         };
 
         window.saveRecordToCloud = async function(record) {
@@ -1801,16 +1891,8 @@
             // registrata per un giorno passato restava in testa all'elenco.
             window.dailyRecords.sort(perDataDecrescente);
             scriviLocale('taxi_records', window.dailyRecords);
-
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_records', String(record.id));
-                    await setDoc(docRef, record);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud record:", err);
-                    if (window.showToast) window.showToast('Corsa salvata solo in locale: sync Cloud fallita.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_records', record && record.id, 's');
+            inviaPresto();
         };
 
         window.saveShiftToCloud = async function(shift) {
@@ -1819,31 +1901,15 @@
             // anche quando si registra un turno di ieri o dell'altro ieri.
             window.shifts.sort(perDataDecrescente);
             scriviLocale('taxi_shifts', window.shifts);
-
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_shifts', String(shift.id));
-                    await setDoc(docRef, shift);
-                } catch (err) {
-                    console.error("Errore scrittura Cloud turno:", err);
-                    if (window.showToast) window.showToast('Turno salvato solo in locale: sync Cloud fallita.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_shifts', shift && shift.id, 's');
+            inviaPresto();
         };
 
         window.deleteRecordFromCloud = async function(id) {
             window.dailyRecords = window.dailyRecords.filter(r => String(r.id) !== String(id));
             scriviLocale('taxi_records', window.dailyRecords);
-
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_records', String(id));
-                    await deleteDoc(docRef);
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud record:", err);
-                    if (window.showToast) window.showToast('Eliminato solo in locale: sync Cloud fallita.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_records', id, 'd');
+            inviaPresto();
         };
 
         // Cancellazione di molti movimenti in un colpo solo: una scrittura sola
@@ -1853,37 +1919,15 @@
             if (!insieme.size) return;
             window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
             scriviLocale('taxi_records', window.dailyRecords);
-
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const elenco = Array.from(insieme);
-                    for (let i = 0; i < elenco.length; i += 400) {
-                        const batch = writeBatch(db);
-                        elenco.slice(i, i + 400).forEach(id => {
-                            batch.delete(docDati('taxi_records', String(id)));
-                        });
-                        await batch.commit();
-                    }
-                } catch (err) {
-                    console.error("Errore eliminazione multipla Cloud:", err);
-                    if (window.showToast) window.showToast('Eliminate solo in locale: sync Cloud fallita.', 'avviso');
-                }
-            }
+            segnaSospesi('taxi_records', Array.from(insieme), 'd');
+            inviaPresto();
         };
 
         window.deleteShiftFromCloud = async function(id) {
             window.shifts = window.shifts.filter(s => String(s.id) !== String(id));
             scriviLocale('taxi_shifts', window.shifts);
-
-            if (isCloudActive && db && auth.currentUser) {
-                try {
-                    const docRef = docDati('taxi_shifts', String(id));
-                    await deleteDoc(docRef);
-                } catch (err) {
-                    console.error("Errore eliminazione Cloud turno:", err);
-                    if (window.showToast) window.showToast('Eliminato solo in locale: sync Cloud fallita.', 'avviso');
-                }
-            }
+            segnaSospeso('taxi_shifts', id, 'd');
+            inviaPresto();
         };
 
         // === IMPORT MASSIVO (usato dal ripristino backup / import Excel) ===
