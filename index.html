@@ -1795,10 +1795,25 @@
             return operazioni;
         }
 
-        // Un blocco parte; se il Cloud lo rifiuta e dentro c'e' piu' di una
-        // riga, e il no non e' «di tutto», si rimanda riga per riga.
-        // Risolve sempre: { fatti, no: [{ o, err }], err }.
-        function spedisciBlocco(fetta, opz, conta) {
+        // SMONTARE UN BLOCCO SENZA MARTELLARE
+        // Un blocco rifiutato si rimanda riga per riga solo se il Cloud ha
+        // detto «e' una riga» (NO_DELLA_RIGA): per un altro no le righe da
+        // sole sarebbero rifiutate uguali, e 400 commit tutti insieme contro
+        // un server gia' in difficolta' sono proprio quello da evitare.
+        // Anche cosi' le righe partono una alla volta, in fila, e un blocco
+        // smontato aspetta che sia finito quello prima (codaSmontaggio): con
+        // tre blocchi rifiutati non partono 1.200 commit in un colpo. E al
+        // primo no che non e' della riga ci si ferma: il resto torna
+        // all'attesa crescente. Il blocco di prova dopo un no a tutto non si
+        // smonta: se risponde «e' una riga» il server c'e', la prova e'
+        // finita, e al giro dopo (con l'attesa) i blocchi sono normali.
+        let codaSmontaggio = Promise.resolve();
+
+        // Un blocco parte; se il Cloud lo rifiuta con un no della riga e
+        // dentro c'e' piu' di una riga, si rimanda riga per riga (vedi
+        // sopra). prova: e' il blocco di prova dopo un no a tutto.
+        // Risolve sempre: { fatti, no: [{ o, err }], err, smontabile }.
+        function spedisciBlocco(fetta, opz, conta, prova) {
             const commit = (ops) => {
                 try {
                     const batch = writeBatch(db);
@@ -1817,15 +1832,28 @@
                 return { fatti: fetta.length, no: [] };
             }, (err) => {
                 console.error('Il Cloud non ha accettato le modifiche in attesa:', err);
-                if (fetta.length < 2 || NO_DI_TUTTO.includes(codiceDi(err))) {
-                    return { fatti: 0, no: fetta.map(o => ({ o, err })), err };
+                const dellaRiga = NO_DELLA_RIGA.includes(codiceDi(err));
+                if (fetta.length < 2 || !dellaRiga || prova) {
+                    // Il blocco di prova con piu' righe non si smonta, e le
+                    // sue righe non si fermano: non si sa ancora quale sia.
+                    const tutte = fetta.map(o => ({ o, err, nonFermare: fetta.length > 1 }));
+                    return { fatti: 0, no: tutte, err, smontabile: dellaRiga && fetta.length > 1 };
                 }
-                return Promise.allSettled(fetta.map(o => commit([o]).then(() => confermati([o]))))
-                    .then(esiti => {
-                        const no = [];
-                        esiti.forEach((e, k) => { if (e.status === 'rejected') no.push({ o: fetta[k], err: e.reason }); });
-                        return { fatti: fetta.length - no.length, no, err };
-                    });
+                const smonta = () => {
+                    const no = [];
+                    let fatti = 0;
+                    let fermato = null;         // il primo no che non e' della riga
+                    return fetta.reduce((catena, o) => catena.then(() => {
+                        if (fermato) { no.push({ o, err: fermato }); return; }
+                        return commit([o]).then(() => { confermati([o]); fatti++; }, (e) => {
+                            no.push({ o, err: e });
+                            if (!NO_DELLA_RIGA.includes(codiceDi(e))) fermato = e;
+                        });
+                    }), Promise.resolve()).then(() => ({ fatti, no, err }));
+                };
+                const turno = codaSmontaggio.then(smonta);
+                codaSmontaggio = turno.catch(() => {});
+                return turno.catch((e) => ({ fatti: 0, no: fetta.map(o => ({ o, err: e })), err: e }));
             });
         }
 
@@ -1858,6 +1886,7 @@
 
             // Dopo un no a tutto: un blocco di prova, il resto se passa.
             let rimandate = 0;
+            const prova = soloProva;
             if (soloProva && operazioni.length > 400) {
                 rimandate = operazioni.length - 400;
                 operazioni = operazioni.slice(0, 400);
@@ -1874,14 +1903,19 @@
                 const fetta = operazioni.slice(i, i + 400);
                 const firme = [].concat(...fetta.map(o => o.voci)).map(v => v.join('|'));
                 firme.forEach(f => inViaggio.add(f));
-                blocchi.push(spedisciBlocco(fetta, opz, conta).finally(() => firme.forEach(f => inViaggio.delete(f))));
+                blocchi.push(spedisciBlocco(fetta, opz, conta, prova).finally(() => firme.forEach(f => inViaggio.delete(f))));
             }
             return Promise.all(blocchi).then(esiti => {
                 const passati = esiti.reduce((a, e) => a + e.fatti, 0);
                 const tuttiNo = [].concat(...esiti.map(e => e.no));
-                // Colpevole: solo un no «della riga» (vedi NO_DELLA_RIGA).
-                const colpevoli = tuttiNo.filter(n => NO_DELLA_RIGA.includes(codiceDi(n.err)));
+                // Colpevole: solo un no «della riga» (vedi NO_DELLA_RIGA) per
+                // una riga sola - non le righe del blocco di prova, che si e'
+                // rifiutato tutto insieme.
+                const colpevoli = tuttiNo.filter(n => !n.nonFermare && NO_DELLA_RIGA.includes(codiceDi(n.err)));
                 const delMomento = tuttiNo.filter(n => !colpevoli.includes(n));
+                // Un blocco ha risposto «e' una riga»: il server c'e', non
+                // serve un altro blocco di prova (vedi SMONTARE UN BLOCCO).
+                const rispostaDellaRiga = esiti.some(e => e.smontabile);
                 if (colpevoli.length) fermaColpevoli([].concat(...colpevoli.map(n => n.o.voci)), opz);
                 if (passati > 0) {
                     attesaDaCapo();
@@ -1889,7 +1923,8 @@
                     avvisoRifiutoDato = false;
                 }
                 if (delMomento.length) {
-                    attesaPiuLunga(passati === 0);
+                    attesaPiuLunga(passati === 0 && !rispostaDellaRiga);
+                    if (rispostaDellaRiga) soloProva = false;
                     if (!avvisoRifiutoDato && !opz.silenzioso) {
                         avvisoRifiutoDato = true;
                         if (window.showToast) window.showToast('Salvato sul telefono; il Cloud non l\'ha accettato, riprovo più tardi.', 'avviso');
