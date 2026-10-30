@@ -1387,7 +1387,11 @@
                         window.showToast(`Cloud attivo per ${user.email || 'il tuo account'}`);
                         subscribeToFirestore();
                         // Le modifiche rimaste in attesa (anche da una sessione
-                        // chiusa senza campo) partono adesso.
+                        // chiusa senza campo) partono adesso. Con loro, una
+                        // volta per accesso, anche le ferme: la causa puo'
+                        // essere stata tolta (le regole, una versione nuova),
+                        // e una cancellazione ferma non si «corregge» a mano.
+                        if (registroDiQuestoAccount()) window.riprovaFerme({ invia: false });
                         inviaSospesi({ forza: true });
                         // I dati dal Cloud arrivano poco dopo: la copia automatica
                         // si controlla quando sono in casa, non prima, o si
@@ -1676,8 +1680,12 @@
         let riprovaProgrammata = null;
 
         // I codici di Firestore che dicono «e' la riga», e quelli che dicono
-        // «e' il momento». Un codice che non sta in nessuno dei due elenchi
-        // conta come riga solo se nello stesso giro qualcos'altro e' passato.
+        // «e' il momento». Si ferma una riga solo per un codice del primo
+        // elenco (o se non si riesce nemmeno a prepararla): un codice che non
+        // sta in nessuno dei due (internal, unknown, not-found...) puo'
+        // essere un guasto passeggero del server, e fermare una riga per
+        // quello voleva dire lasciarla sul telefono per sempre. Va
+        // all'attesa crescente, come un no di tutto.
         const NO_DELLA_RIGA = ['invalid-argument', 'failed-precondition', 'out-of-range'];
         const NO_DI_TUTTO = ['permission-denied', 'unauthenticated', 'unavailable', 'deadline-exceeded',
             'resource-exhausted', 'cancelled', 'aborted'];
@@ -1871,10 +1879,8 @@
             return Promise.all(blocchi).then(esiti => {
                 const passati = esiti.reduce((a, e) => a + e.fatti, 0);
                 const tuttiNo = [].concat(...esiti.map(e => e.no));
-                // Colpevole: un no «della riga», o un no qualsiasi (che non
-                // sia «di tutto») mentre il resto passava.
-                const colpevoli = tuttiNo.filter(n => NO_DELLA_RIGA.includes(codiceDi(n.err))
-                    || (passati > 0 && !NO_DI_TUTTO.includes(codiceDi(n.err))));
+                // Colpevole: solo un no «della riga» (vedi NO_DELLA_RIGA).
+                const colpevoli = tuttiNo.filter(n => NO_DELLA_RIGA.includes(codiceDi(n.err)));
                 const delMomento = tuttiNo.filter(n => !colpevoli.includes(n));
                 if (colpevoli.length) fermaColpevoli([].concat(...colpevoli.map(n => n.o.voci)), opz);
                 if (passati > 0) {
@@ -2695,16 +2701,19 @@
             return cambiato ? scriviSospesi(reg) : true;
         }
 
-        // Le ferme ripartono: per un tasto «riprova», o per chi sa di aver
-        // tolto la causa. Non le chiama niente da solo.
-        function riprovaFerme() {
+        // Le ferme ripartono: a ogni accesso (onAuthStateChanged), per un
+        // tasto «riprova», o per chi sa di aver tolto la causa. Fra un
+        // accesso e l'altro non le chiama niente da solo. opz.invia false:
+        // non spedire subito (l'accesso spedisce gia' per conto suo).
+        // Restituisce true se ce n'era almeno una.
+        function riprovaFerme(opz) {
             const reg = leggiSospesi();
             let cambiato = false;
             Object.values(reg.per).forEach(voci => Object.keys(voci).forEach(id => {
                 if (voci[id].endsWith('!')) { voci[id] = voci[id].slice(0, -1); cambiato = true; }
             }));
             if (cambiato) scriviSospesi(reg);
-            if (cambiato && window.inviaSospesi) window.inviaSospesi({ forza: true });
+            if (cambiato && !(opz && opz.invia === false) && window.inviaSospesi) window.inviaSospesi({ forza: true });
             return cambiato;
         }
 
@@ -2729,7 +2738,9 @@
                 fiscali: 'un\'impostazione fiscale'
             };
             const nome = nomi[f.chiave] || 'una riga';
-            if (f.op === 'd') return 'la cancellazione di ' + nome;
+            // Una cancellazione: la riga qui non c'e' piu', basta il nome
+            // (il testo dice gia' «cancellazione»).
+            if (f.op === 'd') return nome;
             if (!MEMORIA_SOSPESI[f.chiave]) return nome;
             const x = mappaLocaleSospesi(f.chiave).get(String(f.id));
             if (!x) return nome;
@@ -3083,11 +3094,17 @@
             // Le ferme: il Cloud non le accetta, e da sole non ripartono.
             // Restano sul telefono: lo si dice, con quanto basta per
             // ritrovarle (le prime tre).
-            const ferme = elencoFerme(reg);
+            // Una cancellazione non si corregge: si dice a parte, e si dice
+            // di riprovare (riparte da sola al prossimo accesso, o col tasto).
+            const tutte = elencoFerme(reg);
+            const prime = (el) => el.slice(0, 3).map(descriviFerma).join(', ') + (el.length > 3 ? ` e altre ${el.length - 3}` : '');
+            const ferme = tutte.filter(f => f.op !== 'd');
             if (ferme.length) {
-                const dette = ferme.slice(0, 3).map(descriviFerma).join(', ');
-                const altre = ferme.length > 3 ? ` e altre ${ferme.length - 3}` : '';
-                pezzi.push(`${ferme.length} ${ferme.length === 1 ? 'modifica che il Cloud non accetta' : 'modifiche che il Cloud non accetta'}: ${dette}${altre}. Sul telefono ${ferme.length === 1 ? 'resta' : 'restano'}; se ${ferme.length === 1 ? 'la correggi riparte' : 'le correggi ripartono'}`);
+                pezzi.push(`${ferme.length} ${ferme.length === 1 ? 'modifica che il Cloud non accetta' : 'modifiche che il Cloud non accetta'}: ${prime(ferme)}. Sul telefono ${ferme.length === 1 ? 'resta' : 'restano'}; se ${ferme.length === 1 ? 'la correggi riparte' : 'le correggi ripartono'}`);
+            }
+            const tolte = tutte.filter(f => f.op === 'd');
+            if (tolte.length) {
+                pezzi.push(`${tolte.length} ${tolte.length === 1 ? 'cancellazione che il Cloud non accetta' : 'cancellazioni che il Cloud non accetta'}: ${prime(tolte)}; riprova più tardi`);
             }
             return pezzi.join(' · ');
         }
