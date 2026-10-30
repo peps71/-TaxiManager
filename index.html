@@ -1246,7 +1246,7 @@
     <div id="toast" role="status" aria-live="polite" class="hidden fixed right-5 left-5 md:left-auto justify-center md:justify-start bg-gray-900 text-yellow-400 px-5 py-3 rounded-xl shadow-2xl z-50 items-center space-x-2 border border-yellow-400/30 slide-in font-bold text-sm no-print">
         <span id="toast-text" class="min-w-0">Messaggio</span>
         <!-- Solo dopo una corsa o una spesa veloci: toglie quel movimento.
-             Vedi mostraAnnulla(). -->
+             Lo accende il terzo argomento di showToast(). -->
         <button type="button" id="toast-annulla" class="hidden shrink-0 px-4 rounded-lg bg-yellow-400 text-gray-900 font-black">Annulla</button>
     </div>
 
@@ -3326,7 +3326,7 @@
         // Voce di budget aperta in modifica (slug, oppure null = tutte chiuse)
         window.voceFissaInModifica = null;
         window.isCloudSyncing = false;
-        // Impostazioni fiscali per Regime Ordinario (configurabili dall'utente in "Cloud & Sync")
+        // Impostazioni fiscali per Regime Ordinario (configurabili dall'utente in «Gestione → Backup e impostazioni»)
         window.fiscalSettings = Object.assign(
             // accantonamentoPerc vuoto = calcolato da solo sulla stima delle tasse
             // L'INPS artigiani non e' una percentuale secca sull'utile: si paga
@@ -3618,6 +3618,69 @@
             // Con l'annulla resta di piu': il tempo di leggere la cifra,
             // accorgersi dello sbaglio e spostare il dito.
             timerToast = setTimeout(nascondiToast, annulla ? 6000 : 3000);
+            posizionaToast();
+            // Dopo una corsa veloce la scheda si ridisegna, il campo riprende
+            // il fuoco e sale in cima: la misura buona e' quella di dopo.
+            requestAnimationFrame(posizionaToast);
+            setTimeout(posizionaToast, 120);
+        }
+
+        // ============================================================
+        //  IL MESSAGGIO SOPRA LA TASTIERA, NON DIETRO
+        //  Dopo una corsa veloce il campo riprende il fuoco e sull'iPhone la
+        //  tastiera resta aperta. Un elemento fixed, su Safari iOS, si misura
+        //  sull'area della pagina, non su quella visibile: a 6rem dal fondo
+        //  finiva dietro la tastiera, proprio il messaggio con «Annulla».
+        //  Con la tastiera aperta (visualViewport piu' basso della finestra)
+        //  il messaggio si appoggia sopra la tastiera, 8 punti di margine:
+        //  la barra in basso li' non si vede, dietro la tastiera c'e' lei.
+        //  Ma non sopra la scheda della corsa, il tasto «Aggiungi spesa» o la
+        //  scheda della spesa (data-non-coprire): a 320 punti la tastiera
+        //  lascia meno spazio della scheda, e «Annulla» sarebbe finito sui
+        //  tasti POS o App - il tocco della corsa dopo avrebbe annullato
+        //  quella prima. Se non c'e' posto fuori dalla scheda, il
+        //  messaggio resta dov'era: non si vede, ma non ruba tocchi.
+        //  Tastiera chiusa, Mac, o niente visualViewport: nessun cambiamento,
+        //  vale il foglio di stile (6rem sopra la barra, o in basso a destra).
+        // ============================================================
+        function posizionaToast() {
+            const toast = document.getElementById('toast');
+            if (!toast) return;
+            const vv = window.visualViewport;
+            if (toast.classList.contains('hidden') || !vv) { toast.style.bottom = ''; return; }
+            // Quanto dell'area della pagina sta sotto quella visibile: con la
+            // tastiera aperta e' la tastiera, altrimenti zero (o quasi).
+            const sotto = window.innerHeight - (vv.offsetTop + vv.height);
+            if (sotto < 80) { toast.style.bottom = ''; return; }
+            const fondo = Math.round(sotto + 8);
+            const cima = window.innerHeight - fondo - toast.offsetHeight;
+            const schede = document.querySelectorAll('[data-scheda-corsa], [data-non-coprire]');
+            for (const scheda of schede) {
+                const r = scheda.getBoundingClientRect();
+                if (!r.height) continue;
+                // La scheda e' nella parte visibile e il messaggio ci cadrebbe sopra
+                if (r.bottom + 8 > cima && r.top < window.innerHeight - fondo) {
+                    toast.style.bottom = '';
+                    return;
+                }
+            }
+            toast.style.bottom = fondo + 'px';
+        }
+        if (window.visualViewport) {
+            let attesaToast = 0;
+            const rimisuraToast = () => {
+                cancelAnimationFrame(attesaToast);
+                attesaToast = requestAnimationFrame(posizionaToast);
+            };
+            window.visualViewport.addEventListener('resize', rimisuraToast);
+            window.visualViewport.addEventListener('scroll', rimisuraToast);
+            // La scheda scorre con la pagina (o con il contenitore che scorre):
+            // il messaggio che prima non ci stava puo' starci adesso, e viceversa.
+            document.addEventListener('scroll', () => {
+                const toast = document.getElementById('toast');
+                if (!toast || toast.classList.contains('hidden')) return;
+                rimisuraToast();
+            }, { capture: true, passive: true });
         }
         function nascondiToast() {
             const toast = document.getElementById('toast');
@@ -9194,7 +9257,7 @@
                 </button>
             </div>
 
-            <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
+            <button data-non-coprire onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                 Aggiungi spesa
             </button>`;
@@ -9202,7 +9265,7 @@
 
         function spesaLampoHTML(giorno, metodo) {
         return `
-            <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5">
+            <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5" data-non-coprire>
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="etichetta text-red-600">Stai registrando una spesa</span>
                     <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || giornoDiLavoroAdesso())}</span>
@@ -9798,7 +9861,7 @@
                             <button onclick="apriNelCalendario('${escJs(giorno)}')" class="mt-3 bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-2 px-4 rounded-xl text-sm">Apri nel calendario</button>
                         </div>
                         ${!aperto ? riquadroTurnoChiuso(giornoReg) : (window.mostraSpesaLampo ? '' : `
-                        <button onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
+                        <button data-non-coprire onclick="alternaSpesaLampo()" class="w-full flex items-center justify-center gap-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-lg py-4 rounded-[1.25rem] shadow-md transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
                             Aggiungi spesa
                         </button>
@@ -10684,7 +10747,7 @@
                                         <strong>Costi fissi scritti come movimenti.</strong>
                                         In ${esc(etichettaPeriodoUscite.charAt(0).toLowerCase() + etichettaPeriodoUscite.slice(1))} ${fissi.length === 1 ? 'è una riga' : 'sono ' + fissi.length + ' righe'} per ${formatCurrency(totaleImporti(fissi))},
                                         ${window.mostraFissi ? 'ora aperte qui sotto' : 'contate nel totale ma raccolte in una riga sola'}.
-                                        Le hanno generate le versioni precedenti dell'app: da «Cloud & Sync» puoi toglierle.
+                                        Le hanno generate le versioni precedenti dell'app: da «Gestione → Backup e impostazioni», alla voce «Costi fissi scritti come movimenti», puoi toglierle.
                                     </span>
                                     <button onclick="alternaMostraFissi()" class="flex-shrink-0 bg-white border border-indigo-300 hover:bg-indigo-100 text-indigo-800 text-xs font-black px-3 py-1.5 rounded-lg">
                                         ${window.mostraFissi ? 'Raccogli di nuovo' : 'Mostrali'}
@@ -11767,7 +11830,7 @@
                                 <p class="text-xs text-gray-500">
                                     Stima indicativa, non una dichiarazione. Non tiene conto di detrazioni e deduzioni personali, dei minimali INPS artigiani,
                                     di acconti gia' versati o di redditi diversi da questa attivita'. Le percentuali INPS e addizionali si cambiano in
-                                    "Cloud & Sync" → Impostazioni Fiscali. Verifica sempre con il commercialista.
+                                    «Gestione → Backup e impostazioni», alla voce «Impostazioni fiscali (regime ordinario)». Verifica sempre con il commercialista.
                                 </p>
                             </div>
                         </div>
@@ -11895,7 +11958,7 @@
                         <div class="h-3 bg-gray-100 rounded-full overflow-hidden">
                             <div class="h-full ${sf.vicino ? 'bg-red-500' : 'bg-yellow-400'} rounded-full transition-all" style="width:${sf.pct}%"></div>
                         </div>
-                        <p class="text-xs text-gray-500">Se superi la soglia nell'anno, dall'anno successivo esci dal regime forfettario. Soglia modificabile in "Cloud & Sync" → Impostazioni Fiscali. Stima indicativa: verifica sempre con il commercialista.</p>
+                        <p class="text-xs text-gray-500">Se superi la soglia nell'anno, dall'anno successivo esci dal regime forfettario. Soglia modificabile in «Gestione → Backup e impostazioni», alla voce «Impostazioni fiscali (regime ordinario)». Stima indicativa: verifica sempre con il commercialista.</p>
                     </div>
 
                     </div><!-- fine approfondimenti fiscali -->
@@ -13528,7 +13591,10 @@
                 showToast('Le ore totali devono essere un numero tra 0 e 24.');
                 return;
             }
-            const ore = !isNaN(oreInserite) ? oreInserite : calcolaOreTurno(data, inizio, fine, preset.pausaInizio, preset.pausaFine);
+            // Il ripiego conta sulla data fissa, come il campo e i preset: sulla
+            // data vera la notte del cambio d'ora darebbe 11 o 13 ore invece di
+            // 12, e lo stesso turno varrebbe diverso a seconda del giorno.
+            const ore = !isNaN(oreInserite) ? oreInserite : calcolaOreTurno('2000-01-01', inizio, fine, preset.pausaInizio, preset.pausaFine);
 
             const shift = conPausaDelPreset({
                 id: nuovoId(),
@@ -13984,11 +14050,20 @@
         //  Vale per il giorno proposto all'apertura e per le corse e le spese
         //  veloci quando nessun giorno e' scelto. Le corse gia' registrate
         //  non si toccano: cambia solo dove va la prossima.
+        //  Eccezione: la notte di Capodanno. Il giorno di lavoro non
+        //  attraversa mai l'anno. L'anno di esercizio si conta per cassa
+        //  (un incasso dell'1 gennaio e' dell'anno nuovo), e l'app all'1:30
+        //  dell'1/1 si apre gia' sull'anno nuovo: una corsa messa sul 31/12
+        //  finiva in un anno che non si stava guardando, la riga non si
+        //  vedeva e la si ribatteva. Quindi se il turno vivo e' dell'anno
+        //  prima vale oggi, come prima della v175: data, filtro del giorno e
+        //  anno attivo restano dalla stessa parte di mezzanotte.
         // ============================================================
         function giornoDiLavoroAdesso() {
             const oggi = oggiISO();
             const vivo = turnoVivoAdesso();
-            if (vivo && String(vivo.data) === spostaGiorno(oggi, -1)) return String(vivo.data);
+            if (vivo && String(vivo.data) === spostaGiorno(oggi, -1)
+                && String(vivo.data).slice(0, 4) === oggi.slice(0, 4)) return String(vivo.data);
             return oggi;
         }
 
