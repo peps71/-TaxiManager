@@ -878,6 +878,16 @@
            sono le frecce e i puntini di separazione, che devono vedersi
            senza prendersi la scena. */
         :root[data-tema="scuro"] .text-gray-300 { color: #8a8275; }
+        /* IL «0,00» DEL CAMPO GRANDE NON E' UN IMPORTO
+           Di giorno il segnaposto della corsa e della spesa veloci e' un
+           grigio chiarissimo su bianco: si capisce che e' vuoto. Di notte
+           restava lo stesso grigio (#d1d5db) sulla scheda scura, cioe' quasi
+           bianco, grande quanto una cifra vera: sembrava gia' scritto
+           «0,00». Qui scende a #5e584d, che sulla scheda (#1d1a16) da'
+           circa 2,5 di contrasto: si vede che c'e' un campo, non si legge
+           come un numero. Apposta sotto il 4,5 dei testi: non e' un testo
+           da leggere, e' il posto dove scriverne uno. */
+        :root[data-tema="scuro"] .placeholder\:text-gray-300::placeholder { color: #5e584d; }
         :root[data-tema="scuro"] .hover\:text-gray-900:hover,
         :root[data-tema="scuro"] .hover\:text-gray-800:hover,
         :root[data-tema="scuro"] .hover\:text-gray-700:hover { color: var(--inchiostro-su); }
@@ -7389,6 +7399,12 @@
             Object.keys(perData).forEach(d => {
                 const [a, m, gi] = d.split('-').map(Number);
                 const idx = new Date(a, m - 1, gi).getDay();
+                // Una data storta nell'archivio («2026-xx», arrivata da un
+                // backup o da un import a mano) non ha un giorno della
+                // settimana: getDay() da' NaN e la schermata intera cadeva
+                // con «Cannot read properties of undefined». Quella riga qui
+                // si salta; le date buone si contano come prima.
+                if (!settimana[idx]) return;
                 settimana[idx].gg++;
                 settimana[idx].tot += perData[d].tot;
                 settimana[idx].n += perData[d].n;
@@ -9785,6 +9801,10 @@
                     ${rd.giorniLavorati === 0 ? `
                         <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center">
                             <p class="text-gray-400 font-bold">Nessuna giornata lavorata nel ${annoAttivo()}.</p>
+                            <!-- Uno stato vuoto deve dire da dove si comincia:
+                                 senza turni qui non c'e' niente da contare. -->
+                            <p class="text-sm text-gray-500 mt-1">I conti partono dal primo turno registrato.</p>
+                            <button onclick="apriCalendario()" class="mt-4 bg-gray-900 hover:bg-gray-800 text-yellow-400 text-sm font-black px-5 py-3 rounded-xl">Apri il Calendario</button>
                         </div>
                     ` : `
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -11605,6 +11625,14 @@
             window.meseCalendario = String(iso).slice(0, 7);
             window.giornoCalendarioAperto = iso;
             window.showCorsaForm = false;
+            switchTab('giornata');
+        }
+
+        // Dallo stato vuoto di Rendimento: il calendario sul mese che stava
+        // gia' guardando, che e' dove si registra il primo turno.
+        function apriCalendario() {
+            ricordaVista('calendario');
+            window.giornoCalendarioAperto = null;
             switchTab('giornata');
         }
 
