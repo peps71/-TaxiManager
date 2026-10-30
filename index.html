@@ -8188,7 +8188,7 @@
             <div class="bg-white rounded-[1.25rem] shadow-sm border border-red-200 p-4 space-y-3.5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <span class="etichetta text-red-600">Stai registrando una spesa</span>
-                    <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || oggiISO())}</span>
+                    <span class="text-xs font-bold text-gray-400 capitalize">${ggMmAaaa(giorno || giornoDiLavoroAdesso())}</span>
                 </div>
                 <div>
                     <label for="spesa-lampo-cat" class="etichetta block mb-1.5">Tipo di spesa</label>
@@ -8239,7 +8239,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                     Torna alle corse
                 </button>
-                ${window.showUscitaForm ? moduloUscitaHTML(giorno || oggiISO()) : ''}
+                ${window.showUscitaForm ? moduloUscitaHTML(giorno || giornoDiLavoroAdesso()) : ''}
             </div>`;
         }
 
@@ -8655,9 +8655,10 @@
                 </details>`;
 
             // Senza filtro giorno si sta guardando tutto l'anno, ma quello che
-            // si registra va su oggi: e' quella la giornata che il registro
-            // apre o chiude.
-            const giornoReg = giorno || oggiISO();
+            // si registra va su oggi (o, dopo mezzanotte, sul giorno del turno
+            // di notte ancora in corso: vedi giornoDiLavoroAdesso): e' quella
+            // la giornata che il registro apre o chiude.
+            const giornoReg = giorno || giornoDiLavoroAdesso();
             const aperto = registroAperto(giornoReg);
 
             return { aperto, corseFiltrate, corsePeriodo, costoG, costoPieno, eo, etichettaPeriodo, euroOra, filtriAttivi, filtroOltreIlGiorno, giornate, giorno, giornoReg, kmTot, lista, mediaCorsa, mese, metodiPieni, metodo, nelPeriodo, oreTot, pannelloFiltri, perMetodo, riposoDelGiorno, spalm, spesePeriodo, tocca, totCorse, totSpese, totSpeseVere, turniLavorati, turniPeriodo };
@@ -11962,7 +11963,7 @@
             if (!categoria) { showToast('Scegli che spesa è.'); return; }
             // Le spese si registrano anche nei giorni di riposo: l'auto costa
             // lo stesso, e il conto della giornata lo dice gia' a chiare lettere.
-            const data = giornoGiornate() || oggiISO();
+            const data = giornoGiornate() || giornoDiLavoroAdesso();
 
             const conFattura = !!(document.getElementById('spesa-lampo-fattura') || {}).checked;
 
@@ -12072,7 +12073,7 @@
                 campo.focus();
                 return;
             }
-            const data = giornoGiornate() || oggiISO();
+            const data = giornoGiornate() || giornoDiLavoroAdesso();
             const riposo = giornataNonLavorata(data);
             if (riposo) {
                 nascondiAvvisoCorsaStrana();
@@ -12939,8 +12940,30 @@
         // Se pero' stai guardando un anno diverso da quello corrente, oggi non
         // c'entra nulla: in quel caso nessun filtro giorno.
         function giornoDefaultFiltro() {
-            const oggi = oggiISO();
+            const oggi = giornoDiLavoroAdesso();
             return oggi.slice(0, 4) === annoAttivo() ? oggi : '';
+        }
+
+        // ============================================================
+        //  DOPO MEZZANOTTE, DENTRO IL TURNO DI NOTTE, «OGGI» E' IERI
+        //  Con l'app aperta dalle 19 del 20, alle 2 di notte le corse
+        //  finivano sul 20: il giorno della scheda si era fissato all'apertura
+        //  e la mezzanotte non lo sposta. Ma chi riapriva l'app alle 2 (o la
+        //  ritrovava ripartita da capo, come fa l'iPhone con le app in
+        //  fondo) se la vedeva aprire sul 21: la corsa finiva su un giorno
+        //  senza turno, «turno non registrato», €/h «—», e il turno del 20
+        //  perdeva le corse della seconda meta'. Due strade, due giorni.
+        //  Qui la regola diventa una sola: se c'e' un turno in corso
+        //  cominciato ieri, il giorno di lavoro e' il suo. Altrimenti e' oggi.
+        //  Vale per il giorno proposto all'apertura e per le corse e le spese
+        //  veloci quando nessun giorno e' scelto. Le corse gia' registrate
+        //  non si toccano: cambia solo dove va la prossima.
+        // ============================================================
+        function giornoDiLavoroAdesso() {
+            const oggi = oggiISO();
+            const vivo = turnoVivoAdesso();
+            if (vivo && String(vivo.data) === spostaGiorno(oggi, -1)) return String(vivo.data);
+            return oggi;
         }
 
         // Il giorno scelto nella scheda Giornate. Mai scelto (null) = oggi, che e'
