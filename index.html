@@ -1390,15 +1390,50 @@
         // c'e' gia' un archivio. Va caricato, altrimenti entrando dal secondo
         // dispositivo non si troverebbe niente. Prima i movimenti stavano in una
         // cartella condivisa e c'erano gia': adesso ogni account parte da zero.
+        // Il registro e' quello di questo account? Lo e' sempre dopo la
+        // decisione sull'account, tranne se il disco ha rifiutato di
+        // ricordarlo (pieno): allora si scrive direttamente, come prima.
+        function registroDiQuestoAccount() {
+            const uid = uidCorrente();
+            return !!uid && window.leggiSospesi().uid === uid;
+        }
+
+        // La strada di prima, a blocchi da 400 in fila: resta solo per il
+        // caso del registro che non si e' potuto scrivere.
+        async function scriviDiretti(nomeCol, elementi, campoId, onProgress, totale, giaFatti) {
+            let fatti = giaFatti || 0;
+            for (let i = 0; i < elementi.length; i += 400) {
+                const fetta = elementi.slice(i, i + 400);
+                const batch = writeBatch(db);
+                fetta.forEach(x => batch.set(docDati(nomeCol, String(x[campoId])), x));
+                await batch.commit();
+                fatti += fetta.length;
+                if (onProgress) onProgress(fatti, totale || elementi.length);
+            }
+            return fatti;
+        }
+
         async function migraSulCloud(nomeCol, elementi, chiave) {
             if (giaMigrate[nomeCol] || !elementi || !elementi.length) return;
+            // Tutto segnato PRIMA della prima attesa: se l'app si chiude a meta'
+            // (iOS lo fa), alla riapertura la cartella sul Cloud non e' piu'
+            // vuota ma e' monca, e senza il segno il suo elenco prenderebbe
+            // il posto dell'archivio del telefono, accorciandolo. Col segno
+            // l'unione tiene tutto e il resto riparte da solo.
+            const conRegistro = registroDiQuestoAccount();
+            if (conRegistro && !window.segnaSospesi(nomeCol, elementi.map(x => x && x[chiave]), 's')) {
+                if (window.showToast) window.showToast('Non porto i dati sul Cloud: il telefono non ha spazio per ricordarsi cosa ha già mandato. Libera spazio da Gestione e riapri l\'app.', 'avviso');
+                return;
+            }
             giaMigrate[nomeCol] = true;
             try {
                 if (window.showToast) window.showToast(`Porto sul Cloud ${elementi.length} elementi...`);
-                for (let i = 0; i < elementi.length; i += 400) {
-                    const batch = writeBatch(db);
-                    elementi.slice(i, i + 400).forEach(x => batch.set(docDati(nomeCol, String(x[chiave])), x));
-                    await batch.commit();
+                if (conRegistro) {
+                    const esiti = await inviaSospesi({ chiavi: [nomeCol], forza: true, silenzioso: true });
+                    const no = esiti.find(e => e.status === 'rejected');
+                    if (no) throw no.reason;
+                } else {
+                    await scriviDiretti(nomeCol, elementi, chiave);
                 }
                 if (window.showToast) window.showToast(`${elementi.length} elementi portati sul Cloud.`);
             } catch (err) {
@@ -1956,49 +1991,53 @@
             window.shifts = merge(window.shifts, newShifts);
             scriviLocale('taxi_records', window.dailyRecords);
             scriviLocale('taxi_shifts', window.shifts);
+            segnaSospesi('taxi_records', (newRecords || []).map(x => x && x.id), 's');
+            segnaSospesi('taxi_shifts', (newShifts || []).map(x => x && x.id), 's');
 
             if (!(isCloudActive && db && auth.currentUser)) return { cloud: false };
 
-            const gruppi = [
-                { col: 'taxi_records', items: newRecords || [] },
-                { col: 'taxi_shifts', items: newShifts || [] }
-            ];
-            let fatti = 0;
-            const totale = gruppi.reduce((a, g) => a + g.items.length, 0);
-
             // Se la scrittura sul Cloud fallisce (rete debole o assente, molto comune
-            // spostandosi in auto), il dato resta comunque salvato in locale qui sopra:
-            // non deve bloccare chi ha chiamato bulkSave (es. il salvataggio di una
-            // modifica a km/ore di un turno), altrimenti il pannello di modifica resta
-            // aperto e la schermata non si aggiorna, dando l'impressione che "non funzioni".
-            try {
-                for (const g of gruppi) {
-                    for (let i = 0; i < g.items.length; i += 400) {
-                        const fetta = g.items.slice(i, i + 400);
-                        const batch = writeBatch(db);
-                        fetta.forEach(item => {
-                            batch.set(docDati(g.col, String(item.id)), item);
-                        });
-                        await batch.commit();
-                        fatti += fetta.length;
-                        if (onProgress) onProgress(fatti, totale);
-                    }
+            // spostandosi in auto), il dato resta comunque salvato in locale qui sopra,
+            // e segnato nel registro: ripartira' da solo. Non deve bloccare chi ha
+            // chiamato bulkSave (es. il salvataggio di una modifica a km/ore di un
+            // turno), altrimenti il pannello di modifica resta aperto e la schermata
+            // non si aggiorna, dando l'impressione che "non funzioni".
+            const avviso = 'Salvato sul telefono: il Cloud lo riceverà appena torna la rete.';
+            if (!registroDiQuestoAccount()) {
+                try {
+                    const totale = (newRecords || []).length + (newShifts || []).length;
+                    let fatti = await scriviDiretti('taxi_records', newRecords || [], 'id', onProgress, totale, 0);
+                    fatti = await scriviDiretti('taxi_shifts', newShifts || [], 'id', onProgress, totale, fatti);
+                    return { cloud: true, scritti: fatti };
+                } catch (err) {
+                    console.error("Errore scrittura Cloud (bulkSave):", err);
+                    if (window.showToast) window.showToast(avviso, 'avviso');
+                    return { cloud: false, errore: true, scritti: 0 };
                 }
-                return { cloud: true, scritti: fatti };
-            } catch (err) {
-                console.error("Errore scrittura Cloud (bulkSave):", err);
-                if (window.showToast) window.showToast('Salvato solo in locale: sync Cloud fallita (rete debole?). Riproverai al prossimo salvataggio.', 'avviso');
-                return { cloud: false, errore: true, scritti: fatti };
             }
+            const esiti = await inviaSospesi({ chiavi: ['taxi_records', 'taxi_shifts'], onProgress, silenzioso: true });
+            const scritti = esiti.reduce((a, e) => a + (e.status === 'fulfilled' ? (e.value || 0) : 0), 0);
+            if (esiti.some(e => e.status === 'rejected')) {
+                if (window.showToast) window.showToast(avviso, 'avviso');
+                return { cloud: false, errore: true, scritti };
+            }
+            return { cloud: true, scritti };
         };
 
         window.wipeAllData = async function() {
+            // Prima il segno, poi l'azzeramento: gli identificativi servono per
+            // dire al Cloud cosa togliere, anche se adesso non c'e' campo.
+            segnaSospesi('taxi_records', (window.dailyRecords || []).map(x => x && x.id), 'd');
+            segnaSospesi('taxi_shifts', (window.shifts || []).map(x => x && x.id), 'd');
             window.dailyRecords = [];
             window.shifts = [];
             window.scriviLocale('taxi_records', []);
             window.scriviLocale('taxi_shifts', []);
 
             if (isCloudActive && db && auth.currentUser) {
+                inviaSospesi({ chiavi: ['taxi_records', 'taxi_shifts'], forza: true });
+                // E quello che sta sul Cloud ma non su questo telefono (scritto
+                // da un altro dispositivo e non ancora arrivato qui)
                 try {
                     for (const col of ['taxi_records', 'taxi_shifts']) {
                         const snap = await getDocs(colDati(col));
@@ -14285,8 +14324,22 @@
             // Cartella vuota sul Cloud ma roba qui: si porta su, e non si
             // tocca niente finche' non si sa che il Cloud accetta i dati.
             if (vuoto && (window[nome] || []).length && !cloudOk[nome]) {
+                // Tutto segnato prima della prima attesa (vedi migraSulCloud):
+                // una migrazione interrotta a meta' non accorcia l'archivio
+                // alla riapertura, e il resto riparte da solo. Se il disco non
+                // accetta il segno, la migrazione non parte.
+                const elenco = window[nome];
+                if (!segnaSospesi(chiave, elenco.map(x => x && x[campoId]), 's')) {
+                    if (window.showToast) window.showToast(`${etichetta}: non porto i dati sul Cloud, il telefono non ha spazio per ricordarsi cosa ha già mandato.`, 'avviso');
+                    return 'senzaSpazio';
+                }
+                const segni = leggiSospesi().per[chiave] || {};
                 try {
-                    for (const x of window[nome]) await salvaUno(x);
+                    for (const x of elenco) {
+                        await salvaUno(x);
+                        const id = String(x && x[campoId]);
+                        if (segni[id]) togliSospesi([[chiave, id, segni[id]]]);
+                    }
                     cloudOk[nome] = true;
                     if (messaggi && window.showToast) window.showToast(messaggi.caricato);
                 } catch (err) {
