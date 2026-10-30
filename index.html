@@ -21,8 +21,9 @@
          un indirizzo dimenticato non da' un errore chiaro: smette di
          funzionare l'accesso con Google, e con quello la sincronizzazione.
          Scritta fissa non ci sarebbe rimedio dal telefono. Messa da qui, c'e'
-         un interruttore: il tasto in Gestione (o la striscia che compare se il
-         Cloud non si raggiunge) scrive taxi_csp = 'no', e al riavvio la
+         un interruttore: il tasto in «Gestione → Backup e impostazioni» (o la
+         striscia che compare se il Cloud non si raggiunge) scrive
+         taxi_csp = 'no', e al riavvio la
          protezione non viene applicata. L'app torna come prima, i dati non si
          toccano. Questo copione e' il primo della pagina: quello che si
          carica dopo e' tutto sotto protezione.
@@ -53,8 +54,9 @@
             // Questo pezzo e' provato su Chromium, non su Safari: se l'accesso
             // si rompe sull'iPhone e' il primo sospettato. La foto del profilo
             // Google non si usa: googleusercontent.com esce da img-src.
-            // Se l'accesso o la sincronizzazione non vanno: Cloud & Sync ->
-            // «Protezione sugli indirizzi» -> Disattiva, e si riprova.
+            // Se l'accesso o la sincronizzazione non vanno: Gestione ->
+            // Backup e impostazioni -> «Protezione sugli indirizzi» ->
+            // Disattiva, e si riprova.
             var regole = [
                 "default-src 'self'",
                 "script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com",
@@ -69,6 +71,23 @@
                 "base-uri 'self'",
                 "form-action 'none'"
             ].join('; ');
+            // QUANDO LA PROTEZIONE HA DAVVERO FERMATO QUALCOSA
+            // Un accesso non riuscito con la rete accesa puo' essere colpa
+            // della protezione o no: il consiglio di spegnerla si da' solo se
+            // in questa sessione ha fermato davvero una connessione, un
+            // riquadro o un copione (vedi avvisaErroreAccesso). Si tengono
+            // solo la regola e l'origine (https://dominio): il percorso e la
+            // query possono contenere l'account o la chiave, e qui non servono.
+            window.cspViolazioni = [];
+            document.addEventListener('securitypolicyviolation', function (e) {
+                try {
+                    var direttiva = String(e.effectiveDirective || e.violatedDirective || '').split(' ')[0];
+                    var origine = String(e.blockedURI || '');
+                    try { origine = new URL(origine).origin; } catch (err) { origine = origine.split(/[\/?#]/)[0].slice(0, 40); }
+                    var gia = window.cspViolazioni.some(function (v) { return v.direttiva === direttiva && v.origine === origine; });
+                    if (!gia && window.cspViolazioni.length < 20) window.cspViolazioni.push({ direttiva: direttiva, origine: origine });
+                } catch (err) { /* pazienza */ }
+            });
             var m = document.createElement('meta');
             m.setAttribute('http-equiv', 'Content-Security-Policy');
             m.setAttribute('content', regole);
@@ -1427,8 +1446,15 @@
             // Con la rete accesa lo stesso errore arriva anche quando e' la
             // protezione sugli indirizzi a fermare la richiesta: dire solo
             // «senza rete» mandava a cercare il guasto nel posto sbagliato.
+            // Ma lo si dice solo se la protezione ha fermato davvero qualcosa
+            // di quello che l'accesso usa (window.cspViolazioni, raccolte dal
+            // primo copione della pagina): se no il guasto e' altrove, e
+            // spegnerla toglierebbe una difesa per niente.
             if (codice === 'auth/network-request-failed' && window.cspAttiva && navigator.onLine) {
-                messaggi[codice] = 'L\'accesso non è riuscito, eppure la rete c\'è: prova a spegnere la protezione sugli indirizzi (in Cloud & Sync) e riprova. L\'app intanto continua a funzionare in locale.';
+                const fermato = (window.cspViolazioni || []).some(v => ['connect-src', 'frame-src', 'script-src', 'script-src-elem'].includes(v.direttiva));
+                messaggi[codice] = fermato
+                    ? 'L\'accesso non è riuscito: la protezione sugli indirizzi ha fermato un collegamento. Spegnila da «Gestione → Backup e impostazioni» e riprova. L\'app intanto continua a funzionare in locale.'
+                    : 'L\'accesso non è riuscito, eppure la rete c\'è: riprova. Se continua con la rete buona, prova a spegnere la protezione sugli indirizzi da «Gestione → Backup e impostazioni». L\'app intanto continua a funzionare in locale.';
             }
             if (window.showToast) window.showToast((messaggi[codice] || ('Accesso non riuscito: ' + codice)), 'avviso');
         }
@@ -16950,7 +16976,7 @@
             // La striscia della versione nuova ha la precedenza: se c'e' quella,
             // si rimanda invece di accavallare due avvisi.
             if (barra && !barra.classList.contains('hidden')) return;
-            showToast('\u26a0\ufe0f Cloud non raggiungibile: l\'app lavora in locale. Vedi \u00abCloud & Sync\u00bb.');
+            showToast('\u26a0\ufe0f Cloud non raggiungibile: l\'app lavora in locale. Vedi \u00abGestione \u2192 Backup e impostazioni\u00bb.');
         }
 
         // PERCHE' UNA RIGA CHE NON FA NIENTE
