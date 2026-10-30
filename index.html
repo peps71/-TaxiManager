@@ -8969,7 +8969,14 @@
             if (gia && !confirm(`Il ${ggMm(iso)} ha già ${gia.turno}. Lo sostituisco con ${preset.label}?`)) return;
             if (gia) window.deleteShiftFromCloud(gia.id);
 
-            const ore = calcolaOreTurno(iso, preset.inizio, preset.fine, preset.pausaInizio, preset.pausaFine);
+            // Le ore si contano su una data fissa senza cambio d'ora, come fa il
+            // modulo «+ Registra un turno» (vedi moduloTurnoHTML): sulla data
+            // vera, «La notte» del sabato del cambio d'ora diventava 13 ore in
+            // ottobre e 11 a marzo, mentre lo stesso turno dal modulo ne
+            // segnava 12. Lo stesso turno deve valere le stesse ore da tutte e
+            // due le strade, e le ore di un turno a orario fisso sono quelle
+            // del contratto, non quelle dell'orologio.
+            const ore = calcolaOreTurno('2000-01-01', preset.inizio, preset.fine, preset.pausaInizio, preset.pausaFine);
             // I km restano da compilare: si aggiungono dall'elenco turni quando si sanno
             window.saveShiftToCloud(conPausaDelPreset({
                 id: nuovoId(),
