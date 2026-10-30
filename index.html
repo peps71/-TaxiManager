@@ -1702,16 +1702,16 @@
         let avvisoFermaDato = false;
         let riprovaProgrammata = null;
 
-        // I codici di Firestore che dicono «e' la riga», e quelli che dicono
-        // «e' il momento». Si ferma una riga solo per un codice del primo
-        // elenco (o se non si riesce nemmeno a prepararla): un codice che non
-        // sta in nessuno dei due (internal, unknown, not-found...) puo'
-        // essere un guasto passeggero del server, e fermare una riga per
-        // quello voleva dire lasciarla sul telefono per sempre. Va
-        // all'attesa crescente, come un no di tutto.
+        // I codici di Firestore che dicono «e' la riga». Si ferma una riga
+        // (e si smonta un blocco) solo per uno di questi, o se non si riesce
+        // nemmeno a prepararla. Tutti gli altri vanno all'attesa crescente:
+        // quelli «del momento» (permission-denied, unauthenticated,
+        // unavailable, deadline-exceeded, resource-exhausted, cancelled,
+        // aborted) e anche quelli che non dicono di chi e' la colpa
+        // (internal, unknown, not-found...), che possono essere un guasto
+        // passeggero del server: fermare una riga per quelli voleva dire
+        // lasciarla sul telefono per sempre.
         const NO_DELLA_RIGA = ['invalid-argument', 'failed-precondition', 'out-of-range'];
-        const NO_DI_TUTTO = ['permission-denied', 'unauthenticated', 'unavailable', 'deadline-exceeded',
-            'resource-exhausted', 'cancelled', 'aborted'];
         const codiceDi = (err) => String((err && err.code) || '').replace(/^firestore\//, '');
 
         function riprovaFra(ms) {
