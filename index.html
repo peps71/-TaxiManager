@@ -1271,12 +1271,16 @@
 
                 // Se si e' entrati con il reindirizzamento (Safari sulla schermata
                 // Home), il risultato arriva qui al ritorno.
-                try { await getRedirectResult(auth); } catch (err) { avvisaErroreAccesso(err); }
+                try {
+                    const ritorno = await getRedirectResult(auth);
+                    if (ritorno && ritorno.user) accessoAppenaFatto = true;
+                } catch (err) { avvisaErroreAccesso(err); }
 
                 // Nessun accesso automatico: senza fare l'accesso l'app funziona
                 // per intero in locale, e nessun dato va sul Cloud.
                 onAuthStateChanged(auth, (user) => {
                     fermaAscolti();
+                    if (user && !accountDeciso(user)) user = null;
                     if (user) {
                         isCloudActive = true;
                         window.isCloudSyncing = true;
@@ -1331,6 +1335,51 @@
             }, (error) => console.error(`Errore Sync ${etichetta}:`, error));
         }
 
+        // ============================================================
+        //  DI CHI SONO LE MODIFICHE IN ATTESA
+        //  Il registro ricorda l'ultimo account entrato, anche dopo
+        //  l'uscita: le modifiche segnate sono sue, e partono solo quando
+        //  si rientra con lo stesso. La decisione sta nel copione normale
+        //  (decidiAccount); qui c'e' la domanda, PRIMA di agganciare gli
+        //  ascolti - dopo, l'elenco del nuovo account avrebbe gia' preso il
+        //  posto di quello del telefono.
+        //  Entrando con un altro account (o per la prima volta, su un
+        //  telefono con dei dati) si chiede: OK porta i dati del telefono
+        //  anche nel nuovo account, insieme ai suoi (il vecchio account sul
+        //  Cloud non si tocca); Annulla esce e non tocca niente. In nessuno
+        //  dei due casi si perde qualcosa.
+        // ============================================================
+        let accessoAppenaFatto = false;
+
+        function accountDeciso(user) {
+            const appena = accessoAppenaFatto;
+            accessoAppenaFatto = false;
+            const lun = (x) => (Array.isArray(x) ? x.length : 0);
+            const nMov = lun(window.dailyRecords);
+            const nTur = lun(window.shifts);
+            const nAltri = lun(window.scadenze) + lun(window.note) + lun(window.versamenti) + lun(window.veicoli);
+            const nAttesa = window.contaSospesi();
+            const decisione = window.decidiAccount(user.uid, appena, nMov + nTur + nAltri + nAttesa > 0);
+            if (decisione === 'procedi') return true;
+            if (decisione === 'adotta') { window.adottaAccount(user.uid); return true; }
+            const email = user.email || 'questo account';
+            const plur = (n, uno, tanti) => `${n} ${n === 1 ? uno : tanti}`;
+            const domanda = `Sei entrato con ${email}. Su questo telefono ci sono già `
+                + `${plur(nMov, 'movimento', 'movimenti')} e ${plur(nTur, 'turno', 'turni')}`
+                + (nAttesa ? `, e ${plur(nAttesa, 'modifica non ancora inviata', 'modifiche non ancora inviate')}` : '')
+                + ` di un altro account o mai caricati.\n\n`
+                + `OK: li porto anche in ${email}, insieme a quello che c'è già.\n`
+                + `Annulla: esco da ${email} e non tocco niente.`;
+            if (confirm(domanda)) {
+                window.adottaAccount(user.uid);
+                window.segnaTuttoIlLocale();
+                return true;
+            }
+            signOut(auth).catch(err => console.warn('Uscita non riuscita:', err));
+            if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera da Gestione e rientra.`, 'avviso');
+            return false;
+        }
+
         function avvisaErroreAccesso(err) {
             const codice = (err && err.code) || '';
             if (!codice || codice === 'auth/popup-closed-by-user' || codice === 'auth/cancelled-popup-request') return;
@@ -1351,9 +1400,13 @@
             if (!auth) { if (window.showToast) window.showToast('Cloud non disponibile: sei senza rete?'); return; }
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
+            // Un accesso fatto adesso, non una sessione ripresa: se il
+            // telefono ha dati, prima di agganciarsi si chiede (accountDeciso).
+            accessoAppenaFatto = true;
             try {
                 await signInWithPopup(auth, provider);
             } catch (err) {
+                accessoAppenaFatto = false;
                 const codice = (err && err.code) || '';
                 const daRedirect = ['auth/popup-blocked', 'auth/popup-closed-by-user', 'auth/operation-not-supported-in-this-environment', 'auth/internal-error'];
                 if (daRedirect.includes(codice)) {
@@ -1367,8 +1420,12 @@
             if (!auth) return;
             try {
                 await signOut(auth);
-                // I dati restano sul dispositivo: uscire dal Cloud non cancella niente.
-                if (window.showToast) window.showToast('Uscito dal Cloud. I dati restano su questo dispositivo.');
+                // I dati restano sul dispositivo: uscire dal Cloud non cancella
+                // niente. E il telefono ricorda l'account: le modifiche ancora in
+                // attesa partono rientrando con quello (vedi DI CHI SONO).
+                const inAttesa = window.contaSospesi ? window.contaSospesi() : 0;
+                if (window.showToast) window.showToast('Uscito dal Cloud. I dati restano su questo dispositivo.'
+                    + (inAttesa ? ` ${inAttesa} ${inAttesa === 1 ? 'modifica non ancora inviata partirà' : 'modifiche non ancora inviate partiranno'} quando rientri con lo stesso account.` : ''));
             } catch (err) {
                 console.warn('Uscita non riuscita:', err);
             }
