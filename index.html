@@ -217,6 +217,29 @@
            apposta, non per sbaglio. */
         .tasto-minuto { min-height: 0; }
 
+        /* I CAMPI NON SCENDONO SOTTO I 16 PIXEL
+           Safari su iPhone, quando tocchi un campo scritto piu' piccolo di
+           16px, ingrandisce tutta la pagina per fartelo leggere, e poi la
+           lascia ingrandita: la schermata esce dai lati e va rimessa a posto
+           con due dita. Succedeva col selettore dell'anno (15px), col filtro
+           dei metodi, con le date dei filtri, con la data di una scadenza
+           fatta (13px), con le impostazioni fiscali e con la modifica in riga:
+           tutti campi nati con text-sm o text-xs, che qui sopra sono stati
+           alzati ma restano sotto la soglia.
+           Una regola sola, come per i 44px, cosi' vale anche per i campi che
+           verranno. max(16px, 1em): 1em e' il corpo del contenitore, quindi
+           un campo dentro un titolo grande resta grande. I campi che hanno un
+           corpo grande loro (la cifra della corsa veloce, il selettore
+           dell'anno nel menu) si tolgono con :not: questa regola pesa piu'
+           delle classi e li rimpicciolirebbe. Un campo nuovo con un corpo
+           grande va aggiunto all'elenco. (Niente «revert-layer»: su Safari
+           c'e' solo dalla 16.4.) */
+        input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.text-base):not(.text-lg):not(.text-xl):not(.text-2xl):not(.text-\[2\.35rem\]),
+        select:not(.text-base):not(.text-lg):not(.text-xl):not(.text-2xl),
+        textarea:not(.text-base):not(.text-lg):not(.text-xl):not(.text-2xl) {
+            font-size: max(16px, 1em);
+        }
+
         /* ============================================================
            LA NAVIGAZIONE DA TASTIERA
            Chi gira l'app con il tasto Tab - perche' usa un Mac senza
