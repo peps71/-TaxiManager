@@ -1484,12 +1484,18 @@
                 + `OK: li porto anche in ${email}, insieme a quello che c'è già.\n`
                 + `Annulla: esco da ${email} e non tocco niente.`;
             if (confirm(domanda)) {
-                // Prima il registro passa a questo account (e si libera di
-                // quello che era dell'altro), poi i candidati: vedi PORTARE I
-                // DATI DEL TELEFONO IN UN ALTRO ACCOUNT. Se il disco rifiuta,
-                // il registro resta dell'altro e si scrive direttamente.
-                if (window.adottaAccount(user.uid)) window.segnaTuttoIlLocale();
-                return true;
+                // Il registro passa a questo account (e si libera di quello
+                // che era dell'altro) e i dati del telefono diventano
+                // candidati, in una scrittura sola: vedi PORTARE I DATI DEL
+                // TELEFONO IN UN ALTRO ACCOUNT. Se il disco la rifiuta non e'
+                // cambiato niente, e si fa come Annulla: entrando lo stesso,
+                // i dati del telefono non arriverebbero in questo account, e
+                // quello che si scrivesse dopo andrebbe direttamente lassu'
+                // senza un segno - senza campo, perso alla chiusura.
+                if (window.adottaAccount(user.uid, { conIlLocale: true })) return true;
+                signOut(auth).catch(err => console.warn('Uscita non riuscita:', err));
+                if (window.showToast) window.showToast(`Non sono entrato in ${email}: il telefono non ha spazio per ricordarsi cosa portarci. Non ho toccato niente. Libera spazio da «Gestione → Backup e impostazioni → Spazio» e rientra.`, 'avviso');
+                return false;
             }
             signOut(auth).catch(err => console.warn('Uscita non riuscita:', err));
             if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra.`, 'avviso');
@@ -1586,6 +1592,9 @@
             const uid = uidCorrente();
             return !!uid && window.leggiSospesi().uid === uid;
         }
+        // Per il registro (segnaSospesi): l'account con cui si e' dentro il
+        // Cloud adesso, o null se si e' fuori (o si sta ancora decidendo).
+        window.uidNelCloud = () => (isCloudActive ? uidCorrente() : null);
 
         // La strada di prima, a blocchi da 400 in fila: resta solo per il
         // caso del registro che non si e' potuto scrivere.
@@ -2841,6 +2850,15 @@
         function segnaSospesi(chiave, ids, op) {
             const reg = leggiSospesi();
             if (!reg.uid) return true;          // mai entrato: nessun Cloud da aggiornare
+            // Dentro il Cloud con un account che non e' quello del registro
+            // (il disco ha rifiutato di ricordarlo): le modifiche di adesso
+            // sono di questo account, e nel registro dell'altro partirebbero
+            // verso di lui al suo prossimo accesso. Niente segno: chi chiama
+            // vede che il registro non e' di questo account e scrive
+            // direttamente (vedi TRANNE QUANDO IL SEGNO NON C'E'). Fuori dal
+            // Cloud si segna per l'account ricordato, come sempre.
+            const dentro = window.uidNelCloud ? window.uidNelCloud() : null;
+            if (dentro && dentro !== reg.uid) return true;
             const elenco = (ids || []).filter(id => id !== undefined && id !== null && String(id) !== '');
             if (!elenco.length) return true;
             const voci = reg.per[chiave] || (reg.per[chiave] = {});
@@ -3066,7 +3084,10 @@
         // di A scritti sopra quelli di B). Le scritte dei sei archivi
         // diventano candidati: partono solo se B non le ha gia' (vedi
         // segnaTuttoIlLocale e risolviCandidati).
-        function adottaAccount(uidNuovo) {
+        // opz.conIlLocale: e' l'OK alla domanda; anche i dati del telefono
+        // diventano candidati, nella stessa scrittura - se il disco la
+        // rifiuta, non e' cambiato niente (false), e chi chiama lo sa.
+        function adottaAccount(uidNuovo, opz) {
             const reg = leggiSospesi();
             if (reg.uid && uidNuovo && reg.uid !== uidNuovo) {
                 Object.keys(reg.per).forEach(k => {
@@ -3080,6 +3101,7 @@
                 });
             }
             reg.uid = uidNuovo || null;
+            if (opz && opz.conIlLocale && reg.uid) candidaTuttoIlLocale(reg);
             return scriviSospesi(reg);
         }
 
@@ -3102,13 +3124,24 @@
         //  partenza, e portarli scriverebbe i valori di fabbrica sopra
         //  quelli veri dell'account.
         // ============================================================
-        function segnaTuttoIlLocale() {
-            let ok = true;
+        function candidaTuttoIlLocale(reg) {
             ARCHIVI_CANDIDATI.forEach(k => {
-                const ids = Array.from(mappaLocaleSospesi(k).keys());
-                if (!segnaSospesi(k, ids, 'c')) ok = false;
+                const ids = Array.from(mappaLocaleSospesi(k).keys())
+                    .filter(id => id !== undefined && id !== null && String(id) !== '');
+                if (!ids.length) return;
+                const voci = reg.per[k] || (reg.per[k] = {});
+                ids.forEach(id => { reg.n++; voci[String(id)] = 'c' + reg.n; });
+                if (!reg.dal) reg.dal = new Date().toISOString();
             });
-            return ok;
+        }
+
+        // Tutti in una scrittura: false se il disco la rifiuta (e allora
+        // nel registro non e' cambiato niente).
+        function segnaTuttoIlLocale() {
+            const reg = leggiSospesi();
+            if (!reg.uid) return true;
+            candidaTuttoIlLocale(reg);
+            return scriviSospesi(reg);
         }
 
         // Le modifiche scritte qui e non ancora partite che OK porterebbe
