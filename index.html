@@ -1554,10 +1554,6 @@
             profilo: () => doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'),
             fiscali: () => doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali')
         };
-        const valoriACampi = {
-            profilo: () => Object.assign({}, window.profilo || {}, (() => { try { return JSON.parse(localStorage.getItem('taxi_profilo') || '{}') || {}; } catch (err) { return {}; } })()),
-            fiscali: () => Object.assign({}, window.fiscalSettings || {}, (() => { try { return JSON.parse(localStorage.getItem('taxi_fiscal_settings') || '{}') || {}; } catch (err) { return {}; } })())
-        };
 
         function inviaSospesi(opz) {
             opz = opz || {};
@@ -1575,7 +1571,7 @@
                 if (opz.chiavi && !opz.chiavi.includes(chiave)) return;
                 const voci = reg.per[chiave];
                 if (DOC_A_CAMPI[chiave]) {
-                    const valori = valoriACampi[chiave]();
+                    const valori = window.valoriLocaliCampi(chiave);
                     const campi = {};
                     const prese = [];
                     Object.keys(voci).forEach(campo => {
@@ -1717,8 +1713,9 @@
                     if (d.exists()) {
                         window.fiscalSettings = window.unisciCampiSospesi('fiscali',
                             Object.assign({}, window.fiscalSettings, d.data()), window.fiscalSettings);
-                        try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(window.fiscalSettings)); }
-                        catch (err) { /* lo dice gia' l'avviso sul disco */ }
+                        // Dalla porta unica: se il disco rifiuta, lo si sa
+                        // (vedi LA FONTE DEL CONTENUTO).
+                        window.scriviLocale('taxi_fiscal_settings', window.fiscalSettings);
                     } else if (!d.metadata.fromCache && window.saveFiscaliToCloud) {
                         window.segnaCampiCambiati('fiscali', null, window.fiscalSettings);
                         window.saveFiscaliToCloud(window.fiscalSettings);
@@ -1909,9 +1906,11 @@
         // ancora alla v175 continua a leggere lo stesso documento.
         window.saveProfiloToCloud = async function (profilo) {
             if (!isCloudActive || !db || !auth.currentUser) return;
-            if (registroDiQuestoAccount()) { inviaPresto(); return; }
+            if (registroDiQuestoAccount() && !window.segnoRifiutato('profilo')) { inviaPresto(); return; }
+            // Senza il segno (disco pieno, o registro di un altro account) si
+            // scrive tutto il profilo, in unione con quello che c'e' lassu'.
             try {
-                await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'), profilo);
+                await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'profilo', 'dati'), profilo, { merge: true });
             } catch (err) {
                 console.error('Errore scrittura profilo:', err);
                 if (window.showToast) window.showToast('Profilo salvato solo su questo dispositivo.', 'avviso');
@@ -1925,24 +1924,56 @@
         // la scrittura locale resta com'era (la fa chi chiama, o la riga qui
         // sopra), poi il segno nel registro, poi la spedizione. Chi chiama
         // non aspetta il Cloud: senza rete non lo aspetterebbe mai.
+        //
+        // TRANNE QUANDO IL SEGNO NON C'E'
+        // Se il disco rifiuta il segno (pieno), o il registro non e' di
+        // questo account (un telefono arrivato dalla v175 col disco pieno
+        // non riesce nemmeno a ricordarsi l'account), dal registro non
+        // partirebbe niente: si scrive direttamente, come nella v175,
+        // l'oggetto che c'e' in memoria. Senza campo quella scrittura si
+        // perde se l'app si chiude - come prima, e solo in questo caso.
+        // ids: un identificativo o un elenco; oggetto: per 's', il contenuto.
+        function spedisci(chiave, ids, op, oggetto, avviso) {
+            const elenco = (Array.isArray(ids) ? ids : [ids])
+                .filter(id => id !== undefined && id !== null && String(id) !== '');
+            if (!elenco.length) return;
+            const segnato = segnaSospesi(chiave, elenco, op);
+            if (!(isCloudActive && db && auth.currentUser)) return;
+            if (segnato && registroDiQuestoAccount()) { inviaPresto(); return; }
+            return scriviDiretto(chiave, elenco, op, oggetto, avviso);
+        }
+
+        async function scriviDiretto(chiave, elenco, op, oggetto, avviso) {
+            try {
+                if (op === 's') {
+                    await setDoc(docDati(chiave, String(elenco[0])), oggetto);
+                    return;
+                }
+                for (let i = 0; i < elenco.length; i += 400) {
+                    const batch = writeBatch(db);
+                    elenco.slice(i, i + 400).forEach(id => batch.delete(docDati(chiave, String(id))));
+                    await batch.commit();
+                }
+            } catch (err) {
+                console.error('Errore scrittura Cloud ' + chiave + ':', err);
+                if (window.showToast) window.showToast(avviso || 'Salvato solo su questo dispositivo: il Cloud non l\'ha accettato.', 'avviso');
+            }
+        }
+
         window.saveScadenzaToCloud = async function(scadenza) {
-            segnaSospeso('taxi_scadenze', scadenza && scadenza.id, 's');
-            inviaPresto();
+            return spedisci('taxi_scadenze', scadenza && scadenza.id, 's', scadenza, 'Scadenza salvata solo su questo dispositivo.');
         };
 
         window.saveVersamentoToCloud = async function(v) {
-            segnaSospeso('taxi_versamenti', v && v.id, 's');
-            inviaPresto();
+            return spedisci('taxi_versamenti', v && v.id, 's', v, 'Versamento salvato solo su questo dispositivo.');
         };
 
         window.deleteVersamentoFromCloud = async function(id) {
-            segnaSospeso('taxi_versamenti', id, 'd');
-            inviaPresto();
+            return spedisci('taxi_versamenti', id, 'd');
         };
 
         window.saveNotaToCloud = async function(nota) {
-            segnaSospeso('taxi_note', nota && nota.id, 's');
-            inviaPresto();
+            return spedisci('taxi_note', nota && nota.id, 's', nota, 'Nota salvata solo su questo dispositivo.');
         };
 
         // LE FOTO NON SI ASCOLTANO
@@ -1953,9 +1984,9 @@
         // magazzino del telefono e non si ripassano piu'.
         window.saveFiscaliToCloud = async function (impostazioni) {
             if (isCloudActive && db && auth.currentUser) {
-                if (registroDiQuestoAccount()) { inviaPresto(); return; }
+                if (registroDiQuestoAccount() && !window.segnoRifiutato('fiscali')) { inviaPresto(); return; }
                 try {
-                    await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali'), impostazioni);
+                    await setDoc(doc(db, 'artifacts', appId, 'users', uidCorrente(), 'impostazioni', 'fiscali'), impostazioni, { merge: true });
                 } catch (err) {
                     console.error("Errore scrittura Cloud impostazioni fiscali:", err);
                     if (window.showToast) window.showToast('Impostazioni fiscali salvate solo su questo dispositivo.', 'avviso');
@@ -1996,33 +2027,27 @@
         };
 
         window.deleteNotaFromCloud = async function(id) {
-            segnaSospeso('taxi_note', id, 'd');
-            inviaPresto();
+            return spedisci('taxi_note', id, 'd');
         };
 
         window.deleteScadenzaFromCloud = async function(id) {
-            segnaSospeso('taxi_scadenze', id, 'd');
-            inviaPresto();
+            return spedisci('taxi_scadenze', id, 'd');
         };
 
         window.saveVoceFissaToCloud = async function(voce) {
-            segnaSospeso('taxi_voci_fisse', voce && voce.slug, 's');
-            inviaPresto();
+            return spedisci('taxi_voci_fisse', voce && voce.slug, 's', voce, 'Voce di budget salvata solo su questo dispositivo.');
         };
 
         window.deleteVoceFissaFromCloud = async function(slug) {
-            segnaSospeso('taxi_voci_fisse', slug, 'd');
-            inviaPresto();
+            return spedisci('taxi_voci_fisse', slug, 'd');
         };
 
         window.saveVeicoloToCloud = async function(veicolo) {
-            segnaSospeso('taxi_veicoli', veicolo && veicolo.id, 's');
-            inviaPresto();
+            return spedisci('taxi_veicoli', veicolo && veicolo.id, 's', veicolo, 'Vettura salvata solo su questo dispositivo.');
         };
 
         window.deleteVeicoloFromCloud = async function(id) {
-            segnaSospeso('taxi_veicoli', id, 'd');
-            inviaPresto();
+            return spedisci('taxi_veicoli', id, 'd');
         };
 
         window.saveRecordToCloud = async function(record) {
@@ -2031,8 +2056,7 @@
             // registrata per un giorno passato restava in testa all'elenco.
             window.dailyRecords.sort(perDataDecrescente);
             scriviLocale('taxi_records', window.dailyRecords);
-            segnaSospeso('taxi_records', record && record.id, 's');
-            inviaPresto();
+            return spedisci('taxi_records', record && record.id, 's', record, 'Corsa salvata solo in locale: sync Cloud fallita.');
         };
 
         window.saveShiftToCloud = async function(shift) {
@@ -2041,15 +2065,13 @@
             // anche quando si registra un turno di ieri o dell'altro ieri.
             window.shifts.sort(perDataDecrescente);
             scriviLocale('taxi_shifts', window.shifts);
-            segnaSospeso('taxi_shifts', shift && shift.id, 's');
-            inviaPresto();
+            return spedisci('taxi_shifts', shift && shift.id, 's', shift, 'Turno salvato solo in locale: sync Cloud fallita.');
         };
 
         window.deleteRecordFromCloud = async function(id) {
             window.dailyRecords = window.dailyRecords.filter(r => String(r.id) !== String(id));
             scriviLocale('taxi_records', window.dailyRecords);
-            segnaSospeso('taxi_records', id, 'd');
-            inviaPresto();
+            return spedisci('taxi_records', id, 'd');
         };
 
         // Cancellazione di molti movimenti in un colpo solo: una scrittura sola
@@ -2059,15 +2081,13 @@
             if (!insieme.size) return;
             window.dailyRecords = (window.dailyRecords || []).filter(r => !insieme.has(String(r.id)));
             scriviLocale('taxi_records', window.dailyRecords);
-            segnaSospesi('taxi_records', Array.from(insieme), 'd');
-            inviaPresto();
+            return spedisci('taxi_records', Array.from(insieme), 'd');
         };
 
         window.deleteShiftFromCloud = async function(id) {
             window.shifts = window.shifts.filter(s => String(s.id) !== String(id));
             scriviLocale('taxi_shifts', window.shifts);
-            segnaSospeso('taxi_shifts', id, 'd');
-            inviaPresto();
+            return spedisci('taxi_shifts', id, 'd');
         };
 
         // === IMPORT MASSIVO (usato dal ripristino backup / import Excel) ===
@@ -2086,8 +2106,9 @@
             window.shifts = merge(window.shifts, newShifts);
             scriviLocale('taxi_records', window.dailyRecords);
             scriviLocale('taxi_shifts', window.shifts);
-            segnaSospesi('taxi_records', (newRecords || []).map(x => x && x.id), 's');
-            segnaSospesi('taxi_shifts', (newShifts || []).map(x => x && x.id), 's');
+            const segnatiMov = segnaSospesi('taxi_records', (newRecords || []).map(x => x && x.id), 's');
+            const segnatiTur = segnaSospesi('taxi_shifts', (newShifts || []).map(x => x && x.id), 's');
+            const segnati = segnatiMov && segnatiTur;
 
             if (!(isCloudActive && db && auth.currentUser)) return { cloud: false };
 
@@ -2098,7 +2119,9 @@
             // turno), altrimenti il pannello di modifica resta aperto e la schermata
             // non si aggiorna, dando l'impressione che "non funzioni".
             const avviso = 'Salvato sul telefono: il Cloud lo riceverà appena torna la rete.';
-            if (!registroDiQuestoAccount()) {
+            // Senza il segno (disco pieno, o registro di un altro account)
+            // si scrive direttamente, come prima del registro.
+            if (!segnati || !registroDiQuestoAccount()) {
                 try {
                     const totale = (newRecords || []).length + (newShifts || []).length;
                     let fatti = await scriviDiretti('taxi_records', newRecords || [], 'id', onProgress, totale, 0);
@@ -2222,6 +2245,14 @@
         //  avviso che sparisce in tre secondi: finche' dura, ogni corsa
         //  che registri vive solo nella memoria del browser.
         // ============================================================
+        // Gli archivi la cui ultima scrittura sul disco e' stata rifiutata:
+        // per loro il disco e' rimasto indietro, e la versione buona e'
+        // quella in memoria (vedi LA FONTE DEL CONTENUTO). Uno per archivio,
+        // non una spia sola: con il disco quasi pieno l'archivio delle corse
+        // non ci sta piu', ma il registro, che e' piccolo, si' - e una spia
+        // sola l'avrebbe spenta proprio la scrittura del registro.
+        const discoIndietro = new Set();
+
         function scriviLocale(chiave, valore) {
             // Ogni volta che i movimenti cambiano il contatore sale: e' il
             // segnale con cui gli indici pesanti sanno di doversi rifare. Passa
@@ -2230,14 +2261,17 @@
             if (chiave === 'taxi_records') window.versioneDati = (window.versioneDati || 0) + 1;
             try {
                 localStorage.setItem(chiave, JSON.stringify(valore));
+                discoIndietro.delete(chiave);
                 if (window.discoRotto) mostraAvvisoDisco(false);
                 return true;
             } catch (err) {
                 console.error('Scrittura locale rifiutata:', chiave, err);
+                discoIndietro.add(chiave);
                 mostraAvvisoDisco(true, err);
                 return false;
             }
         }
+        window.discoIndietro = (chiave) => discoIndietro.has(chiave);
         window.scriviLocale = scriviLocale;
 
         // ============================================================
@@ -2333,6 +2367,11 @@
         // Segna una o piu' modifiche. op: 's' (scritto) o 'd' (cancellato).
         // Restituisce false solo se il disco ha rifiutato la scrittura: chi
         // sta per spedire tanta roba (la migrazione) deve saperlo prima.
+        // Gli archivi il cui ultimo segno il disco ha rifiutato: chi spedisce
+        // una modifica sola (il profilo, una corsa) lo chiede qui e, se il
+        // segno non c'e', la scrive direttamente sul Cloud come prima.
+        const segniRifiutati = new Set();
+
         function segnaSospesi(chiave, ids, op) {
             const reg = leggiSospesi();
             if (!reg.uid) return true;          // mai entrato: nessun Cloud da aggiornare
@@ -2341,8 +2380,11 @@
             const voci = reg.per[chiave] || (reg.per[chiave] = {});
             elenco.forEach(id => { reg.n++; voci[String(id)] = (op === 'd' ? 'd' : 's') + reg.n; });
             if (!reg.dal) reg.dal = new Date().toISOString();
-            return scriviSospesi(reg);
+            const ok = scriviSospesi(reg);
+            if (ok) segniRifiutati.delete(chiave); else segniRifiutati.add(chiave);
+            return ok;
         }
+        const segnoRifiutato = (chiave) => segniRifiutati.has(chiave);
 
         function segnaSospeso(chiave, id, op) {
             return segnaSospesi(chiave, [id], op);
@@ -2383,26 +2425,66 @@
         };
         const CAMPO_ID_SOSPESI = { taxi_voci_fisse: 'slug' };
 
-        // L'archivio locale per identificativo: prima il disco (l'ultima
-        // parola, anche se l'ha scritta l'altra finestra), poi la memoria per
-        // quello che il disco non ha (disco pieno). Copie pulite, senza
-        // undefined: e' quello che va sul Cloud.
-        function mappaLocaleSospesi(chiave) {
+        // ============================================================
+        //  LA FONTE DEL CONTENUTO
+        //  Il registro dice cosa spedire; il contenuto si prende al momento
+        //  dell'invio, e ci sono due posti dove prenderlo: il disco e la
+        //  memoria della pagina. Di solito dicono la stessa cosa, e quando
+        //  no, la regola e' una sola, per la spedizione (inviaSospesi), per
+        //  l'unione con l'elenco del Cloud (unisciConSospesi) e per i
+        //  documenti a campi (profilo, fiscali):
+        //   - si parte dal disco, che e' l'ultima parola anche quando l'ha
+        //     scritta l'altra finestra (sul Mac), e si completa con la
+        //     memoria per quello che il disco non ha;
+        //   - MA se l'ultima scrittura di quell'archivio sul disco e' stata
+        //     rifiutata (disco pieno), il disco e' rimasto alla versione di
+        //     prima: si parte dalla memoria, e il disco completa.
+        //  Prima si partiva sempre dal disco: con l'archivio delle corse
+        //  rifiutato ma il segno accettato, partiva la corsa VECCHIA, il
+        //  server la confermava, il segno si toglieva e la correzione
+        //  spariva.
+        // ============================================================
+        // L'archivio locale per identificativo, secondo la regola qui sopra.
+        // memoria: l'elenco in memoria, se chi chiama ce l'ha gia' in mano.
+        // Copie pulite, senza undefined: e' quello che va sul Cloud.
+        function mappaLocaleSospesi(chiave, memoria) {
             const campoId = CAMPO_ID_SOSPESI[chiave] || 'id';
             const mappa = new Map();
             // Un elemento senza identificativo non ha un posto sul Cloud:
             // si spedirebbe come documento "undefined", e il secondo
             // cancellerebbe il primo. Resta qui, e non parte.
             const conId = (x) => x && typeof x === 'object' && x[campoId] !== undefined && x[campoId] !== null && String(x[campoId]) !== '';
+            const dalDisco = (elenco) => {
+                if (Array.isArray(elenco)) elenco.forEach(x => {
+                    if (conId(x) && !mappa.has(String(x[campoId]))) mappa.set(String(x[campoId]), x);
+                });
+            };
+            const dallaMemoria = (elenco) => {
+                if (Array.isArray(elenco)) elenco.forEach(x => {
+                    if (conId(x) && !mappa.has(String(x[campoId]))) {
+                        try { mappa.set(String(x[campoId]), JSON.parse(JSON.stringify(x))); } catch (err) { /* pazienza */ }
+                    }
+                });
+            };
             const disco = leggiLocale(chiave, []);
-            if (Array.isArray(disco)) disco.forEach(x => { if (conId(x)) mappa.set(String(x[campoId]), x); });
-            const mem = window[MEMORIA_SOSPESI[chiave]];
-            if (Array.isArray(mem)) mem.forEach(x => {
-                if (conId(x) && !mappa.has(String(x[campoId]))) {
-                    try { mappa.set(String(x[campoId]), JSON.parse(JSON.stringify(x))); } catch (err) { /* pazienza */ }
-                }
-            });
+            const mem = Array.isArray(memoria) ? memoria : window[MEMORIA_SOSPESI[chiave]];
+            if (discoIndietro.has(chiave)) { dallaMemoria(mem); dalDisco(disco); }
+            else { dalDisco(disco); dallaMemoria(mem); }
             return mappa;
+        }
+
+        // La stessa regola per i documenti a campi: quale versione del
+        // profilo (o delle impostazioni fiscali) spedire.
+        const DOCUMENTO_SUL_DISCO = { profilo: 'taxi_profilo', fiscali: 'taxi_fiscal_settings' };
+        const DOCUMENTO_IN_MEMORIA = { profilo: 'profilo', fiscali: 'fiscalSettings' };
+        function valoriLocaliCampi(chiave) {
+            const suDisco = DOCUMENTO_SUL_DISCO[chiave];
+            let disco = leggiLocale(suDisco, {});
+            if (!disco || typeof disco !== 'object' || Array.isArray(disco)) disco = {};
+            const mem = window[DOCUMENTO_IN_MEMORIA[chiave]] || {};
+            return discoIndietro.has(suDisco)
+                ? Object.assign({}, disco, mem)
+                : Object.assign({}, mem, disco);
         }
 
         // ============================================================
@@ -2422,18 +2504,14 @@
             const ids = voci ? Object.keys(voci) : [];
             if (!ids.length) return dalCloud;
             const cid = campoId || 'id';
-            const qui = new Map();
-            (locale || []).forEach(x => { if (x && typeof x === 'object') qui.set(String(x[cid]), x); });
-            let dalDisco = null;     // si legge solo se serve
+            // Il contenuto secondo LA FONTE DEL CONTENUTO: la stessa regola
+            // della spedizione, cosi' a video c'e' quello che parte.
+            const qui = mappaLocaleSospesi(chiave, locale);
             const togli = new Set();
             const aggiungi = [];
             ids.forEach(id => {
                 if (voci[id][0] === 'd') { togli.add(id); return; }
-                let x = qui.get(id);
-                if (!x) {
-                    if (!dalDisco) dalDisco = mappaLocaleSospesi(chiave);
-                    x = dalDisco.get(id);
-                }
+                const x = qui.get(id);
                 if (x) { togli.add(id); aggiungi.push(x); }
             });
             return (dalCloud || []).filter(x => !togli.has(String(x && x[cid]))).concat(aggiungi);
@@ -2509,8 +2587,8 @@
         }
 
         Object.assign(window, {
-            testoSospesi, leggiSospesi, contaSospesi, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
-            mappaLocaleSospesi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
+            testoSospesi, leggiSospesi, contaSospesi, segnoRifiutato, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
+            mappaLocaleSospesi, valoriLocaliCampi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
             segnaTuttoIlLocale
         });
 
@@ -14237,8 +14315,7 @@
                 if (impostazioni) {
                     segnaCampiCambiati('fiscali', window.fiscalSettings, nuove);
                     window.fiscalSettings = nuove;
-                    try { localStorage.setItem('taxi_fiscal_settings', JSON.stringify(nuove)); }
-                    catch (err) { /* spazio esaurito: pazienza */ }
+                    scriviLocale('taxi_fiscal_settings', nuove);
                     // E vanno anche sul Cloud, come tutto il resto del backup:
                     // ripristinare qui e trovarle vecchie sull'altro
                     // dispositivo sarebbe mezzo ripristino.
