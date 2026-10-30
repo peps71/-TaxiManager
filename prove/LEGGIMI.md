@@ -38,6 +38,8 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `coerenza3.mjs` | 81 identità sul motore costruito dopo la v121: il costo del giorno con l'IRPEF, il budget fuso col conguaglio, i corrispettivi mese per mese |
 | `coerenzaVideo.mjs` | gli stessi importi **letti a video** in Andamento, Spese, Commercialista, Rendimento |
 | `testIntegrita.mjs` | backup esportato e reimportato: tutto torna identico. E le scadenze rispettano la cadenza |
+| `testRipristino.mjs` | rimettere un backup **dal tasto vero**: prima chiede, dicendo quante righe ha il backup, quante ce ne sono adesso e quante tornerebbero com'erano (al plurale e al singolare); dicendo no l'archivio resta identico byte per byte, dicendo si' si ripristina come prima. Rata, numero delle rate e minimale INPS rientrano dal backup, e un backup vecchio che non li ha lascia quelli di adesso. Un file oltre i 50 MB non si legge nemmeno (si prova con un file sparso da 60 MB e uno valido di 50 MB esatti), e le foto con l'id storto o troppo pesanti si scartano |
+| `testEsporta.mjs` | i file che escono, scaricati dai tasti veri: nel CSV per il commercialista una categoria o una nota che comincia con `=` `+` `-` `@` esce con l'apostrofo davanti (se no Excel la prende per una formula) e gli importi restano numeri; e con l'orologio fermo al 1° gennaio 2027 alle 00:30 di Roma il backup e il file delle foto si chiamano `..._2027-01-01`, non col giorno di Greenwich |
 | `testGiorni.mjs` | il giro dei giorni su cui poggia il budget: cinque anni, i due cambi dell'ora legale, gli anni bisestili |
 | `testPrevisioneRealta.mjs` | il budget è il pavimento, il conto vero comanda quando lo supera, le rate si sommano |
 | `testIndiceVivo.mjs` | l'indice dei pagamenti si rifà quando registri o cancelli **dai tasti veri** |
@@ -52,6 +54,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testConguaglio.mjs` | le righe si aprono e dicono quali movimenti contengono, con la provenienza |
 | `testPareggio.mjs` | il costo fisso al giorno comprende la quota IRPEF, e l'etichetta del pareggio segue il segno: «Sopra» col più in verde, «Sotto» col meno in rosso |
 | `testVerifica.mjs` | una corsa segnata «da verificare» compare nel registro e nei corrispettivi, e non tocca nessun importo |
+| `testCorsaStrana.mjs` | «23,50» scritto di fretta diventa «2350»: sopra i 300 € il tasto veloce chiede un secondo tocco sullo **stesso** metodo (un altro metodo o un'altra cifra ripartono da capo), 300 e 299 salvano subito; il modulo completo chiede conferma e rifiuta «0», «abc», «Infinity», «1e400», anche in modifica; le spese restano libere (2.000 € senza domande, lo zero permesso). La domanda sta nella scheda a 320 px e si legge di giorno e al buio. Orologio fermo con un turno vivo |
 | `testAssegna.mjs` | riassegnare una spesa a una voce di budget: il nome lo riscrive l'app, importo e data non si toccano |
 | `testScadenzeBudget.mjs` | una voce di budget con la sua scadenza compare fra le scadenze, e si spunta da sola quando paghi |
 | `testConfronto.mjs` | il confronto con l'anno scorso guarda lo stesso tratto, non un anno intero contro dieci mesi |
@@ -62,10 +65,10 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `testCoperto.mjs` | l'occhio copre il totale e **solo** quello |
 | `testSpazio.mjs` | archiviare un anno: prima il file, poi la cancellazione, e solo se confermi |
 | `mediaAltre.mjs` | somma e divisore della media guardano la stessa finestra |
-| `testIniezione.mjs` | un backup confezionato male non esegue niente |
+| `testIniezione.mjs` | un backup confezionato male non esegue niente. E i campi dei turni (inizio, fine, pause, ore, km) con dentro un `<img onerror>`: da `applicaBackup` escono ripuliti (orario `''`, numero `null`) mentre i valori giusti restano identici anche nel tipo; scritti direttamente in `taxi_shifts`, a video non fanno partire niente in nessuna scheda, nel calendario, nello spostamento e nella modifica in riga |
 | `testCspViva.mjs` | la protezione sugli indirizzi è davvero applicata, e l'interruttore la toglie |
 | `testArchivi.mjs` | i cinque archivi che si sincronizzano passano tutti dallo stesso codice: una cartella vuota sul Cloud non svuota il telefono, e l'elenco delle voci di budget non si cancella in nessun caso |
-| `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei |
+| `testDisegni.mjs` | i sei pacchetti del Cloud fanno un disegno, non sei. E la scheda Cloud aperta senza service worker non si ridisegna in un giro senza fine (erano 516 disegni in tre secondi; ora al massimo 3) |
 | `testTastiera.mjs` | si preme Tab per davvero e si guarda dove si finisce: ogni comando raggiunto mostra l'anello del fuoco, e l'anello si **misura** contro il fondo su cui è disegnato (serve 3 di contrasto), di giorno e al buio. E col mouse o col dito l'anello deve restare spento. Orologio e fuso fermi su un giorno con un turno vivo, se no il campo dell'incasso non c'è |
 | `testOreTurno.mjs` | le ore scritte a mano chiudono il turno e fermano il €/h su quel numero (400 € in 10 ore = 40 €/h, e ci resta), **senza toccare** il turno normale a metà, lo Spezzato con la sua pausa, il turno non ancora cominciato, il riposo e i due turni nello stesso giorno |
 | `testAnnulla.mjs` | si esce dai tre moduli completi senza salvare: il tasto c'è in cima e in fondo, **non è un submit** (se lo fosse salverebbe invece di annullare, e si vedrebbe solo contando i movimenti), a modulo intonso non chiede niente, con qualcosa scritto chiede e dicendo no resta tutto, e «Salva e basta» continua a salvare come prima |

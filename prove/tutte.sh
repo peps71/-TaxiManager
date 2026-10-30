@@ -45,6 +45,8 @@ titolo "coerenza del report";     giro coerenza2.mjs
 titolo "coerenza del motore";     giro coerenza3.mjs
 titolo "coerenza a video";        giro coerenzaVideo.mjs
 titolo "integrita' dei dati";     giro testIntegrita.mjs
+titolo "ripristino con conferma"; giro testRipristino.mjs
+titolo "file che escono (CSV e nomi)"; giro testEsporta.mjs
 titolo "il giro dei giorni";      giro testGiorni.mjs
 titolo "previsione e realta'";    giro testPrevisioneRealta.mjs
 titolo "indice dei pagamenti";    giro testIndiceVivo.mjs
@@ -59,6 +61,7 @@ titolo "impostazioni fiscali";    giro testFiscali.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs
 titolo "costo e pareggio";        giro testPareggio.mjs
 titolo "corse da verificare";     giro testVerifica.mjs
+titolo "corse fuori misura";      giro testCorsaStrana.mjs
 titolo "riassegna a una voce";    giro testAssegna.mjs
 titolo "scadenze dal budget";     giro testScadenzeBudget.mjs
 titolo "confronto anno su anno";  giro testConfronto.mjs

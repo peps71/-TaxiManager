@@ -1,4 +1,9 @@
 // Sei pacchetti dal Cloud devono dare UN disegno, non sei.
+// E la scheda Cloud, aperta senza service worker (su file://, o la prima
+// volta prima che la copia salvata prenda il comando), non deve ridisegnarsi
+// da sola in un giro senza fine: ogni disegno chiedeva la versione della
+// copia salvata, la risposta «nessuna» ridisegnava, il disegno richiedeva...
+// 540 disegni in tre secondi, con il telefono che scalda per niente.
 // Le prove girano da dove sta il repository, non da un percorso fisso: cosi'
 // funzionano anche su un'altra macchina. Il motore del browser si cerca dove
 // e' installato, oppure lo si dice con PLAYWRIGHT=/percorso/index.mjs.
@@ -52,4 +57,31 @@ console.log(`  archivio: ${r.movimenti} movimenti`);
 console.log(`  sei pacchetti accodati : ${r.accodato.disegni} disegno/i in ${r.accodato.ms.toFixed(0)} ms  ${r.accodato.disegni === 1 ? 'ok' : '*** dovrebbe essere 1 ***'}`);
 console.log(`  come prima (uno a uno) : ${r.diretto.disegni} disegni in ${r.diretto.ms.toFixed(0)} ms`);
 console.log(`  risparmio: ${(r.diretto.ms - r.accodato.ms).toFixed(0)} ms all'accesso`);
+
+// La scheda Cloud su file://: qui un service worker non c'e' per forza.
+const q = await b.newPage({ locale: 'it-IT' });
+q.on('dialog', d => d.accept());
+const erroriQ = []; q.on('pageerror', e => erroriQ.push(String(e)));
+await q.goto(APP);
+await q.waitForFunction(() => typeof window.switchTab === 'function');
+const c = await q.evaluate(async () => {
+  const senzaCopia = !(navigator.serviceWorker && navigator.serviceWorker.controller);
+  window.activeTab = 'dashboard'; renderContent();
+  await new Promise(r2 => setTimeout(r2, 300));
+  let n = 0;
+  const vero = window.renderContent;
+  window.renderContent = function () { n++; return vero.apply(this, arguments); };
+  switchTab('cloud');
+  await new Promise(r2 => setTimeout(r2, 3000));
+  window.renderContent = vero;
+  const testo = (document.getElementById('main-container').innerText || '').trim().length;
+  return { senzaCopia, disegni: n, testo };
+});
+const SOGLIA = 3;
+console.log(`  scheda Cloud senza service worker (${c.senzaCopia ? 'nessuna copia al comando' : '*** una copia c\'e\': la prova non vale ***'})`);
+console.log(`  disegni in 3 secondi: ${c.disegni}  ${c.disegni <= SOGLIA ? 'ok' : '*** dovrebbero essere al massimo ' + SOGLIA + ' ***'}`);
+console.log(`  la scheda e' disegnata: ${c.testo > 40 ? 'ok' : '*** vuota ***'}`);
+console.log(`  errori JS: ${erroriQ.length ? '*** ' + erroriQ.join(' | ') + ' ***' : 'nessuno'}`);
 await b.close();
+const male = r.accodato.disegni !== 1 || !c.senzaCopia || c.disegni > SOGLIA || c.testo <= 40 || erroriQ.length > 0;
+process.exit(male ? 1 : 0);
