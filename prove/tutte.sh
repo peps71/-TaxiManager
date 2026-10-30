@@ -75,6 +75,8 @@ titolo "iniezione da id e date";  giro testIniezioneDate.mjs
 titolo "backup coi tipi storti";  giro testBackupTipi.mjs
 titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "archivi sincronizzati";   giro testArchivi.mjs
+titolo "modifiche in attesa del Cloud"; giro testSospesi.mjs
+titolo "senza campo, col Cloud finto"; giro testOffline.mjs
 titolo "grafica e misure";        giro testGrafica.mjs
 titolo "modo scuro";              giro testScuro.mjs
 titolo "il logo";                 giro testLogo.mjs
