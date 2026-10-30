@@ -2433,8 +2433,28 @@
             return ok;
         }
 
+        // La riga della scheda Cloud: quante modifiche aspettano, da quando.
+        // Solo testo. '' = niente in attesa (o telefono mai entrato).
+        // Non si scarta mai niente: oltre le 5.000 si chiede solo di
+        // collegarsi a una rete.
+        function testoSospesi(connesso) {
+            const reg = leggiSospesi();
+            if (!reg.uid) return '';
+            const n = contaSospesi(reg);
+            if (!n) return '';
+            let dal = '';
+            const d = reg.dal ? new Date(reg.dal) : null;
+            if (d && !isNaN(d.getTime())) {
+                dal = ` (dal ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')})`;
+            }
+            let t = `${n} ${n === 1 ? 'modifica' : 'modifiche'} in attesa di invio al Cloud${dal}`;
+            if (!connesso) t += `: ${n === 1 ? 'partirà' : 'partiranno'} quando rientri`;
+            if (n > 5000) t += ' · molte modifiche in attesa: collegati a una rete';
+            return t;
+        }
+
         Object.assign(window, {
-            leggiSospesi, contaSospesi, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
+            testoSospesi, leggiSospesi, contaSospesi, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
             mappaLocaleSospesi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
             segnaTuttoIlLocale
         });
@@ -11479,6 +11499,7 @@
                                 Quello che registri qui compare sugli altri dispositivi dove hai fatto lo stesso accesso, in tempo reale.
                                 I dati stanno in una cartella che è solo tua: nessun altro account può leggerli.
                             </p>
+                            ${testoSospesi(true) ? `<p id="cloud-in-attesa" class="text-xs font-bold text-gray-600">${esc(testoSospesi(true))}</p>` : ''}
                             <button onclick="esciDalCloud()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-5 rounded-xl text-sm">
                                 Esci dal Cloud
                             </button>
@@ -11489,6 +11510,7 @@
                                 Facendo l'accesso, gli stessi dati compaiono anche sugli altri tuoi dispositivi, e ognuno ha
                                 la sua cartella privata sul Cloud.
                             </p>
+                            ${testoSospesi(false) ? `<p id="cloud-in-attesa" class="text-xs font-bold text-gray-600">${esc(testoSospesi(false))}</p>` : ''}
                             <button onclick="entraConGoogle()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-bold py-3 px-5 rounded-xl shadow-sm transition-colors">
                                 Entra con Google
                             </button>
