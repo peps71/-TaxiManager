@@ -216,6 +216,19 @@
         /* Rare eccezioni dove 44px spaccherebbe davvero la riga: si chiede
            apposta, non per sbaglio. */
         .tasto-minuto { min-height: 0; }
+        /* La crocetta sull'angolo di una foto era un tasto di 20 punti per
+           15: sul telefono si prendeva la foto invece della crocetta. Il
+           tasto ora e' un quadrato trasparente di 44 punti centrato sulla
+           crocetta, che resta piccola e nello stesso posto (6 punti fuori
+           dall'angolo): la miniatura, di 56 punti, non sparisce sotto un
+           tasto nero grande quasi quanto lei. */
+        .tasto-foto-via {
+            top: -10px; right: -10px;
+            width: 44px; height: 44px;
+            display: flex; align-items: flex-start; justify-content: flex-end;
+            padding: 4px;
+            background: transparent;
+        }
 
         /* I CAMPI NON SCENDONO SOTTO I 16 PIXEL
            Safari su iPhone, quando tocchi un campo scritto piu' piccolo di
@@ -8695,7 +8708,7 @@
                                         <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
                                         <span class="text-[11px] font-bold text-yellow-400 whitespace-nowrap">in turno</span>
                                     </span>` : ''}
-                                ${giorno ? `<button onclick="pulisciGiornoGiornate()" title="Togli il filtro giorno" aria-label="Togli il filtro giorno" class="tasto-icona w-9 h-9 flex-shrink-0 rounded-xl text-white/45 hover:text-white flex items-center justify-center">×</button>` : ''}
+                                ${giorno ? `<button onclick="pulisciGiornoGiornate()" title="Mostra tutti i giorni" aria-label="Mostra tutti i giorni" class="tasto-icona w-9 h-9 flex-shrink-0 rounded-xl text-white/45 hover:text-white flex items-center justify-center">×</button>` : ''}
                             </span>
                         </div>
 
@@ -9053,7 +9066,7 @@
                                         ${formatCurrency(incassoDi(iso))}
                                     </p>` : ''}
                             </div>
-                            <button onclick="toccaGiornoCalendario('${escJs(iso)}')" class="text-gray-400 hover:text-white text-xl leading-none px-2">×</button>
+                            <button onclick="toccaGiornoCalendario('${escJs(iso)}')" title="Chiudi la giornata" aria-label="Chiudi la giornata" class="tasto-icona shrink-0 rounded-xl text-gray-400 hover:text-white text-xl leading-none flex items-center justify-center">×</button>
                         </div>
 
                         <div>
@@ -9120,16 +9133,23 @@
 
                     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-4">
                         <!-- Intestazione con mese precedente e successivo -->
-                        <div class="flex items-center justify-between gap-3">
-                            <button onclick="scorriMeseCalendario(-1)" title="Mese precedente" class="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
-                            <div class="text-center min-w-0">
+                        <!-- A 320 punti la freccia ‹ veniva schiacciata a 18 punti
+                             di larghezza dal titolo, e il conto del mese andava a
+                             capo in cinque righe strette. Le frecce non si
+                             stringono piu' (shrink-0, 44 punti come ogni tasto
+                             icona) e il conto sta sotto, a tutta larghezza. -->
+                        <div class="space-y-1">
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="scorriMeseCalendario(-1)" title="Mese precedente" aria-label="Mese precedente" class="tasto-icona shrink-0 w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">‹</button>
+                            <div class="flex-1 text-center min-w-0">
                                 <p class="text-lg font-black text-gray-900 capitalize leading-tight">${nomeMese(mm)} ${anno}</p>
-                                <p class="text-xs font-bold text-gray-400">${lavorati.length} lavorati · ${festivi.length} festivi · ${recuperi.length} recuperi · ${oreScritte(oreMese)} h</p>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="meseCalendarioOggi()" class="px-3 h-10 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black">Oggi</button>
-                                <button onclick="scorriMeseCalendario(1)" title="Mese successivo" class="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="meseCalendarioOggi()" class="px-2.5 h-10 rounded-lg bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-black">Oggi</button>
+                                <button onclick="scorriMeseCalendario(1)" title="Mese successivo" aria-label="Mese successivo" class="tasto-icona shrink-0 w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 font-black text-gray-700">›</button>
                             </div>
+                        </div>
+                        <p class="text-xs font-bold text-gray-400 text-center">${lavorati.length} lavorati · ${festivi.length} festivi · ${recuperi.length} recuperi · ${oreScritte(oreMese)} h</p>
                         </div>
 
                         ${inSpostamento ? `
@@ -9969,6 +9989,9 @@
         // che non esiste non da' errore - semplicemente non fa niente.
         const CLASSE_MINIATURA = 'rounded-lg border border-gray-200';
         const STILE_MINIATURA = 'width: 3.5rem; height: 3.5rem; object-fit: cover;';
+        // La crocetta che toglie una foto: si vede piccola nell'angolo, come
+        // prima, ma il tasto intorno e' di 44 punti (vedi .tasto-foto-via).
+        const CROCETTA_FOTO = '<span class="bg-gray-900 text-white rounded-xl text-xs font-black px-1.5" aria-hidden="true">×</span>';
 
         // Le foto gia' scattate ma non ancora salvate con la nota.
         function riquadroFotoInAttesa() {
@@ -9979,9 +10002,8 @@
                     ${attesa.map((f, i) => `
                         <span class="relative inline-flex">
                             <img data-foto="attesa:${i}" alt="Foto da allegare" class="${CLASSE_MINIATURA}" style="${STILE_MINIATURA}" />
-                            <button type="button" onclick="togliFotoInAttesa(${i})" aria-label="Togli questa foto"
-                                    class="absolute bg-gray-900 text-white rounded-xl text-xs font-black px-1.5"
-                                    style="top:-6px; right:-6px;">×</button>
+                            <button type="button" onclick="togliFotoInAttesa(${i})" aria-label="Togli questa foto" title="Togli questa foto"
+                                    class="tasto-foto-via absolute">${CROCETTA_FOTO}</button>
                         </span>`).join('')}
                     <span class="text-xs font-bold text-gray-400">${attesa.length === 1 ? 'una foto' : attesa.length + ' foto'} da allegare</span>
                 </div>`;
@@ -10008,9 +10030,8 @@
                         <span class="relative inline-flex">
                             <button type="button" onclick="apriFoto('${escJs(id)}')" aria-label="Guarda la foto allegata"
                                     class="inline-flex">${riquadroFoto(id, CLASSE_MINIATURA, STILE_MINIATURA)}</button>
-                            <button type="button" onclick="staccaFoto('${escJs(n.id)}', '${escJs(id)}')" aria-label="Elimina questa foto"
-                                    class="absolute bg-gray-900 text-white rounded-xl text-xs font-black px-1.5"
-                                    style="top:-6px; right:-6px;">×</button>
+                            <button type="button" onclick="staccaFoto('${escJs(n.id)}', '${escJs(id)}')" aria-label="Elimina questa foto" title="Elimina questa foto"
+                                    class="tasto-foto-via absolute">${CROCETTA_FOTO}</button>
                         </span>`).join('')}
                 </div>`;
         }
