@@ -1473,6 +1473,9 @@
         function fermaAscolti() {
             annullaAscolti.forEach(f => { try { f(); } catch (err) { /* pazienza */ } });
             annullaAscolti = [];
+            // Gli ascolti nuovi ripartono dalla copia in memoria (vedi
+            // L'ELENCO DALLA COPIA IN MEMORIA)
+            if (window.azzeraListeDalServer) window.azzeraListeDalServer();
         }
 
         // Collezioni che hanno gia' consegnato almeno un elenco non vuoto dal server.
@@ -1906,6 +1909,9 @@
 
             annullaAscolti.push(onSnapshot(recordsCol, (snapshot) => {
                 candidati('taxi_records', snapshot);
+                // Dalla copia in memoria, prima del server: si unisce e non
+                // conta (vedi L'ELENCO DALLA COPIA IN MEMORIA)
+                const dalServer = window.listaArrivata('taxi_records', snapshot.metadata.fromCache);
                 // Cartella vuota al primo accesso: si carica quello che c'e' qui
                 if (snapshot.empty && !collezioniConDati['records'] && !snapshot.metadata.fromCache) {
                     migraSulCloud('taxi_records', window.dailyRecords, 'id');
@@ -1916,11 +1922,11 @@
                     snapshot.forEach(doc => {
                         cloudRecords.push({ id: doc.id, ...doc.data() });
                     });
-                    if (cloudRecords.length) collezioniConDati['records'] = true;
+                    if (cloudRecords.length && dalServer) collezioniConDati['records'] = true;
                     // Le corse battute qui e non ancora arrivate lassu' (anche
                     // da una sessione chiusa senza campo) non si perdono: vedi
                     // L'UNIONE nel copione normale.
-                    const uniti = window.unisciConSospesi('taxi_records', 'id', cloudRecords, window.dailyRecords);
+                    const uniti = window.unisciConSospesi('taxi_records', 'id', cloudRecords, window.dailyRecords, !dalServer);
                     uniti.sort(perDataDecrescente);
                     window.dailyRecords = uniti;
                     window.scriviLocale('taxi_records', uniti);
@@ -1934,6 +1940,7 @@
 
             annullaAscolti.push(onSnapshot(shiftsCol, (snapshot) => {
                 candidati('taxi_shifts', snapshot);
+                const dalServer = window.listaArrivata('taxi_shifts', snapshot.metadata.fromCache);
                 if (snapshot.empty && !collezioniConDati['turni'] && !snapshot.metadata.fromCache) {
                     migraSulCloud('taxi_shifts', window.shifts, 'id');
                     return;
@@ -1943,8 +1950,8 @@
                     snapshot.forEach(doc => {
                         cloudShifts.push({ id: doc.id, ...doc.data() });
                     });
-                    if (cloudShifts.length) collezioniConDati['turni'] = true;
-                    const uniti = window.unisciConSospesi('taxi_shifts', 'id', cloudShifts, window.shifts);
+                    if (cloudShifts.length && dalServer) collezioniConDati['turni'] = true;
+                    const uniti = window.unisciConSospesi('taxi_shifts', 'id', cloudShifts, window.shifts, !dalServer);
                     uniti.sort(perDataDecrescente);
                     window.shifts = uniti;
                     window.scriviLocale('taxi_shifts', uniti);
@@ -2764,6 +2771,38 @@
         }
 
         // ============================================================
+        //  L'ELENCO DALLA COPIA IN MEMORIA
+        //  Firestore, prima di parlare col server, risponde con quello che
+        //  ha in memoria: aprendo l'app senza campo e' un elenco vuoto - o
+        //  quasi, perche' dentro ci sono le righe battute in questa
+        //  sessione. Quell'elenco prendeva il posto dell'archivio del
+        //  telefono: battuta una corsa senza campo, a video (e sul disco)
+        //  restava solo lei, e le altre tornavano col server - se tornava.
+        //  Allora, finche' un archivio non ha ricevuto un elenco dal server
+        //  (fromCache falso), un elenco dalla copia in memoria si UNISCE al
+        //  telefono, non lo sostituisce, e non vale come prova che il Cloud
+        //  ha dei dati (cloudOk, collezioniConDati). Si torna da capo a ogni
+        //  aggancio degli ascolti (entrata, cambio di account).
+        //  Non si usa includeMetadataChanges: darebbe anche il passaggio
+        //  dalla copia al server quando le righe non cambiano, ma insieme
+        //  un ridisegno in piu' per ogni scrittura (prima «in sospeso», poi
+        //  «confermata»), il costo che le versioni 113 e 114 hanno tolto.
+        //  Il caso che resta fuori - il server ha esattamente le righe che
+        //  la copia aveva gia' - lascia l'unione accesa fino al prossimo
+        //  cambiamento: tiene qualche riga in piu', non ne toglie.
+        // ============================================================
+        const listeDalServer = {};
+        // Restituisce true se l'archivio ha gia' avuto un elenco dal server
+        // (contando anche questo).
+        function listaArrivata(chiave, daCache) {
+            if (!daCache) listeDalServer[chiave] = true;
+            return !!listeDalServer[chiave];
+        }
+        function azzeraListeDalServer() {
+            Object.keys(listeDalServer).forEach(k => { delete listeDalServer[k]; });
+        }
+
+        // ============================================================
         //  L'UNIONE: QUELLO CHE ARRIVA DAL CLOUD PIU' QUELLO IN ATTESA
         //  Un posto solo, chiamato da tutti gli ascolti. Senza voci in
         //  attesa l'elenco del Cloud passa com'e' (il comportamento di
@@ -2775,11 +2814,21 @@
         //  fatta di la'. Meglio una riga in piu' da togliere a mano che una
         //  corsa persa.
         // ============================================================
-        function unisciConSospesi(chiave, campoId, dalCloud, locale) {
-            const voci = leggiSospesi().per[chiave];
-            const ids = voci ? Object.keys(voci) : [];
-            if (!ids.length) return dalCloud;
+        //  tieniLocali: l'elenco viene dalla copia in memoria di Firestore e
+        //  il server non ha ancora parlato (vedi L'ELENCO DALLA COPIA IN
+        //  MEMORIA): oltre a quanto sopra, restano anche le righe del
+        //  telefono che quell'elenco non ha (tranne le cancellate qui).
+        function unisciConSospesi(chiave, campoId, dalCloud, locale, tieniLocali) {
+            const voci = leggiSospesi().per[chiave] || {};
+            const ids = Object.keys(voci);
             const cid = campoId || 'id';
+            if (tieniLocali) {
+                const ci = new Set((dalCloud || []).map(x => String(x && x[cid])));
+                const restano = (locale || []).filter(x => x && typeof x === 'object'
+                    && !ci.has(String(x[cid])) && !(voci[String(x[cid])] && voci[String(x[cid])][0] === 'd'));
+                dalCloud = (dalCloud || []).concat(restano);
+            }
+            if (!ids.length) return dalCloud;
             // Il contenuto secondo LA FONTE DEL CONTENUTO: la stessa regola
             // della spedizione, cosi' a video c'e' quello che parte.
             const qui = mappaLocaleSospesi(chiave, locale);
@@ -2943,7 +2992,8 @@
         Object.assign(window, {
             testoSospesi, leggiSospesi, contaSospesi, segnoRifiutato, segnaSospeso, segnaSospesi, togliSospesi, segnaCampiCambiati,
             mappaLocaleSospesi, valoriLocaliCampi, unisciConSospesi, unisciCampiSospesi, decidiAccount, adottaAccount,
-            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare, fermaSospesi, riprovaFerme, elencoFerme
+            segnaTuttoIlLocale, risolviCandidati, contaSospesiDaPortare, fermaSospesi, riprovaFerme, elencoFerme,
+            listaArrivata, azzeraListeDalServer
         });
 
         // Quanto spazio prendono le strisce aperte: si misura, non si indovina.
@@ -14909,7 +14959,11 @@
             // server, senza toccare niente.
             if (vuoto && daCache) return 'cache';
 
-            if (!vuoto) cloudOk[nome] = true;
+            // Prima che il server abbia parlato, un elenco dalla copia in
+            // memoria si unisce al telefono e non accende la spia (vedi
+            // L'ELENCO DALLA COPIA IN MEMORIA).
+            const dalServer = listaArrivata(chiave, daCache);
+            if (!vuoto && dalServer) cloudOk[nome] = true;
 
             // Cartella vuota sul Cloud ma roba qui: si porta su, e non si
             // tocca niente finche' non si sa che il Cloud accetta i dati.
@@ -14948,7 +15002,7 @@
             }
 
             // Le modifiche fatte qui e non ancora confermate restano (vedi L'UNIONE)
-            dalCloud = unisciConSospesi(chiave, campoId, dalCloud, window[nome] || []);
+            dalCloud = unisciConSospesi(chiave, campoId, dalCloud, window[nome] || [], !dalServer);
             if (ordina) dalCloud.sort(ordina);
             window[nome] = dalCloud;
             window.scriviLocale(chiave, dalCloud);
