@@ -8081,7 +8081,7 @@
         // non deve far salvare d'un colpo la stessa cifra riscritta dopo.
         window.corsaStranaInAttesa = null;
         return `
-            <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5">
+            <div class="bg-white rounded-[1.25rem] shadow-sm border border-gray-100 p-4 space-y-3.5" data-scheda-corsa>
                 <label for="corsa-lampo" class="etichetta block">Incasso corsa</label>
                 <div class="flex items-baseline gap-2 border-b-2 border-gray-200 focus-within:border-green-600 pb-2.5 transition-colors">
                     <input type="text" inputmode="decimal" id="corsa-lampo" placeholder="0,00"
@@ -12039,6 +12039,64 @@
                 const nuovo = document.getElementById('corsa-lampo');
                 if (nuovo) { nuovo.value = ''; nuovo.focus(); }
             }, 0);
+        }
+
+        // ============================================================
+        //  LA TASTIERA NON COPRE I TASTI DEL METODO
+        //  Sull'iPhone, toccando «Incasso corsa», la tastiera sale e copre
+        //  proprio i quattro tasti Contanti / POS / Satispay / App: si scrive
+        //  la cifra e poi bisogna chiudere la tastiera per trovare dove
+        //  confermarla. Safari porta in vista il campo, non quello che gli sta
+        //  sotto. Qui, quando il campo prende il fuoco, la scheda intera sale
+        //  in cima allo schermo (8 punti di margine): campo e tasti stanno
+        //  insieme sopra la tastiera.
+        //  QUANDO SI SPOSTA, E QUANDO NO
+        //  Solo al fuoco (anche quello che torna da solo dopo una corsa) e
+        //  quando cambia l'area visibile (visualViewport: la tastiera che
+        //  finisce di salire, la barra dei suggerimenti che compare). Mai
+        //  mentre si scrive: nessun ascolto sui tasti. E se la scheda e' gia'
+        //  in cima non si muove niente, cosi' la tastiera che cambia altezza
+        //  non fa ballare la pagina.
+        //  Solo dove c'e' una tastiera sullo schermo (dito, o schermo stretto):
+        //  sul Mac la pagina non deve saltare a ogni clic nel campo.
+        // ============================================================
+        function portaInCimaSchedaCorsa() {
+            const campo = document.getElementById('corsa-lampo');
+            if (!campo || document.activeElement !== campo) return;
+            const tocco = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || window.innerWidth < 768;
+            if (!tocco) return;
+            const scheda = campo.closest('[data-scheda-corsa]');
+            if (!scheda) return;
+            // La cima di quello che si vede: con la tastiera aperta Safari
+            // puo' aver gia' spostato l'area visibile dentro la pagina.
+            const vv = window.visualViewport;
+            const cima = vv ? vv.offsetTop : 0;
+            const spostamento = scheda.getBoundingClientRect().top - cima - 8;
+            if (Math.abs(spostamento) < 2) return;
+            // Scorre il primo contenitore che scorre davvero: di solito il
+            // contenuto principale, altrimenti la pagina.
+            let scorre = scheda.parentElement;
+            while (scorre && scorre !== document.body) {
+                const oy = getComputedStyle(scorre).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && scorre.scrollHeight > scorre.clientHeight) break;
+                scorre = scorre.parentElement;
+            }
+            if (!scorre || scorre === document.body) scorre = document.scrollingElement || document.documentElement;
+            scorre.scrollTop += spostamento;
+        }
+        window.portaInCimaSchedaCorsa = portaInCimaSchedaCorsa;
+        // Un ascolto solo, sul documento: il campo rinasce a ogni disegno.
+        // Si aspetta un fotogramma, perche' al momento del fuoco Safari non ha
+        // ancora fatto il suo spostamento e la misura sarebbe vecchia.
+        document.addEventListener('focusin', (e) => {
+            if (e.target && e.target.id === 'corsa-lampo') requestAnimationFrame(portaInCimaSchedaCorsa);
+        });
+        if (window.visualViewport) {
+            let attesaVista = 0;
+            window.visualViewport.addEventListener('resize', () => {
+                cancelAnimationFrame(attesaVista);
+                attesaVista = requestAnimationFrame(portaInCimaSchedaCorsa);
+            });
         }
 
         function addCorsa(e) {
