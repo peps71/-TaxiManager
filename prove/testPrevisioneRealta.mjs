@@ -1,4 +1,10 @@
-// La previsione vale finche' non arriva il conto; poi comanda il conto.
+// La previsione vale finche' il conto vero non la supera; e in ogni caso si
+// spalma su TUTTO l'anno (versione 177: «se e' a budget, e' a budget»).
+// Prima ogni pagamento apriva un periodo suo, un mese o un anno a partire dal
+// giorno pagato, e il costo del giorno saltava dal giorno del pagamento: una
+// rata da 975,60 su una voce mensile da 166 faceva +26 euro al giorno per un
+// mese (sezione F). Adesso il pagato si confronta col budget dell'anno solare,
+// come fa il conguaglio, e la cifra piu' alta si divide per i giorni dell'anno.
 // Le prove girano da dove sta il repository, non da un percorso fisso: cosi'
 // funzionano anche su un'altra macchina. Il motore del browser si cerca dove
 // e' installato, oppure lo si dice con PLAYWRIGHT=/percorso/index.mjs.
@@ -47,15 +53,17 @@ console.log('\n  A) nessun pagamento: vale la previsione');
 await setup([{ slug:'assic', nome:'Assicurazione auto', importo:1387, unita:'anno', tipo:'bolletta', dataInizio:'', dataFine:'' }], []);
 prova('15 marzo 2026', (await q('2026-03-15')).reale, 1387/365);
 
-console.log('\n  B) rinnovo il 10 ottobre 2026 a 1.500');
+console.log('\n  B) rinnovo il 10 ottobre 2026 a 1.500: pesa su tutto il 2026');
 await setup(
   [{ slug:'assic', nome:'Assicurazione auto', importo:1387, unita:'anno', tipo:'bolletta', dataInizio:'', dataFine:'' }],
   [{ data:'2026-10-10', categoria:'Assicurazione auto', metodo:'Bonifico', importo:1500 }]);
-prova('9 ottobre 2026 (giorno prima)',   (await q('2026-10-09')).reale, 1387/365);
+prova('15 marzo 2026 (prima del pagamento)', (await q('2026-03-15')).reale, 1500/365);
+prova('9 ottobre 2026 (giorno prima)',   (await q('2026-10-09')).reale, 1500/365);
 prova('10 ottobre 2026 (giorno stesso)', (await q('2026-10-10')).reale, 1500/365);
-prova('1 gennaio 2027 (annata in corso)',(await q('2027-01-01')).reale, 1500/365);
-prova('9 ottobre 2027 (ultimo coperto)', (await q('2027-10-09')).reale, 1500/365);
-prova('10 ottobre 2027 (scaduta, non rinnovata)', (await q('2027-10-10')).reale, 1500/365);
+prova('31 dicembre 2026',                (await q('2026-12-31')).reale, 1500/365);
+// nel 2027 non c'e' (ancora) nessun pagamento: vale il budget
+prova('1 gennaio 2027 (anno nuovo, niente pagato)', (await q('2027-01-01')).reale, 1387/365);
+prova('10 ottobre 2027 (non rinnovata)', (await q('2027-10-10')).reale, 1387/365);
 prova('e la PREVISIONE resta quella scritta', (await q('2027-01-01')).previsto, 1387/365);
 
 console.log('\n  B2) un pagamento PIU\' BASSO del budget non deve tirare giu\' la giornata');
@@ -68,13 +76,19 @@ await setup(
   [{ data:'2026-05-18', categoria:'Tasse e Contributi - INPS', metodo:'Bonifico', importo:6000 }]);
 prova('budget 4.800, pagati 6.000: sale alla spesa vera', (await q('2026-06-15')).reale, 6000/365);
 
-console.log('\n  C) due rate da 750: la seconda ricalcola tutta l\'annata');
+console.log('\n  C) due rate da 750 in due anni diversi: ogni anno resta al budget');
 await setup(
   [{ slug:'assic', nome:'Assicurazione auto', importo:1387, unita:'anno', tipo:'bolletta', dataInizio:'', dataFine:'' }],
   [{ data:'2026-10-10', categoria:'Assicurazione auto', metodo:'Bonifico', importo:750 },
    { data:'2027-04-10', categoria:'Assicurazione auto', metodo:'Bonifico', importo:750 }]);
-prova('10 ottobre 2026 (ricalcolato a 1.500)', (await q('2026-10-10')).reale, 1500/365);
-prova('1 gennaio 2027',                        (await q('2027-01-01')).reale, 1500/365);
+prova('10 ottobre 2026 (750 pagati nel 2026)', (await q('2026-10-10')).reale, 1387/365);
+prova('1 gennaio 2027 (750 pagati nel 2027)',  (await q('2027-01-01')).reale, 1387/365);
+// due rate nello stesso anno si sommano: 750 + 750 = 1.500, oltre il budget
+await setup(
+  [{ slug:'assic', nome:'Assicurazione auto', importo:1387, unita:'anno', tipo:'bolletta', dataInizio:'', dataFine:'' }],
+  [{ data:'2026-04-10', categoria:'Assicurazione auto', metodo:'Bonifico', importo:750 },
+   { data:'2026-10-10', categoria:'Assicurazione auto', metodo:'Bonifico', importo:750 }]);
+prova('due rate nel 2026: 1.500 su tutto l\'anno', (await q('2026-02-01')).reale, 1500/365);
 // e con una rata sola, prima che arrivi la seconda, non deve dimezzare
 await setup(
   [{ slug:'assic', nome:'Assicurazione auto', importo:1387, unita:'anno', tipo:'scadenza', dataInizio:'', dataFine:'' }],
@@ -94,6 +108,24 @@ prova('31 gennaio: 200 spesi, sotto',    (await q('2026-01-31')).reale, prev);
 const r10 = await q('2026-03-10');
 prova('10 marzo: 3.400 spesi in 69 giorni', r10.reale, 3400/69);
 prova('e la previsione resta 6.000/365',    r10.previsto, prev);
+
+console.log('\n  F) il caso vero: voce mensile da 166, rata da 975,60 il 31 ottobre');
+{
+  const rate = [];
+  for (let m = 1; m <= 9; m++) rate.push({ data: `2026-${String(m).padStart(2,'0')}-${m === 2 ? '28' : '30'}`, categoria:'Leasing', metodo:'POS', importo:166 });
+  rate.push({ data:'2026-10-31', categoria:'Leasing', metodo:'POS', importo:975.60 });
+  await setup([{ slug:'leasing', nome:'Leasing', importo:166, unita:'mese', tipo:'scadenza', dataInizio:'', dataFine:'' }], rate);
+  const pagato = 9 * 166 + 975.60;          // 2.469,60: piu' dei 1.992 a budget
+  const giusto = pagato / 365;
+  const q30 = (await q('2026-10-30')).reale, q31 = (await q('2026-10-31')).reale;
+  prova('30 ottobre', q30, giusto);
+  prova('31 ottobre: nessun salto dal giorno prima', q31, giusto);
+  prova('10 febbraio: lo stesso, tutto l\'anno', (await q('2026-02-10')).reale, giusto);
+  // e una voce mensile pagata giusta non cambia nulla: il budget dell'anno
+  await setup([{ slug:'leasing', nome:'Leasing', importo:166, unita:'mese', tipo:'scadenza', dataInizio:'', dataFine:'' }],
+    [{ data:'2026-10-31', categoria:'Leasing', metodo:'POS', importo:166 }]);
+  prova('voce mensile pagata giusta: 166 x 12 / 365', (await q('2026-10-31')).reale, 166 * 12 / 365);
+}
 
 console.log('\n  E) il conguaglio e la scheda del budget parlano di PREVISIONE');
 // pagamento in una data GIA' PASSATA: il conguaglio non conta i movimenti

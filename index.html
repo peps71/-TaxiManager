@@ -2596,7 +2596,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 176;
+        const VERSIONE_APP = 177;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -15756,11 +15756,11 @@
 
         // ============================================================
         //  LA PREVISIONE, E IL CONTO VERO
-        //  Una voce di budget e' una previsione: vale finche' non arriva il
-        //  conto. Da quel momento comanda il conto.
-        //  L'assicurazione la rinnovi il 10 ottobre e ti costa 1.500 invece
-        //  dei 1.387 che avevi previsto: da quel giorno, e fino al 10 ottobre
-        //  dell'anno dopo, la giornata deve pesare 4,11 e non 3,80. Non e' il
+        //  Una voce di budget e' una previsione, spalmata su tutto l'anno.
+        //  Il conto vero comanda solo quando nell'anno la supera, e anche
+        //  allora si spalma su tutto l'anno (versione 177).
+        //  L'assicurazione ti costa 1.500 invece dei 1.387 che avevi previsto:
+        //  ogni giorno di quell'anno deve pesare 4,11 e non 3,80. Non e' il
         //  budget che va corretto a mano - quello resta la tua previsione, ed
         //  e' con quella che il conguaglio ti dice di quanto hai sforato.
         //
@@ -15954,20 +15954,50 @@
 
             if (tipoVoce(v) === 'consumo') return quotaVoceConsumo(v, g, giorniMese);
 
-            const annata = annataDelGiorno(v, g) || periodoDaScadenza(v, g);
-            if (!annata) return quotaVocePrevista(v, g, giorniMese);
-            // IL BUDGET E' IL PAVIMENTO, NON IL SOFFITTO
-            // Il pagamento vero comanda quando SUPERA la previsione, non
-            // quando sta sotto. Prima comandava sempre, e questo tirava giu'
-            // la giornata senza motivo: una voce da 4.800 € l'anno con 2.523 €
-            // pagati a ottobre faceva 6,91 al giorno invece di 13,15 - ma quei
-            // soldi li devi tirare fuori lo stesso, e di qui a dicembre
-            // arrivano. Peggio ancora con le rate: pagata la prima di due, la
-            // giornata dimezzava fino all'arrivo della seconda.
-            // Se poi a fine anno il budget risulta piu' alto del dovuto, a
-            // dirlo c'e' il conguaglio: e' il suo mestiere.
-            const previstoPeriodo = importoDi(v.importo);
-            return Math.max(previstoPeriodo, annata.totale) / annata.giorni;
+            // A BUDGET VUOL DIRE SPALMATA SU TUTTO L'ANNO (versione 177)
+            // Una voce a budget pesa ogni giorno dell'anno allo stesso modo,
+            // comunque e ogni volta che la paghi: il budget dell'anno diviso i
+            // giorni in cui la voce vale. Pagare non sposta niente.
+            // Se pero' nell'anno paghi PIU' del budget, il costo vero e' piu'
+            // alto: allora conta il pagato, e anche lui si spalma su tutto
+            // l'anno, non sul mese o sul periodo del pagamento.
+            // Prima ogni pagamento apriva un periodo suo (un mese per le voci
+            // «al mese», un anno per quelle «all'anno») e se superava il
+            // previsto di quel periodo la differenza pesava solo li': una rata
+            // grossa su una voce mensile faceva salire il costo del giorno di
+            // 26 € per un mese intero, dal giorno del pagamento. Il titolare ha
+            // chiesto l'opposto: «se e' a budget, e' a budget».
+            const a = annoDellaVoce(v, g.slice(0, 4));
+            if (!a.giorni) return quotaVocePrevista(v, g, giorniMese);
+            return Math.max(a.previsto, a.pagato) / a.giorni;
+        }
+
+        // Il budget di una voce nell'anno, quanto e' stato pagato davvero
+        // nello stesso anno solare, e in quanti giorni la voce vale. Si conta
+        // una volta per voce e per anno: la giornata la chiede 365 volte.
+        const annoVoceCache = new Map();
+        let annoVoceVersione = '';
+        function annoDellaVoce(v, anno) {
+            const versione = (window.versioneDati || 0) + ':' + (window.dailyRecords || []).length
+                            + ':' + elencoVociFisse().length;
+            if (annoVoceVersione !== versione) { annoVoceCache.clear(); annoVoceVersione = versione; }
+            const chiave = [anno, v && v.slug, v && v.nome, v && v.unita, v && v.importo,
+                            v && v.dataInizio, v && v.dataFine].join('|');
+            if (annoVoceCache.has(chiave)) return annoVoceCache.get(chiave);
+            const da = `${anno}-01-01`, a = `${anno}-12-31`;
+            const previsto = budgetVocePeriodo(v, da, a).totale;
+            let giorni = 0;
+            perOgniGiorno(da, a, (iso) => {
+                if (v.dataInizio && iso < v.dataInizio) return;
+                if (v.dataFine && iso > v.dataFine) return;
+                giorni++;
+            });
+            const pagato = Math.round(pagamentiVoce(v)
+                .filter(x => String(x.data).slice(0, 4) === String(anno))
+                .reduce((t, x) => t + x.importo, 0) * 100) / 100;
+            const risultato = { previsto, pagato, giorni };
+            annoVoceCache.set(chiave, risultato);
+            return risultato;
         }
 
         // UNA SPESA CHE SI ACCUMULA (il carburante)
@@ -16342,17 +16372,14 @@
                 return { daPrevisione: false, quota: reale,
                          testo: `hai già superato la previsione: ${formatCurrency(speso)} spesi nel ${anno}` };
             }
-            const annata = annataDelGiorno(v, oggi) || periodoDaScadenza(v, oggi);
-            if (!annata) return { daPrevisione: true, quota: previsto, testo: 'la tua previsione' };
-            if (annata.previsto) {
-                return { daPrevisione: false, quota: reale,
-                         testo: `previsione ripartita dalla scadenza del ${ggMmAaaa(annata.da)}, fino al ${ggMmAaaa(annata.ultimoGiorno)}` };
+            const anno = oggi.slice(0, 4);
+            const a = annoDellaVoce(v, anno);
+            if (!(a.pagato > a.previsto)) {
+                return { daPrevisione: true, quota: reale,
+                         testo: `il budget del ${anno} (${formatCurrency(a.previsto)}), spalmato su tutto l'anno` };
             }
-            const scaduta = oggi > annata.ultimoGiorno;
             return { daPrevisione: false, quota: reale,
-                     testo: `${formatCurrency(annata.totale)} pagati${annata.rate > 1 ? ` in ${annata.rate} rate` : ''} il ${ggMmAaaa(annata.da)}`
-                            + (scaduta ? ', periodo finito: resta questa finché non registri il rinnovo'
-                                       : `, coprono fino al ${ggMmAaaa(annata.ultimoGiorno)}`) };
+                     testo: `${formatCurrency(a.pagato)} pagati nel ${anno}, più dei ${formatCurrency(a.previsto)} a budget: anche la differenza è spalmata su tutto l'anno` };
         }
 
         // LA SCADENZA CHE SI AVVICINA
