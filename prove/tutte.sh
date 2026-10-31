@@ -86,6 +86,7 @@ titolo "il logo";                 giro testLogo.mjs
 titolo "annullare un modulo";     giro testAnnulla.mjs
 titolo "annulla dopo corsa e spesa veloci"; giro testAnnullaVeloce.mjs
 titolo "campi, tastiera e tasti sull'iPhone"; giro testIphone.mjs
+titolo "tasti sopra l'importo";        giro testTastiSopra.mjs
 titolo "rendimento vuoto e date storte"; giro testRendimento.mjs
 titolo "turno di notte e cambio d'ora"; giro testNotte.mjs
 titolo "ore del turno";           giro testOreTurno.mjs
