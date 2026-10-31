@@ -13194,13 +13194,16 @@
             if (!categoria) { showToast('Scegli che spesa è.'); return; }
             // Le spese si registrano anche nei giorni di riposo: l'auto costa
             // lo stesso, e il conto della giornata lo dice gia' a chiare lettere.
-            const data = giornoGiornate() || giornoDiLavoroAdesso();
+            const sceltoSpesa = giornoGiornate();
+            const annoNuovoSpesa = giornoAnnoNuovo(sceltoSpesa);
+            const data = annoNuovoSpesa || sceltoSpesa || giornoDiLavoroAdesso();
 
             const conFattura = !!(document.getElementById('spesa-lampo-fattura') || {}).checked;
 
             const record = { id: nuovoId(), data, tipo: 'USCITA', categoria, metodo, importo, ora: oraDiAdesso() };
             if (conFattura) record.fattura = true;
             window.saveRecordToCloud(record);
+            if (annoNuovoSpesa) passaAllAnnoNuovo(annoNuovoSpesa);
             window.ultimoDataUscita = data;
             window.ultimaCategoriaUscita = categoria;
             window.ultimoMetodoUscita = metodo;
@@ -13216,7 +13219,7 @@
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
             // showToast scrive con textContent: qui esc() farebbe vedere «&amp;»
             // al posto di «&» nel nome della spesa.
-            showToast(`${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`, null,
+            showToast(`${annoNuovoSpesa ? 'Anno nuovo: la spesa va sul ' + ggMmAaaa(data) + '. ' : ''}${categoria} ${formatCurrency(importo)} · ${metodo}${conFattura ? ' · con fattura' : ''} — spese di giornata ${formatCurrency(totale)}`, null,
                 () => annullaMovimentoVeloce(record.id, 'Spesa', 'spesa-lampo'));
             renderContent();
             setTimeout(() => {
@@ -13304,7 +13307,9 @@
                 campo.focus();
                 return;
             }
-            const data = giornoGiornate() || giornoDiLavoroAdesso();
+            const sceltoCorsa = giornoGiornate();
+            const annoNuovoCorsa = giornoAnnoNuovo(sceltoCorsa);
+            const data = annoNuovoCorsa || sceltoCorsa || giornoDiLavoroAdesso();
             const riposo = giornataNonLavorata(data);
             if (riposo) {
                 nascondiAvvisoCorsaStrana();
@@ -13340,6 +13345,7 @@
                 ora: oraDiAdesso()
             };
             window.saveRecordToCloud(record);
+            if (annoNuovoCorsa) passaAllAnnoNuovo(annoNuovoCorsa);
             window.ultimoDataCorsa = data;
             window.ultimoMetodoCorsa = metodo;
             try { localStorage.setItem('taxi_ultimo_metodo_corsa', metodo); } catch (err) { /* pazienza */ }
@@ -13347,7 +13353,7 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'ENTRATA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`, null,
+            showToast(`${annoNuovoCorsa ? 'Anno nuovo: la corsa va sul ' + ggMmAaaa(data) + '. ' : ''}${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`, null,
                 () => annullaMovimentoVeloce(record.id, 'Corsa', 'corsa-lampo'));
             renderContent();
             // Il campo torna vuoto e tiene il cursore: la corsa dopo si scrive
@@ -14207,6 +14213,38 @@
             if (vivo && String(vivo.data) === spostaGiorno(oggi, -1)
                 && String(vivo.data).slice(0, 4) === oggi.slice(0, 4)) return String(vivo.data);
             return oggi;
+        }
+
+        // CAPODANNO CON L'APP RIMASTA APERTA
+        // Qui sopra c'e' il caso dell'app riaperta dopo mezzanotte. Ma se l'app
+        // e' rimasta aperta dalle 23 del 31/12, il giorno scelto nella scheda e'
+        // ancora il 31 e l'anno guardato il vecchio: la corsa dell'1:30 finiva
+        // sul 31/12, cioe' nell'anno di esercizio sbagliato (per cassa e'
+        // dell'anno nuovo). Se il giorno scelto e' proprio quello del turno in
+        // corso e sta nell'anno prima di oggi, la corsa o la spesa veloce va su
+        // oggi. Un giorno dell'anno vecchio scelto a mano per un'altra ragione
+        // (un turno gia' finito, una corsa dimenticata) non si tocca: la regola
+        // scatta solo col turno ancora vivo.
+        function giornoAnnoNuovo(scelto) {
+            const oggi = oggiISO();
+            const vivo = turnoVivoAdesso();
+            if (scelto && vivo && String(vivo.data) === scelto
+                && scelto.slice(0, 4) !== oggi.slice(0, 4)) return oggi;
+            return '';
+        }
+
+        // Dopo averci scritto sopra, la scheda passa all'anno nuovo e a oggi:
+        // altrimenti la riga appena registrata starebbe in un anno che non si
+        // sta guardando, e la si ribatterebbe.
+        function passaAllAnnoNuovo(oggi) {
+            window.annoScelto = oggi.slice(0, 4);
+            ricordaGiornoGiornate(oggi);
+            window.dashGiorno = null;
+            window.dashMese = null;
+            window.filterGiornoUscite = null;
+            window.giornataAperta = null;
+            window.annoScadenze = null;
+            if (typeof renderNav === 'function') setTimeout(renderNav, 0);
         }
 
         // Il giorno scelto nella scheda Giornate. Mai scelto (null) = oggi, che e'
