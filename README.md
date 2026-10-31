@@ -234,9 +234,11 @@ esempio da un backup rovinato — si mette da parte senza fermare le altre, e si
 Un Firebase finto (`prove/_finto/`) che non apre connessioni permette di provare il
 telefono senza campo, il server che rifiuta, una migrazione interrotta e un altro account.
 Prove nuove: `testSospesi`, `testOffline` (sulla versione 175 falliva in 37 punti),
-`testCspViva` allargata. Altre prove per le ultime correzioni (righe ferme, cambio di
-account, Capodanno, il messaggio sopra la tastiera) arrivano con la versione successiva:
-qui sono state verificate con script a parte.
+`testAccount`, `testSpedizione`, `testRifiuti`, `testIphone`, `testAnnullaVeloce`,
+`testRendimento`, `testNotte`, e `testCspViva` allargata: ognuna fallisce sulla versione di
+prima. E tre prove vecchie dipendevano dall'ora in cui giravano: `testOggi` e
+`testTurnoChiuso` fallivano fra mezzanotte e le due di Roma, `testConfronto` l'ultimo
+giorno del mese. Anche sulla 175: erano le prove, non l'app.
 
 ### Da provare sull'iPhone vero
 
