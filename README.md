@@ -148,6 +148,41 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## I tasti del metodo sopra l'importo (versione 178)
+
+Sull'iPhone vero, scrivendo l'incasso, la tastiera copriva Contanti, POS, Satispay e
+App/Voucher: bisognava chiuderla con ✓ per trovare dove confermare. La versione 176
+provava a far salire la scheda in cima quando si tocca il campo, e in Chromium funzionava;
+sull'iPhone no, perché Safari decide da solo dove portare il campo e lo scorrimento chiesto
+dalla pagina non scatta. Le prove non potevano vederlo: la tastiera vera c'è solo sul
+telefono.
+
+### La regola che non dipende dal browser
+
+Con la tastiera aperta **ogni** telefono — iPhone o Android — porta il campo appena sopra
+di lei. Quello che sta **sotto** il campo finisce coperto; quello che sta **sopra** resta in
+vista. Quindi la scheda adesso è fatta così:
+
+- **Incasso corsa**: i quattro tasti in alto, sotto la cifra. Si scrive la cifra e si tocca
+  il metodo come prima: cambia solo dove stanno i tasti.
+- La domanda «2.350,00 € per una corsa sola? Tocca di nuovo…» sta fra i tasti e la cifra,
+  non sotto: sotto sarebbe finita anche lei dietro la tastiera.
+- **Spesa veloce**: tipo di spesa, «Con fattura», i cinque tasti, e la cifra per ultima.
+
+Tasti e cifra insieme occupano circa 205 punti: ci stanno sopra la tastiera anche
+sull'iPhone più piccolo (lo SE ne lascia libera circa il 50% in più) e sui telefoni
+Android. Lo scorrimento della versione 176 resta: dove funziona (Android, Chromium) porta
+la scheda in cima, dove non funziona non serve più.
+
+### Le prove
+
+`prove/testTastiSopra.mjs` misura com'è fatta la scheda, non dove scorre la pagina: i tasti
+della corsa e della spesa sopra la cifra, la domanda sulla corsa in mezzo, a 390, 360 e 320
+punti. Sulla versione 177 fallisce: 0 tasti su 4 sopra la cifra.
+
+**Da provare sul telefono**, iPhone e Android: toccare l'incasso, scrivere una cifra, e
+vedere i quattro tasti sopra la tastiera senza chiuderla.
+
 ## A budget vuol dire spalmata su tutto l'anno (versione 177)
 
 Il 31 ottobre il costo del giorno è salito di colpo da 94 a 120 €, senza una spesa nuova
