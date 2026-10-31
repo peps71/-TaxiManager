@@ -61,7 +61,7 @@ se sta altrove: `PLAYWRIGHT=/percorso/playwright/index.mjs sh prove/tutte.sh`.
 | `troncati.mjs` | nessun testo e nessuna cifra tagliata con i puntini, a 320, 390 e 768 px di larghezza |
 | `impronta.mjs` | salva l'HTML esatto delle 14 viste: serve a confrontare prima e dopo un rimaneggiamento |
 | `testScadenze.mjs` | la «prossima» è la più vicina, non la più lontana |
-| `testSpalmate.mjs` | le spese a budget non pesano sul giorno in cui le paghi |
+| `testSpalmate.mjs` | le spese a budget non pesano sul giorno in cui le paghi; la spiegazione «già a budget, spalmati su tutto l'anno» sta nel dettaglio della giornata in Andamento (dalla versione 179 non più nella scheda nera di «Oggi») |
 | `testCoperto.mjs` | l'occhio copre il totale e **solo** quello |
 | `testSpazio.mjs` | archiviare un anno: prima il file, poi la cancellazione, e solo se confermi |
 | `mediaAltre.mjs` | somma e divisore della media guardano la stessa finestra |

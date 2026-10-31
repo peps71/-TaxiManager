@@ -2596,7 +2596,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 178;
+        const VERSIONE_APP = 179;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -9972,10 +9972,11 @@
                             <p class="text-xs font-medium text-white/35 mt-0.5">
                                 ${turniLavorati.length} ${turniLavorati.length === 1 ? 'turno' : 'turni'} · ${oreScritte(oreTot)} h${kmTot ? ' · ' + numeroIT(kmTot) + ' km' : ''}
                             </p>` : ''}
-                        ${spalm && spalm.pagateOggiABudget > 0 ? `
-                            <p class="text-[11px] font-medium text-white/35 mt-1.5 leading-relaxed">
-                                ${formatCurrency(spalm.pagateOggiABudget)} pagati oggi sono già a budget: non pesano su questa giornata, sono spalmati su tutto l'anno.
-                            </p>` : ''}
+                        <!-- Qui c'era «X € pagati oggi sono già a budget: non pesano su
+                             questa giornata…». Tolta su richiesta del titolare (versione
+                             179): ripeteva quello che il costo del giorno gia' fa, e
+                             allungava la scheda proprio nei giorni delle scadenze. La
+                             stessa frase resta nel dettaglio della giornata in Andamento. -->
 
                         <div class="flex mt-4 pt-3.5 border-t border-white/10">
                             <div class="flex-1 min-w-0" ${costoPieno

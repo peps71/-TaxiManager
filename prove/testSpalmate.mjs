@@ -77,11 +77,13 @@ await p.waitForTimeout(400);
 // giorno in cui la paghi.
 const video = await p.evaluate(() => {
   const t = document.getElementById('main-container').innerText;
-  return { spese: (t.match(/(?:COSTO GIORNO|SPESE)\s+(\u2212[\d.,]+)/i) || [])[1] || '?', aBudget: /a budget/.test(t), nota: /spalmat/i.test(t) };
+  return { spese: (t.match(/(?:COSTO GIORNO|SPESE)\s+(\u2212[\d.,]+)/i) || [])[1] || '?' };
 });
 console.log(`\n  testata «Oggi» del giorno della rata: costo ${video.spese}`);
-console.log(`  marchio «a budget» sulla riga: ${video.aBudget ? 'sì' : 'NO ***'}`);
-console.log(`  spiegazione dello spalmare: ${video.nota ? 'sì' : 'NO ***'}`);
+// La frase «X € pagati oggi sono gia' a budget…» nella scheda nera di «Oggi» e'
+// stata tolta su richiesta del titolare (versione 179): era una ripetizione.
+// La spiegazione resta nel dettaglio della giornata in Andamento, ed e' li'
+// che si controlla, piu' sotto.
 const atteso = '−' + quota.toFixed(2).replace('.', ',');
 const beneVideo = video.spese.replace(/\s/g, ' ').includes(atteso);
 console.log(`  ${beneVideo ? 'ok ' : '***'} la testata mostra ${atteso}${beneVideo ? '' : '  *** SBAGLIATO ***'}`);
@@ -89,10 +91,14 @@ console.log(`  ${beneVideo ? 'ok ' : '***'} la testata mostra ${atteso}${beneVid
 // e il riepilogo giornaliero in Andamento deve dire lo stesso numero
 await p.evaluate(g => { switchTab('dashboard'); cambiaPeriodoDash('giorno'); setDashGiorno(g); }, GIORNO_RATA);
 await p.waitForTimeout(400);
-const vid2 = await p.evaluate(() => {
+const vid2Tutto = await p.evaluate(() => {
   const t = document.getElementById('main-container').innerText;
-  return (t.match(/(?:COSTO GIORNO|SPESE)\s+(\u2212[\d.,]+)/i) || [])[1] || '?';
+  return { costo: (t.match(/(?:COSTO GIORNO|SPESE)\s+(\u2212[\d.,]+)/i) || [])[1] || '?',
+           aBudget: /a budget/.test(t), nota: /spalmat/i.test(t) };
 });
+const vid2 = vid2Tutto.costo;
+tutto &= ok('Andamento: dice che la rata e\' gia\' a budget', vid2Tutto.aBudget ? 1 : 0, 1);
+tutto &= ok('Andamento: e che e\' spalmata su tutto l\'anno', vid2Tutto.nota ? 1 : 0, 1);
 console.log(`  riepilogo di Andamento: costo ${vid2}`);
 const bene2 = vid2.replace(/\s/g, ' ').includes(atteso);
 console.log(`  ${bene2 ? 'ok ' : '***'} le due schermate dicono lo stesso numero${bene2 ? '' : '  *** SBAGLIATO ***'}`);
