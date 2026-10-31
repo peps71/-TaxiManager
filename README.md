@@ -148,6 +148,50 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## A budget vuol dire spalmata su tutto l'anno (versione 177)
+
+Il 31 ottobre il costo del giorno è salito di colpo da 94 a 120 €, senza una spesa nuova
+fuori budget. Quel giorno c'erano quattro scadenze a budget, 975,60 € in tutto.
+
+### Perché saliva
+
+Ogni pagamento di una voce a budget apriva **un periodo suo**, a partire dal giorno pagato:
+un mese per le voci «al mese», un anno per quelle «all'anno». Se il pagamento superava il
+previsto di quel periodo, la differenza pesava **solo lì**. Una rata grossa su una voce
+mensile — una cosa annuale pagata in una volta, o più mesi insieme — faceva salire il
+costo del giorno di decine di euro dal giorno del pagamento, per un mese, e poi lo faceva
+scendere. Rifatto con una voce da 166 € al mese e una rata da 975,60 €: 9,74 € al giorno il
+30 ottobre, 35,85 € il 31.
+
+### La regola adesso
+
+**Se è a budget, è a budget.** Una voce pesa ogni giorno dell'anno allo stesso modo,
+comunque e ogni volta che la paghi:
+
+- se nell'anno paghi **quanto** il budget o **meno**, pesa il budget dell'anno diviso i
+  giorni dell'anno (una voce da 166 € al mese: 166 × 12 / 365 = 5,46 € al giorno, anche a
+  febbraio);
+- se nell'anno paghi **più** del budget, pesa il pagato, e anche la differenza si spalma
+  **su tutto l'anno**, non sul mese del pagamento.
+
+L'«anno» è quello del calendario, lo stesso del conguaglio e delle tasse: un rinnovo pagato
+a ottobre pesa su tutto quell'anno; l'anno dopo, finché non paghi, vale il budget. La
+scheda del budget dice per ogni voce quale delle due cifre comanda: «il budget del 2026,
+spalmato su tutto l'anno» oppure «2.469,60 € pagati nel 2026, più dei 1.992,00 € a budget».
+
+Restano come prima le voci **a consumo**, come il carburante, che seguono quello che hai
+speso davvero fino a quel giorno. **Nessun dato cambia**: cambia solo il conto.
+
+Cosa si vede sul telefono: il costo del giorno è lo stesso tutto l'anno, dal 31 ottobre
+scende rispetto a ieri, e nei mesi passati può cambiare di poco, perché adesso tutto è
+spalmato in modo uniforme.
+
+### Le prove
+
+`testPrevisioneRealta.mjs` riscritta sulla regola nuova, con il caso vero (sezione F): sulla
+versione 176 il 31 ottobre dava 31,47 € invece di 6,77. Il giro completo non ha trovato altre
+prove legate alla regola vecchia.
+
 ## Una corsa fatta in galleria non si perde più (versione 176)
 
 Tre lavori del piano nato dalla revisione della versione 175: la sincronizzazione che non
