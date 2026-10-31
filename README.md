@@ -148,6 +148,18 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## La scheda nera più corta (versione 179)
+
+Nei giorni in cui si paga una scadenza a budget, la scheda nera di «Oggi» aveva una riga in
+più: «978,40 € pagati oggi sono già a budget: non pesano su questa giornata, sono spalmati
+su tutto l'anno». Era una ripetizione — dalla versione 177 una voce a budget pesa ogni
+giorno allo stesso modo, e il costo del giorno lo dice già — e allungava la scheda proprio
+nei giorni delle scadenze, spingendo più in basso la corsa veloce. Tolta su richiesta del
+titolare.
+
+La stessa spiegazione resta nel dettaglio della giornata in **Andamento**, per chi vuole
+sapere perché un pagamento non pesa su quel giorno. `testSpalmate.mjs` ora la cerca lì.
+
 ## I tasti del metodo sopra l'importo (versione 178)
 
 Sull'iPhone vero, scrivendo l'incasso, la tastiera copriva Contanti, POS, Satispay e
