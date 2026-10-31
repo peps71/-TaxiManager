@@ -4,22 +4,62 @@ rules_version = '2';
 //
 // Prima i dati stavano sotto /artifacts/{app}/public/data/... e le regole erano
 // aperte: chiunque conoscesse l'indirizzo del progetto poteva leggere e scrivere
-// i movimenti. Adesso ogni account ha la sua cartella, con dentro il proprio
-// identificativo, e qui si dice che dentro ci puo' entrare solo lui.
+// i movimenti. Poi ogni account ha avuto la sua cartella, con dentro il proprio
+// identificativo, e solo lui poteva entrarci.
+//
+// Restava un buco: «ogni account» voleva dire QUALSIASI account Google. Chiunque
+// apriva l'app (o chiamava Firebase con la chiave pubblica, che sta nella
+// pagina) poteva farsi una cartella sua nel nostro database e riempirla a spese
+// del progetto. I nostri dati non li vedeva, ma lo spazio e le letture si'.
+// Adesso entra solo chi e' nell'elenco qui sotto.
 //
 // COME SI APPLICANO
-//   console.firebase.google.com  ->  progetto taximanager-5ac5b
-//   Build -> Firestore Database -> scheda "Rules" (Regole)
-//   incollare tutto questo file al posto di quello che c'e', poi "Publish".
+//   1. console.firebase.google.com -> progetto taximanager-5ac5b
+//      Authentication -> Users -> la riga con la tua email -> colonna
+//      «User UID»: e' un codice di 28 lettere e numeri. Copialo con l'icona
+//      che compare passandoci sopra.
+//   2. Qui sotto, al posto di INCOLLA-QUI-IL-TUO-USER-UID, metti quel codice,
+//      dentro gli apici: 'Ab3...xyz'. Niente spazi prima o dopo.
+//   3. Build -> Firestore Database -> scheda «Rules» (Regole): incolla tutto
+//      questo testo al posto di quello che c'e', poi «Publish».
+//
+// Nel repository il segnaposto resta: il codice vero sta solo nella console.
+// Se lo si pubblica senza sostituirlo, il Cloud rifiuta tutto (anche al
+// titolare) ma non cancella niente, ne' qui ne' sul telefono.
+//
+// PERCHE' NON CI SONO CONTROLLI SUL CONTENUTO
+// Si e' pensato di controllare la forma dei documenti (identificativi
+// numerici, date AAAA-MM-GG, nomi delle cartelle ammesse, pezzi delle
+// istantanee sotto i 600.000 caratteri). Si e' deciso di no: la storia del
+// codice prima della versione 166 non c'e' piu', i backup importati portano
+// identificativi di ogni forma, e una versione vecchia aperta su un altro
+// dispositivo potrebbe scrivere qualcosa che oggi non si conosce. Una
+// scrittura rifiutata qui non da' un errore chiaro: resta sul telefono, fra
+// le modifiche in attesa di invio, e non arriva mai sugli altri dispositivi.
+// Con un solo titolare, controllare la forma non protegge da nessuno:
+// protegge da noi stessi, e il prezzo sarebbero dati che non si sincronizzano.
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // CHI PUO' ENTRARE
+    // L'elenco degli identificativi (User UID) degli account ammessi. Per
+    // aggiungerne un secondo, un giorno: , 'secondo-uid' dopo il primo. Ogni
+    // account resta comunque nella SUA cartella: essere nell'elenco non apre
+    // le cartelle degli altri (vedi request.auth.uid == uid qui sotto).
+    // Niente email qui: questo file puo' finire in un repository pubblico.
+    function titolare() {
+      return request.auth != null
+        && request.auth.uid in [
+          'INCOLLA-QUI-IL-TUO-USER-UID'
+        ];
+    }
 
     // La cartella di un account: /artifacts/{app}/users/{uid}/...
     // request.auth.uid e' l'identificativo di chi sta chiedendo, messo da
     // Firebase dopo l'accesso: non si puo' falsificare dal browser.
     match /artifacts/{appId}/users/{uid}/{documenti=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if titolare() && request.auth.uid == uid;
     }
 
     // La vecchia cartella pubblica: da qui in avanti non entra piu' nessuno.

@@ -27,6 +27,19 @@ const ok = (c, testo, dettaglio) => {
 
 const b = await chromium.launch();
 
+// L'ORA FERMA. Senza un orologio fermo la prova girava con l'ora vera, e
+// fra mezzanotte e l'una (o le due) di Roma cadeva per un motivo che non
+// c'entra: «oggi» per la pagina (fuso di Roma) e «oggi» per i conti della
+// prova (fuso della macchina, UTC) erano due giorni diversi, e un turno
+// costruito attorno all'ora vera scavalcava la mezzanotte. Falliva uguale
+// sulla v175: era la prova, non l'app. Si resta attorno al giorno VERO di
+// Roma (la prova vale in ogni giorno dell'anno, come prima), ma a
+// mezzogiorno di quel giorno; e il «mattino» e' le 06:30 UTC dello stesso
+// giorno (07:30 o 08:30 a Roma).
+const GIORNO_ROMA = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const ORA_FISSA = new Date(GIORNO_ROMA + 'T11:00:00Z');
+const MATTINO = new Date(GIORNO_ROMA + 'T06:30:00Z');
+
 // I turni si costruiscono attorno all'orologio di adesso: una prova che vale
 // solo alle dieci di mattina non e' una prova.
 const SEMINA = (quando) => {
@@ -61,7 +74,7 @@ const SEMINA = (quando) => {
 async function apri(quando, oraFissa) {
   const p = await b.newPage({ viewport: { width: 390, height: 1000 }, locale: 'it-IT', timezoneId: 'Europe/Rome' });
   p.on('dialog', d => d.accept());
-  if (oraFissa) await p.clock.setFixedTime(oraFissa);
+  await p.clock.setFixedTime(oraFissa || ORA_FISSA);
   await p.goto(APP);
   await p.evaluate(() => localStorage.clear());
   await p.goto(APP);
@@ -190,7 +203,7 @@ console.log('\n5. IL TURNO DI NOTTE');
 // Cominciato ieri alle 23, ancora in corso alle sette e mezza. Guardare solo
 // i turni che portano la data di oggi lo avrebbe lasciato fuori, e il
 // registro sarebbe rimasto chiuso proprio mentre si lavora.
-const MATTINA = (() => { const o = new Date(); return new Date(Date.UTC(o.getUTCFullYear(), o.getUTCMonth(), o.getUTCDate(), 6, 30)); })();
+const MATTINA = MATTINO;
 p = await apri('niente', MATTINA);
 await p.evaluate(() => {
   window.shifts = [{ id: 'tNotte', data: window.__ieri, turno: 'La notte', inizio: '23:00',

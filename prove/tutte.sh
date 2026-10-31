@@ -75,10 +75,19 @@ titolo "iniezione da id e date";  giro testIniezioneDate.mjs
 titolo "backup coi tipi storti";  giro testBackupTipi.mjs
 titolo "protezione indirizzi";    giro testCspViva.mjs
 titolo "archivi sincronizzati";   giro testArchivi.mjs
+titolo "modifiche in attesa del Cloud"; giro testSospesi.mjs
+titolo "senza campo, col Cloud finto"; giro testOffline.mjs
+titolo "cambio di account, col Cloud finto"; giro testAccount.mjs
+titolo "quando il Cloud o il disco dicono no"; giro testSpedizione.mjs
+titolo "righe rifiutate e blocchi smontati"; giro testRifiuti.mjs
 titolo "grafica e misure";        giro testGrafica.mjs
 titolo "modo scuro";              giro testScuro.mjs
 titolo "il logo";                 giro testLogo.mjs
 titolo "annullare un modulo";     giro testAnnulla.mjs
+titolo "annulla dopo corsa e spesa veloci"; giro testAnnullaVeloce.mjs
+titolo "campi, tastiera e tasti sull'iPhone"; giro testIphone.mjs
+titolo "rendimento vuoto e date storte"; giro testRendimento.mjs
+titolo "turno di notte e cambio d'ora"; giro testNotte.mjs
 titolo "ore del turno";           giro testOreTurno.mjs
 titolo "navigazione da tastiera"; giro testTastiera.mjs
 titolo "il tasto Oggi";           giro testOggi.mjs

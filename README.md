@@ -26,7 +26,7 @@ Fino alla versione 43 l'app entrava nel Cloud con un accesso anonimo e scriveva 
 una cartella `public`: chiunque conoscesse l'indirizzo del progetto Firebase poteva leggere
 e scrivere i movimenti. Adesso non più.
 
-- Si entra con **Google**, da `Cloud & Sync`. Una volta per dispositivo: l'accesso resta
+- Si entra con **Google**, da `Gestione → Backup e impostazioni`. Una volta per dispositivo: l'accesso resta
   memorizzato.
 - I dati stanno in `artifacts/{app}/users/{tuo-identificativo}/…`, una cartella per
   account.
@@ -37,24 +37,69 @@ e scrivere i movimenti. Adesso non più.
   Cloud. Uscendo dal Cloud non si cancella niente.
 - Al primo accesso, quello che è già registrato sul dispositivo viene caricato nella
   cartella dell'account: è così che i dati arrivano sul secondo dispositivo.
+- Se il telefono si ricorda di **un altro account** e ha dati o modifiche in attesa,
+  prima di collegarsi l'app chiede (dalla versione 176). Un telefono che non si ricorda
+  nessun account entra senza domanda, come prima: vince quello che c'è sul Cloud.
 
 ### Cosa va fatto una volta sola nella console Firebase
 
-Sono tre cose, su [console.firebase.google.com](https://console.firebase.google.com) →
-progetto `taximanager-5ac5b`. Prima di cominciare, scarica un backup `.json` dall'app.
+Si fa dal Mac, con calma, quando non si sta lavorando. Ogni passo si può annullare.
+**Prima** l'app deve essere alla versione 176 o successiva, su tutti e due i dispositivi
+(si vede in `Gestione → Backup e impostazioni`): da quella versione una modifica che il Cloud rifiuta resta sul
+telefono in attesa, invece di sparire.
 
-1. **Authentication → Sign-in method → Google → Enable**, scegli l'email di supporto,
-   salva.
-2. **Authentication → Settings → Authorized domains**: verifica che ci sia
-   `peps71.github.io`; se manca, aggiungilo.
-3. **Firestore Database → Rules**: incolla il contenuto di `firestore.rules` al posto di
-   quello che c'è e premi **Publish**.
+0. **Prima di tutto, un backup.** Nell'app: `Gestione → Backup e impostazioni` → scarica il backup `.json` (e,
+   se ci sono foto nelle note, anche il file delle foto). Tienili sul Mac.
+1. **Fai l'accesso con Google dall'app** almeno una volta, sul telefono o sul Mac, se non
+   l'hai mai fatto.
+2. **Attiva l'accesso con Google**, se non lo è già:
+   [console.firebase.google.com](https://console.firebase.google.com) → progetto
+   `taximanager-5ac5b` → **Authentication → Sign-in method → Google → Enable**, scegli
+   l'email di supporto, salva.
+3. **Spegni l'accesso anonimo**: nella stessa pagina, se **Anonymous** risulta «Enabled»,
+   aprilo e disattivalo. L'app non lo usa più dalla versione 44.
+4. **Controlla gli indirizzi ammessi**: **Authentication → Settings → Authorized domains**.
+   Deve esserci `peps71.github.io`; se manca, aggiungilo.
+5. **Trova il tuo codice personale**: **Authentication → Users** → la riga con la tua email
+   → colonna **«User UID»**. È un codice di 28 lettere e numeri: passaci sopra e copialo con
+   l'icona che compare.
+6. **Prepara le regole**: apri il file [`firestore.rules`](firestore.rules) del repository,
+   copia tutto e incollalo in Note. Cerca `INCOLLA-QUI-IL-TUO-USER-UID` e sostituiscilo con
+   il tuo codice, **lasciando gli apici** intorno e senza spazi.
+7. **Prova prima di pubblicare** (facoltativo ma consigliato): **Firestore Database →
+   Rules**, incolla il testo e apri **Rules Playground**. Con «Authenticated», provider
+   `google.com` e il tuo codice come Firebase UID, un `get` su
+   `/artifacts/taximanager-2026/users/<il tuo codice>/taxi_records/prova` deve dire
+   *allowed*; con un codice diverso, *denied*.
+8. **Pubblica le regole**: nella stessa scheda premi **Publish**.
+9. **Prova subito**: sul telefono scrivi una nota di prova. Entro qualche secondo deve
+   comparire anche sul Mac. Poi cancellala. Se invece in `Gestione → Backup e impostazioni` le modifiche
+   restano «in attesa di invio», il codice del punto 6 è sbagliato: rifai i punti 5-8.
+   Le modifiche in attesa partono da sole appena le regole sono giuste: dopo un rifiuto
+   l'app riprova sempre più di rado (fino a ogni 15 minuti), quindi per non aspettare
+   chiudi e riapri l'app, che all'accesso riprova subito.
 
-Finché il punto 3 non è fatto il database resta aperto; finché non sono fatti 1 e 2
-l'accesso non riesce e l'app lo dice con un avviso che nomina il passaggio mancante.
+**Come tornare indietro** dal punto 8: si rifà il punto 8 incollando la versione precedente
+del file `firestore.rules` (è nella storia del repository). Nessun dato viene cancellato
+dalle regole: al massimo il Cloud smette di rispondere e l'app lavora in locale.
+
+Il codice personale **non** va scritto nel repository: resta solo nella console.
 
 I vecchi dati nella cartella `public` restano lì, non più leggibili dall'app: si possono
 cancellare a mano dalla console quando il nuovo accesso funziona su tutti i dispositivi.
+
+**Facoltativo, più avanti:** restringere la chiave dell'app. console.cloud.google.com →
+progetto `taximanager-5ac5b` → **API e servizi → Credenziali** → la chiave «Browser key
+(auto created by Firebase)» → Modifica:
+- *Restrizioni dell'applicazione* → Siti web: `https://peps71.github.io/*` e
+  `https://taximanager-5ac5b.firebaseapp.com/*`. **Il secondo è indispensabile**: senza,
+  l'accesso con Google smette di funzionare.
+- *Restrizioni API* → Limita chiave: Identity Toolkit API, Token Service API, Cloud
+  Firestore API.
+
+Si torna indietro scegliendo «Nessuna» per tutte e due. La restrizione serve contro l'uso
+della chiave da siti altrui; la protezione vera restano le regole. **App Check** per ora no:
+su un'app installata sull'iPhone rischia di rifiutare l'accesso al titolare stesso.
 
 ### Un indirizzo solo: `peps71.github.io`
 
@@ -95,9 +140,116 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
    sugli altri dispositivi in tempo reale.
 3. Se il Cloud non risponde il dato resta comunque salvato in locale e l'app lo dice
    con un avviso, invece di far credere che il salvataggio sia fallito.
+4. Dalla versione 176 ogni modifica non ancora confermata dal Cloud si segna in un
+   registro sul telefono (`taxi_in_sospeso`): se l'app si chiude senza campo, alla
+   riapertura la modifica è ancora lì e riparte da sola. In `Gestione → Backup e impostazioni` una riga dice
+   quante modifiche aspettano.
 
-Da `Cloud & Sync` si scarica un backup completo in JSON (movimenti, turni, scadenze e
+Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
+
+## Una corsa fatta in galleria non si perde più (versione 176)
+
+Tre lavori del piano nato dalla revisione della versione 175: la sincronizzazione che non
+perde niente, l'uso sull'iPhone, e le protezioni di Firebase e della pagina.
+
+### Il difetto più serio: la corsa senza campo
+
+Il database del Cloud teneva le scritture in attesa **solo in memoria**. Si registrava una
+corsa in un garage, iOS chiudeva l'app prima che tornasse la rete, e alla riapertura il
+primo elenco dal Cloud prendeva il posto di quello del telefono: **la corsa spariva**,
+anche dal telefono. Lo stesso per una cancellazione, che risorgeva, e per quello che si
+registrava dopo «Esci dal Cloud».
+
+Adesso ogni modifica che il Cloud non ha ancora confermato si segna in un registro sul
+telefono, `taxi_in_sospeso` (una chiave nuova; nessun dato esistente cambia forma, né sul
+telefono né sul Cloud). Quando arriva un elenco dal Cloud, le righe in attesa tengono la
+versione del telefono. Il registro riparte da solo: all'accesso, quando torna la rete,
+quando l'app torna in primo piano. In «Gestione → Backup e impostazioni» una riga dice quante modifiche aspettano.
+
+Lo stesso registro chiude altri quattro buchi:
+- **una migrazione o un ripristino interrotti a metà** accorciavano l'archivio del telefono
+  ai primi 400 movimenti, e non ripartivano più;
+- **un avvio senza campo** poteva, al ritorno della rete, riscrivere sul Cloud la copia
+  vecchia del telefono sopra le modifiche fatte sul Mac;
+- **profilo e impostazioni fiscali** si scrivevano interi: iPhone e Mac che cambiavano due
+  campi diversi si cancellavano a vicenda. Adesso viaggiano solo i campi cambiati;
+- **con la memoria del telefono piena** la correzione poteva partire nella versione vecchia.
+
+Se il Cloud rifiuta una scrittura, l'app riprova sempre più di rado (da 30 secondi fino a
+15 minuti), e all'accesso riprova subito. Una riga che il Cloud non accetterà mai — per
+esempio da un backup rovinato — si mette da parte senza fermare le altre, e si vede in
+«Gestione → Backup e impostazioni» con data e importo.
+
+### Le scelte, dette chiaramente
+
+- **Una modifica fatta sul telefono senza campo vince** su quella del Mac alla stessa riga,
+  anche su una cancellazione: meglio una riga in più da togliere a mano che un incasso perso.
+- **Cambio di account Google.** Se il telefono si ricorda di un altro account e ha dati o
+  modifiche in attesa, prima di collegarsi chiede. Con OK passano solo le righe che il nuovo
+  account **non ha già** (dove le ha, vince il Cloud); cancellazioni, profilo, impostazioni
+  fiscali e voci di budget in attesa per l'altro account **non** partono, e la domanda lo
+  dice. Con Annulla si esce senza toccare niente.
+- **Un telefono che non si ricorda nessun account** — un telefono nuovo, o uno che arriva
+  dalla versione 175 — entra senza domanda, come prima: vince il Cloud.
+- **Fuori dal Cloud «Cancella tutto»** tocca solo il telefono.
+- Note, scadenze, vetture, versamenti, voci di budget, scheda e impostazioni fiscali di un
+  telefono senza movimenti né turni passano senza domanda in un account dove non ce ne sono:
+  l'avviso dopo Annulla lo dice.
+
+### Sull'iPhone
+
+- **Nessun campo sotto i 16 punti**: Safari non ingrandisce più la pagina toccando
+  l'anno, i filtri, le date, le impostazioni fiscali.
+- **La tastiera non copre più Contanti e POS**: toccando l'incasso la scheda sale in cima.
+- **«Annulla» per 6 secondi** dopo una corsa o una spesa veloce; il messaggio non ruba più
+  i tocchi ai tasti sotto, e con la tastiera aperta sale sopra di lei se non copre la scheda.
+- **Calendario a 320 punti** con le frecce del mese da 44 punti; le crocette piccole (foto,
+  giornata) sono diventate tasti veri, con un nome per VoiceOver.
+- Al buio il «0,00» d'esempio non sembra più un importo già scritto.
+- **Rendimento** dice da dove partono i conti quando è vuoto, e una data storta non lo
+  manda più in errore.
+- **Turno di notte dopo mezzanotte**: riaprendo l'app alle 2 la corsa va sul giorno del
+  turno, non su quello dopo. **Tranne a Capodanno**: l'anno si conta per cassa, quindi
+  dopo la mezzanotte del 31/12 la corsa va sull'1/1, sia riaprendo l'app sia tenendola
+  aperta (in quel caso la scheda passa da sola all'anno nuovo e il messaggio lo dice).
+- **«La notte» vale 12 ore** anche nelle notti del cambio d'ora, dal calendario come dal
+  modulo. Nella notte di ottobre il turno si chiude quindi alle 6 reali.
+
+### Le protezioni
+
+- **`firestore.rules`** ammette solo il titolare, con un elenco di User UID. Nel repository
+  c'è un segnaposto: il codice vero si mette solo nella console (vedi «Cosa va fatto una
+  volta sola nella console Firebase»). **Da pubblicare solo con questa versione installata
+  su tutti e due i dispositivi.**
+- **La protezione sugli indirizzi** lascia uscire i dati solo verso i tre servizi di
+  Firebase che l'app usa (accesso, rinnovo dell'accesso, database): prima anche verso
+  indirizzi che chiunque può affittare. Resta aperto il database di un *altro* progetto
+  Firebase sullo stesso indirizzo: non si può chiudere da qui. Se l'accesso con Google
+  smette di funzionare, il messaggio lo dice e la protezione si spegne da «Gestione → Backup e impostazioni».
+  **È provata su Chromium, non su Safari.**
+
+### Le prove
+
+Un Firebase finto (`prove/_finto/`) che non apre connessioni permette di provare il
+telefono senza campo, il server che rifiuta, una migrazione interrotta e un altro account.
+Prove nuove: `testSospesi`, `testOffline` (sulla versione 175 falliva in 37 punti),
+`testAccount`, `testSpedizione`, `testRifiuti`, `testIphone`, `testAnnullaVeloce`,
+`testRendimento`, `testNotte`, e `testCspViva` allargata: ognuna fallisce sulla versione di
+prima. E tre prove vecchie dipendevano dall'ora in cui giravano: `testOggi` e
+`testTurnoChiuso` fallivano fra mezzanotte e le due di Roma, `testConfronto` l'ultimo
+giorno del mese. Anche sulla 175: erano le prove, non l'app.
+
+### Da provare sull'iPhone vero
+
+1. Accesso con Google con la protezione accesa (popup e reindirizzamento).
+2. Una corsa in modalità aereo, app chiusa del tutto, riaperta con la rete: deve arrivare
+   sul Mac.
+3. La tastiera: Contanti e POS si vedono, la pagina non balla.
+4. Nessun ingrandimento toccando anno, filtri, date, impostazioni fiscali.
+5. «Annulla» visibile e toccabile con la tastiera aperta.
+6. Calendario su uno schermo piccolo: «Settembre» non tocca il tasto Oggi.
+7. Al buio, il segnaposto «0,00».
 
 ## Una revisione da sei specialisti, e le prime correzioni (versione 175)
 

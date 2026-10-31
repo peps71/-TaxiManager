@@ -63,7 +63,13 @@ prova(`corse invariate, 0,0% (visto ${r.cAnno.corsePerc.toFixed(1)}%)`, Math.abs
 prova(`anche l'euro/ora sale del 10% (${r.cAnno.perOraOra.toFixed(2)} contro ${r.cAnno.perOraPrima.toFixed(2)})`,
       Math.abs(r.cAnno.perOraOra / r.cAnno.perOraPrima - 1.1) < 0.002, `${r.cAnno.perOraOra}/${r.cAnno.perOraPrima}`);
 prova(`il mese in corso si ferma a oggi (${r.cMese.a})`, r.cMese.a === r.oggi, r.cMese.a);
-prova(`e l'etichetta lo dice («${r.cMese.etichetta}»)`, /dal 1/.test(r.cMese.etichetta), r.cMese.etichetta);
+// L'ultimo giorno del mese il tratto fino a oggi E' tutto il mese, e l'app
+// lo dice cosi' («tutto il mese»): la prova si aspettava sempre «dal 1° al
+// ...» e cadeva l'ultimo giorno di ogni mese (succedeva anche sulla v175, il
+// 31 ottobre 2026). Ora si aspetta l'una o l'altra a seconda del giorno.
+const ultimoDelMese = Number(r.oggi.slice(8)) === new Date(Date.UTC(+r.oggi.slice(0, 4), +r.oggi.slice(5, 7), 0)).getUTCDate();
+prova(`e l'etichetta lo dice («${r.cMese.etichetta}»${ultimoDelMese ? ', oggi e\' l\'ultimo del mese' : ''})`,
+      ultimoDelMese ? r.cMese.etichetta === 'tutto il mese' : /^dal 1° al /.test(r.cMese.etichetta), r.cMese.etichetta);
 prova(`un anno gia' chiuso si confronta per intero («${r.annoPassato ? r.annoPassato.etichetta : 'assente'}»)`,
       !r.annoPassato || /tutto il/.test(r.annoPassato.etichetta), r.annoPassato && r.annoPassato.etichetta);
 
