@@ -159,7 +159,10 @@ c = await corse(p);
 a = await avviso(p);
 ok(c.length === 1 && c[0].importo === 2350 && c[0].metodo === 'Contanti', 'secondo tocco su Contanti: salvata UNA corsa da 2.350', JSON.stringify(c));
 ok(!a.visibile, 'e la domanda se ne va');
-ok((await toast(p)).includes(`2.350,00${NBSP}€`), 'il messaggio dice 2.350,00 €', JSON.stringify(await toast(p)));
+// Dalla versione 180 dopo la corsa non c'e' scritta: resta solo «Annulla»,
+// che dice a VoiceOver quale corsa annulla.
+const etichettaAnnulla = await p.evaluate(() => (document.getElementById('toast-annulla') || {}).getAttribute?.('aria-label') || '');
+ok(etichettaAnnulla.includes(`2.350,00${NBSP}€`), 'l\'Annulla dice 2.350,00 €', JSON.stringify(etichettaAnnulla));
 
 // Un altro metodo e' un'altra corsa da confermare: POS dopo Contanti vale
 // come primo tocco, non come conferma.

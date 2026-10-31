@@ -82,8 +82,14 @@ const toast = (p) => p.evaluate(() => {
   const q = a && a.getBoundingClientRect(), qt = t.getBoundingClientRect();
   // un punto del messaggio lontano dal tasto: a 6 punti dal bordo sinistro
   const sotto = document.elementFromPoint(qt.left + 6, qt.top + qt.height / 2);
-  return { visibile: vis(t), testo: (document.getElementById('toast-text') || {}).textContent || '', tasto: vis(a) ? { l: Math.round(q.width), a: Math.round(q.height) } : null,
-    pe: getComputedStyle(t).pointerEvents, bordoVaSotto: !!sotto && !sotto.closest('#toast') };
+  const testo = document.getElementById('toast-text');
+  return { visibile: vis(t), testo: (testo || {}).textContent || '', tasto: vis(a) ? { l: Math.round(q.width), a: Math.round(q.height) } : null,
+    pe: getComputedStyle(t).pointerEvents, bordoVaSotto: !!sotto && !sotto.closest('#toast'),
+    // versione 180: dopo la corsa veloce solo il tasto, niente scritta ne' riquadro
+    soloAnnulla: t.classList.contains('solo-annulla'),
+    testoVisibile: !!testo && testo.getClientRects().length > 0,
+    largoComeTasto: !!q && Math.abs(qt.width - q.width) < 2 && Math.abs(qt.height - q.height) < 2,
+    etichetta: (a && a.getAttribute('aria-label')) || '' };
 });
 const caso = async (titolo, fn) => {
   console.log('--- ' + titolo + ' ---');
@@ -102,7 +108,9 @@ for (const [w, tema] of [[320, 'chiaro'], [390, 'scuro']]) {
     console.log('    il messaggio: ' + JSON.stringify(t.testo));
     c('dopo la corsa il messaggio ha il tasto «Annulla» da almeno 44x44', t.tasto && t.tasto.l >= 44 && t.tasto.a >= 44, t);
     c('il messaggio non prende i tocchi (pointer-events: none)', t.pe === 'none', t.pe);
-    c('un tocco sul bordo del messaggio arriva a quello che c\'e\' sotto', t.bordoVaSotto, t);
+    // versione 180, richiesta del titolare: dopo la corsa niente da leggere
+    c('dopo la corsa nessuna scritta: solo il tasto, senza riquadro intorno', t.soloAnnulla && !t.testoVisibile && t.largoComeTasto, t);
+    c('il tasto dice a VoiceOver quale corsa annulla', /12,00/.test(t.etichetta) && /POS/.test(t.etichetta), t.etichetta);
     const id12 = await p.evaluate(() => dailyRecords.find(r => r.importo === 12).id);
     await p.click('#toast-annulla', { timeout: 3000 }); await p.waitForTimeout(250);
     const dopo = await ids(p);
@@ -116,6 +124,8 @@ for (const [w, tema] of [[320, 'chiaro'], [390, 'scuro']]) {
     await p.fill('#spesa-lampo', '30'); await p.locator('button[onclick^="spesaLampo("]').first().click(); await p.waitForTimeout(200);
     const ts = await toast(p);
     c('dopo la spesa veloce c\'e\' l\'Annulla', !!ts.tasto && ts.tasto.l >= 44 && ts.tasto.a >= 44, ts);
+    c('la spesa veloce tiene il suo messaggio scritto', !ts.soloAnnulla && ts.testoVisibile && ts.testo.length > 0, ts);
+    c('e un tocco sul bordo del messaggio arriva a quello che c\'e\' sotto', ts.bordoVaSotto, ts);
     const conSpesa = await ids(p);
     await p.click('#toast-annulla', { timeout: 3000 }); await p.waitForTimeout(250);
     const t3 = await toast(p);
@@ -126,27 +136,36 @@ for (const [w, tema] of [[320, 'chiaro'], [390, 'scuro']]) {
   });
 }
 
-await caso('quanto resta il messaggio: sei secondi con l\'Annulla', async () => {
+await caso('quanto resta: la corsa 3 secondi (solo Annulla), la spesa 6', async () => {
   // Il tempo non si aspetta davvero: nel giro completo, con la macchina
-  // carica, un timer da 6 s poteva scattare tardi e la misura falliva per un
-  // motivo che non c'entra. L'orologio di Playwright si ferma prima del tocco
-  // e si fa avanzare a mano: 5,9 s il messaggio c'e', 6,1 s non c'e' piu'.
+  // carica, un timer poteva scattare tardi e la misura falliva per un motivo
+  // che non c'entra. L'orologio di Playwright si ferma prima del tocco e si fa
+  // avanzare a mano.
+  // Versione 180: dopo la corsa veloce resta solo il tasto Annulla, per 3
+  // secondi (richiesta del titolare); la spesa veloce tiene i suoi 6.
   const { p, ctx } = await apri({ orologioFinto: true });
   await p.clock.pauseAt(new Date('2026-03-11T12:05:00+01:00'));
   await p.fill('#corsa-lampo', '9'); await p.click("button[onclick=\"corsaLampo('Contanti')\"]");
   const a0 = await toast(p);
   await p.clock.runFor(2900);
   const a29 = await toast(p);
-  await p.clock.runFor(3000);
-  const a59 = await toast(p);
   await p.clock.runFor(200);
-  const a61 = await toast(p);
-  c('subito: messaggio e Annulla', a0.visibile && !!a0.tasto, a0);
-  c('a 2,9 s ci sono ancora (il messaggio senza Annulla se ne andrebbe a 3)', a29.visibile && !!a29.tasto, a29);
-  c('a 5,9 s ci sono ancora', a59.visibile && !!a59.tasto, a59);
-  c('a 6,1 s se n\'e\' andato, e il tasto con lui', !a61.visibile && !a61.tasto, a61);
+  const a31 = await toast(p);
+  c('corsa, subito: solo il tasto Annulla', a0.visibile && !!a0.tasto && a0.soloAnnulla, a0);
+  c('corsa, a 2,9 s c\'e\' ancora', a29.visibile && !!a29.tasto, a29);
+  c('corsa, a 3,1 s se n\'e\' andato, e il tasto con lui', !a31.visibile && !a31.tasto, a31);
+  // la spesa veloce: messaggio e Annulla per 6 secondi
+  await p.locator('button[onclick="alternaSpesaLampo()"]').first().click();
+  await p.clock.runFor(300);
+  await p.fill('#spesa-lampo', '7'); await p.locator('button[onclick^="spesaLampo("]').first().click();
+  await p.clock.runFor(5900);
+  const s59 = await toast(p);
+  await p.clock.runFor(200);
+  const s61 = await toast(p);
+  c('spesa, a 5,9 s messaggio e Annulla ci sono ancora', s59.visibile && !!s59.tasto && !s59.soloAnnulla, s59);
+  c('spesa, a 6,1 s se n\'e\' andato', !s61.visibile && !s61.tasto, s61);
   // e un messaggio senza Annulla resta i suoi 3 secondi
-  await p.click('#corsa-lampo');
+  await p.evaluate(() => nascondiToast());
   await p.evaluate(() => showToast('prova'));
   await p.clock.runFor(2900);
   const b29 = await toast(p);

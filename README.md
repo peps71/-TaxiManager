@@ -148,6 +148,25 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Dopo la corsa, solo «Annulla» (versione 180)
+
+Dopo ogni corsa veloce compariva in basso un riquadro nero: «25,00 € · POS — in giornata
+111,30 €» con il tasto «Annulla», per 6 secondi. Il titolare non lo legge: la cifra si
+svuota e la corsa è già nel registro, sotto gli occhi. Adesso resta **solo il tasto giallo
+«Annulla»**, a destra, senza scritta né riquadro, per **3 secondi**: il tempo di accorgersi
+di un tocco sbagliato. Per VoiceOver il tasto dice quale corsa annulla («Annulla la corsa da
+25,00 € · POS»). Dopo i 3 secondi una corsa sbagliata si corregge come sempre dal registro:
+matita, poi Elimina.
+
+Due cose restano come prima, apposta:
+- **la spesa veloce** tiene il suo messaggio scritto e i 6 secondi: lì la categoria scelta
+  da un elenco è la cosa da ricontrollare;
+- **la notte di Capodanno** la corsa veloce dice ancora «Anno nuovo: la corsa va sul
+  01/01…», perché la scheda salta all'anno nuovo e senza quella frase sembrerebbe un errore.
+
+`testAnnullaVeloce` e `testCorsaStrana` aggiornate: sulla versione 179 la prova nuova
+fallisce, perché trova la scritta.
+
 ## La scheda nera più corta (versione 179)
 
 Nei giorni in cui si paga una scadenza a budget, la scheda nera di «Oggi» aveva una riga in

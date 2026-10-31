@@ -692,6 +692,16 @@
         /* Il tasto e' alto 44 punti come tutti; entra un po' nel margine
            del messaggio, cosi' il riquadro non raddoppia di altezza. */
         #toast-annulla { pointer-events: auto; margin-top: -0.5rem; margin-bottom: -0.5rem; }
+        /* SOLO IL TASTO «ANNULLA» (versione 180)
+           Dopo una corsa veloce il titolare non vuole leggere niente: la
+           cifra si svuota e la corsa compare nel registro. Resta solo il tasto
+           giallo, a destra, senza il riquadro nero intorno: il contenitore
+           diventa trasparente e largo quanto il tasto. */
+        #toast.solo-annulla { left: auto; background: transparent; border-width: 0;
+                              box-shadow: none; padding: 0; }
+        #toast.solo-annulla #toast-text { display: none; }
+        #toast.solo-annulla #toast-annulla { margin: 0; min-height: 44px;
+                                             box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28); }
 
         /* Il simbolo dell'euro accanto a una cifra grande: piu' piccolo e piu'
            tenue del numero. Da lontano si legge «116,50», non «€». */
@@ -2596,7 +2606,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 179;
+        const VERSIONE_APP = 180;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3743,11 +3753,17 @@
         // Il terzo argomento, se c'e', e' cosa fa il tasto «Annulla» del
         // messaggio. Senza, il tasto non si vede: ogni messaggio nuovo spegne
         // l'annulla di quello prima, cosi' non si annulla mai la cosa sbagliata.
-        function showToast(msg, tipo, annulla) {
+        // opzioni (facoltative): { soloAnnulla, durata, etichetta }. Con
+        // soloAnnulla si vede solo il tasto, senza testo ne' riquadro;
+        // etichetta e' quello che il tasto dice a VoiceOver.
+        function showToast(msg, tipo, annulla, opzioni) {
             const toast = document.getElementById('toast');
             const text = document.getElementById('toast-text');
             if (!toast || !text) return;
+            const o = opzioni || {};
+            const solo = !!(annulla && o.soloAnnulla);
             text.textContent = msg;
+            toast.classList.toggle('solo-annulla', solo);
             toast.classList.toggle('messaggio-avviso', tipo === 'avviso');
             toast.classList.remove('hidden');
             toast.classList.add('flex');
@@ -3755,11 +3771,14 @@
             if (tasto) {
                 tasto.onclick = annulla ? () => { nascondiToast(); annulla(); } : null;
                 tasto.classList.toggle('hidden', !annulla);
+                if (solo && o.etichetta) tasto.setAttribute('aria-label', o.etichetta);
+                else tasto.removeAttribute('aria-label');
             }
             if (timerToast) clearTimeout(timerToast);
             // Con l'annulla resta di piu': il tempo di leggere la cifra,
-            // accorgersi dello sbaglio e spostare il dito.
-            timerToast = setTimeout(nascondiToast, annulla ? 6000 : 3000);
+            // accorgersi dello sbaglio e spostare il dito. Chi chiama puo'
+            // dire un tempo suo (la corsa veloce: 3 secondi, solo il tasto).
+            timerToast = setTimeout(nascondiToast, o.durata || (annulla ? 6000 : 3000));
             posizionaToast();
             // Dopo una corsa veloce la scheda si ridisegna, il campo riprende
             // il fuoco e sale in cima: la misura buona e' quella di dopo.
@@ -13364,8 +13383,18 @@
             const totale = (window.dailyRecords || [])
                 .filter(r => r.data === data && r.tipo === 'ENTRATA')
                 .reduce((t, r) => t + (parseFloat(r.importo) || 0), 0);
-            showToast(`${annoNuovoCorsa ? 'Anno nuovo: la corsa va sul ' + ggMmAaaa(data) + '. ' : ''}${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`, null,
-                () => annullaMovimentoVeloce(record.id, 'Corsa', 'corsa-lampo'));
+            const annullaCorsa = () => annullaMovimentoVeloce(record.id, 'Corsa', 'corsa-lampo');
+            if (annoNuovoCorsa) {
+                // La notte di Capodanno la scheda salta all'anno nuovo: senza
+                // dirlo sembrerebbe un errore. E' l'unica volta che si scrive.
+                showToast(`Anno nuovo: la corsa va sul ${ggMmAaaa(data)}. ${formatCurrency(importo)} · ${metodo} — in giornata ${formatCurrency(totale)}`, null, annullaCorsa);
+            } else {
+                // Dopo la corsa niente da leggere (versione 180, richiesta del
+                // titolare): la cifra si svuota e la corsa e' gia' nel registro.
+                // Resta solo «Annulla», per 3 secondi, per lo sbaglio di dito.
+                showToast('', null, annullaCorsa,
+                    { soloAnnulla: true, durata: 3000, etichetta: `Annulla la corsa da ${formatCurrency(importo)} · ${metodo}` });
+            }
             renderContent();
             // Il campo torna vuoto e tiene il cursore: la corsa dopo si scrive
             // senza toccare altro.
