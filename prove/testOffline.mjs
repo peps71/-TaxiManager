@@ -276,12 +276,16 @@ await caso('cambio di account', async () => {
   const dom = dialoghi[0] || '';
   c('la domanda dice chi e\' entrato e cosa c\'e\' qui', dom.includes('Sei entrato con u2@esempio.it') && dom.includes('4 movimenti e 1 turno, e 1 modifica non ancora inviata'), dom);
   c('e cosa fanno OK e Annulla', dom.includes('OK: li porto anche in u2@esempio.it') && dom.includes('Annulla: esco da u2@esempio.it e non tocco niente'), dom);
+  c('la domanda, parola per parola', dom === 'Sei entrato con u2@esempio.it. Su questo telefono ci sono già 4 movimenti e 1 turno, e 1 modifica non ancora inviata di un altro account o mai caricati.\n\n'
+    + 'OK: li porto anche in u2@esempio.it, insieme a quello che c\'è già.\nAnnulla: esco da u2@esempio.it e non tocco niente.', dom);
   let r = await reg();
   c('Annulla: si esce dal Cloud', !(await p.evaluate(() => window.isCloudSyncing)) && (await p.evaluate(() => localStorage.__uid)) === '');
   c('Annulla: il registro resta di u1, con la corsa in attesa', r.uid === 'u1' && nVoci(r) === 1, r);
   c('Annulla: niente toccato (telefono, u1, u2)', (await idsQui()) === quiPrima && (await idsServer('u2')) === 'z' && (await idsServer('u1')) === u1Prima,
     { qui: await idsQui(), u1: await idsServer('u1'), u2: await idsServer('u2') });
   c('Annulla: l\'avviso dice come fare', avvisi.some(t => t.includes('Per usare u2@esempio.it con i suoi dati') && /backup/.test(t) && /azzera/.test(t) && /rientra/.test(t)), avvisi);
+  c('Annulla: l\'avviso, parola per parola (con l\'«Attenzione» su quello che passa da solo)', avvisi.includes('Per usare u2@esempio.it con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra. '
+    + 'Attenzione: note, scadenze, vetture, versamenti, voci di budget, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in u2@esempio.it dove lì non ce ne sono ancora.'), avvisi);
   dialoghi.length = 0; await ricarica();
   c('riaperta dopo Annulla: nessuna domanda', dialoghi.length === 0, dialoghi);
   // di nuovo u2, e questa volta OK

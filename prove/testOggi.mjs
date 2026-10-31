@@ -28,11 +28,25 @@ const ok = (c, testo, dettaglio) => {
 
 const b = await chromium.launch();
 
+// L'ORA FERMA. Senza un orologio fermo la prova girava con l'ora vera, e
+// fra mezzanotte e l'una (o le due) di Roma cadeva per un motivo che non
+// c'entra: «oggi» per la pagina (fuso di Roma) e «oggi» per i conti della
+// prova (fuso della macchina, UTC) erano due giorni diversi, e un turno
+// costruito attorno all'ora vera scavalcava la mezzanotte. Falliva uguale
+// sulla v175: era la prova, non l'app. Si resta attorno al giorno VERO di
+// Roma (la prova vale in ogni giorno dell'anno, come prima), ma a
+// mezzogiorno di quel giorno; e il «mattino» e' le 06:30 UTC dello stesso
+// giorno (07:30 o 08:30 a Roma).
+const GIORNO_ROMA = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+const ORA_FISSA = new Date(GIORNO_ROMA + 'T11:00:00Z');
+const MATTINO = new Date(GIORNO_ROMA + 'T06:30:00Z');
+
 // Le giornate si seminano attorno a OGGI, non su una data fissa: una prova
 // che vale solo nell'ottobre 2026 non e' una prova.
 const SEMINA = `
   const oggi = new Date();
-  const iso = d => d.toISOString().slice(0, 10);
+  // il giorno com'e' a Roma, non a Greenwich
+  const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   const anno = String(oggi.getFullYear());
   const rec = [], tur = [];
   for (let indietro = 0; indietro < 20; indietro++) {
@@ -57,7 +71,7 @@ async function apri(larghezza, oraFissa) {
   // L'orologio si puo' fermare: serve per il turno di notte, che si puo'
   // vedere in corso solo di mattina. Si ferma prima di aprire la pagina,
   // altrimenti il copione in testa all'app ha gia' letto l'ora vera.
-  if (oraFissa) await p.clock.setFixedTime(oraFissa);
+  await p.clock.setFixedTime(oraFissa || ORA_FISSA);
   await p.goto(APP);
   await p.evaluate(() => localStorage.clear());
   await p.goto(APP);
@@ -164,7 +178,7 @@ const annoPrima = await p.evaluate(() => {
   return { anno: window.annoAttivo(), giorno: window.giornoGiornate() };
 });
 await p.waitForTimeout(250);
-ok(annoPrima.anno === String(new Date().getFullYear() - 1), 'si guarda l\'anno scorso', annoPrima.anno);
+ok(annoPrima.anno === String(ORA_FISSA.getUTCFullYear() - 1), 'si guarda l\'anno scorso', annoPrima.anno);
 ok(await p.evaluate(TROVA) !== null, 'il tasto «Oggi» c\'e\' anche qui');
 await p.evaluate(() => { vaiAOggiGiornate(); });
 await p.waitForTimeout(300);
@@ -198,7 +212,7 @@ console.log('\n6. A 320 PUNTI LA DATA NON SI STRINGE');
 // Le otto e mezza di mattina, con l'orologio fermo: e' l'unico momento in
 // cui un turno di notte datato ieri risulta ancora in corso, e quindi
 // l'unico in cui questa riga porta tutte e tre le cose insieme.
-const ADESSO = (() => { const o = new Date(); return new Date(Date.UTC(o.getUTCFullYear(), o.getUTCMonth(), o.getUTCDate(), 6, 30)); })();
+const ADESSO = MATTINO;
 for (const larghezza of [320, 390, 768, 1280]) {
   const q = await apri(larghezza, ADESSO);
   // La riga piu' piena che si possa avere: un giorno che non e' oggi - e

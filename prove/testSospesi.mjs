@@ -141,6 +141,10 @@ const r = await p.evaluate(() => {
   o.dec.v175Ripreso = decidiAccount('u1', false, true);
   o.dec.v175RipresoVuoto = decidiAccount('u1', false, false);
   o.dec.maiSenzaDati = decidiAccount('u1', true, false);
+  o.dec.maiConDati = decidiAccount('u1', true, true);
+  // registro c'e' ma senza account (letto da un disco pulito): come mai entrato
+  localStorage.setItem('taxi_in_sospeso', JSON.stringify({ v: 1, uid: null, n: 0, dal: null, per: {} }));
+  o.dec.senzaUidConDati = decidiAccount('u1', true, true);
 
   // la riga della scheda Cloud
   localStorage.removeItem('taxi_in_sospeso');
@@ -217,10 +221,11 @@ c('altro account con dati qui: chiedi', d.altroConDati === 'chiedi', d);
 c('altro account in sessione ripresa con dati: chiedi', d.altroRipresoConDati === 'chiedi', d);
 c('altro account senza dati qui: adotta', d.altroSenzaDati === 'adotta', d);
 c('telefono dalla v175 (nessun registro, sessione ripresa): adotta senza chiedere', d.v175Ripreso === 'adotta' && d.v175RipresoVuoto === 'adotta', d);
-// Mai entrato, primo accesso CON dati: oggi 'chiedi', ma la revisione (B3)
-// lo fa diventare 'adotta' come nella v175. Non si fissa qui finche' non e'
-// deciso: il controllo si aggiunge con la correzione.
 c('mai entrato, primo accesso senza dati: adotta', d.maiSenzaDati === 'adotta', d);
+// B3 (revisione, 2e6c6c0): fino a c5b8761 un telefono mai collegato, con
+// dei dati, al primo accesso si sentiva chiedere «li porto anche in ...?».
+// Nella v175 si entrava e basta, e il Cloud vinceva: di nuovo cosi'.
+c('mai entrato, primo accesso CON dati: adotta senza chiedere (come la v175)', d.maiConDati === 'adotta' && d.senzaUidConDati === 'adotta', d);
 
 console.log('--- la riga della scheda Cloud ---');
 c('mai entrato: niente riga', r.testoMai === '', r.testoMai);
