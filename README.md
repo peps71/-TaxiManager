@@ -148,6 +148,22 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## I messaggi in cima (versione 184)
+
+I messaggi che compaiono per qualche secondo — «Cloud attivo per…», «Corsa annullata», gli
+avvisi — stavano in basso, sopra la barra di navigazione: aprendo l'app coprivano i tasti
+della corsa, proprio quelli che si cercano col pollice. Su richiesta del titolare adesso
+stanno **in cima**, sotto la tacca o la fotocamera; anche il tasto **«Annulla»** dopo una
+corsa veloce, che lassù la tastiera non copre mai.
+
+Sull'iPhone, con la tastiera aperta, Safari fa scorrere l'area visibile verso il basso e la
+cima della pagina esce dallo schermo: in quel caso il messaggio si aggancia alla cima della
+parte visibile, così non sparisce. Il vecchio calcolo che lo appoggiava sopra la tastiera
+non serve più ed è stato tolto.
+
+`prove/testMessaggiInCima.mjs` (nuova) lo controlla a 320, 390 e 1280 punti; sulla
+versione 183 fallisce.
+
 ## Ancora più stretta, e «Importi» (versione 183)
 
 Su richiesta del titolare:
