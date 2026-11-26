@@ -183,7 +183,8 @@ ok(c.length === 2 && c[1].importo === 2350 && c[1].metodo === 'POS', 'POS ritocc
 await scrivi(p, '450');
 await tocca(p, 'Aggiunta importi');
 a = await avviso(p);
-ok(a.testo === domanda('450,00', 'Aggiunta importi'), 'su Aggiunta importi la domanda usa il nome del tasto', JSON.stringify(a.testo));
+// versione 183: il tasto si legge «Importi», il metodo salvato resta «Aggiunta importi»
+ok(a.testo === domanda('450,00', 'Importi'), 'su Importi la domanda usa il nome scritto sul tasto', JSON.stringify(a.testo));
 
 // Cambiare la cifra riparte da capo.
 await scrivi(p, '2350');

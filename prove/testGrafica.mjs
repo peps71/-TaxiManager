@@ -282,7 +282,7 @@ ok(inStampa && inStampa.ombra === 'none' && parseFloat(inStampa.bordo) >= 3,
 // ------------------------------------------------------------------
 console.log('\n5. LA SCHEDA NERA DI «OGGI», PIU\' BASSA (8802a85)');
 // ------------------------------------------------------------------
-// Su richiesta del titolare il totale e' sceso da 41,6 a 36 punti e gli
+// Su richiesta del titolare il totale e' sceso da 41,6 a 36 punti (poi a 30, v183) e gli
 // spazi interni si sono stretti: 20 punti in meno di scheda, e la corsa
 // veloce sale sullo schermo dell'iPhone. Un ritocco qualsiasi (un margine
 // rimesso, una classe di corpo cambiata) la riallungherebbe in silenzio.
@@ -309,7 +309,8 @@ for (const [w, caso, tetto] of [[390, 'corse', 220], [390, 'giornata', 308], [32
     return { alta: +r.height.toFixed(1), corpo: getComputedStyle(c).fontSize, testo: c.textContent.trim(),
              dentro: rc.left >= r.left && rc.right <= r.right, sbordo: document.documentElement.scrollWidth - innerWidth };
   }, caso);
-  ok(m && m.corpo === '36px', `${w} px, ${caso}: il totale e' a 36 px`, m && `${m.corpo}, «${m.testo}»`);
+  // versione 183: sceso ancora, a 30 punti (richiesta del titolare)
+  ok(m && m.corpo === '30px', `${w} px, ${caso}: il totale e' a 30 px`, m && `${m.corpo}, «${m.testo}»`);
   ok(m && m.alta <= tetto, `${w} px, ${caso}: la scheda nera e' alta al massimo ${tetto} px`, m && `${m.alta} px`);
   ok(m && m.dentro && m.sbordo <= 0, `${w} px, ${caso}: la cifra di cinque cifre sta nella scheda e la pagina non sborda`, m && JSON.stringify(m));
   await q.close();

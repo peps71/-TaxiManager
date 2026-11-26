@@ -148,6 +148,21 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Ancora più stretta, e «Importi» (versione 183)
+
+Su richiesta del titolare:
+
+- **il totale della scheda nera** di «Oggi» scende ancora, da 36 a **30 punti**;
+- **la riga «1 turno · 12 h»** esce dalla scheda nera: turno, ore e km si leggono nel
+  registro della giornata, subito sotto;
+- **il tasto «Aggiunta importi» si chiama «Importi»**, e così dappertutto (filtro per
+  metodo, riepilogo, registro dei corrispettivi, modifica di una corsa, la domanda sopra
+  i 300 €). Le corse si salvano ancora col nome di prima, «Aggiunta importi»: quelle già
+  registrate e quelle nuove stanno nello stesso mucchio, e nessun dato cambia.
+
+`testGrafica`, `testCorsaStrana` e `testMetodiCarburante` aggiornate al corpo e al nome
+nuovi.
+
 ## Il calendario di famiglia, e la scheda nera più stretta (versione 182)
 
 ### I turni di tua moglie e gli avvenimenti, nel calendario
