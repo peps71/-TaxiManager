@@ -65,7 +65,8 @@ for (const [w, h, libero] of [[390, 844, 460], [360, 780, 440], [320, 568, 300]]
   const c = await misura('[data-scheda-corsa]', 'corsa-lampo', '#corsa-lampo-avviso');
   prova('corsa: la scheda c\'e\'', !!c);
   if (c) {
-    prova('corsa: i 4 tasti stanno sopra l\'importo', c.tasti === 4 && c.sopra === 4, `${c.sopra} su ${c.tasti}`);
+    // dalla versione 181 i tasti della corsa sono sei (WeTaxi, Buoni, Aggiunta importi)
+    prova('corsa: i 6 tasti stanno sopra l\'importo', c.tasti === 6 && c.sopra === 6, `${c.sopra} su ${c.tasti}`);
     prova('corsa: tasti e importo stanno insieme sopra la tastiera', c.serve <= libero, `servono ${c.serve}, liberi ~${libero}`);
     prova('corsa: la domanda sopra soglia sta fra i tasti e l\'importo', c.avvisoInMezzo === true);
   }

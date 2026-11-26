@@ -2606,7 +2606,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 180;
+        const VERSIONE_APP = 181;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3947,6 +3947,9 @@
                 case 'Contanti':  return 'bg-green-100 text-green-800 border border-green-300';
                 case 'POS':       return 'bg-gray-900 text-white border border-gray-900';
                 case 'Satispay':  return 'bg-red-100 text-red-800 border border-red-300';
+                case 'WeTaxi':    return 'bg-orange-100 text-orange-800 border border-orange-300';
+                case 'Buoni':     return 'bg-fuchsia-200 text-fuchsia-900 border border-fuchsia-500';
+                case 'Aggiunta':  return 'bg-indigo-100 text-indigo-800 border border-indigo-300';
                 default:          return 'bg-blue-100 text-blue-800 border border-blue-300';
             }
         }
@@ -4249,13 +4252,17 @@
                 ? [['Contanti', 'Contanti'], ['POS', 'POS / Carta'], ['Satispay', 'Satispay'],
                    ['Carta Carburante', 'Carta Carburante'], ['Conto', 'Conto'], ['Bonifico', 'Bonifico']]
                 : [['Contanti', 'Contanti'], ['POS', 'POS / Carta'], ['Satispay', 'Satispay'],
-                   ['App/Nexi', 'App / Voucher'], ['Conto', 'Conto']];
+                   ['WeTaxi', 'WeTaxi'], ['Buoni', 'Buoni'], ['Aggiunta importi', 'Aggiunta importi'],
+                   ['Conto', 'Conto']];
             // Un movimento vecchio puo' avere un metodo che non e' piu' in
             // elenco («Fattura» prima della v104): se sparisse dalla tendina,
             // aprendo la modifica il menu mostrerebbe un'altra voce e al primo
             // salvataggio il metodo cambierebbe da solo. Si aggiunge in coda.
             const presente = voci.some(([v]) => v === selezionato);
-            if (selezionato && !presente) voci.push([selezionato, selezionato + ' (come l\'avevi segnato)']);
+            // «App/Nexi» dalla versione 181 non si sceglie piu' per le corse
+            // nuove, ma quelle vecchie lo tengono, col nome che avevano.
+            if (selezionato && !presente) voci.push([selezionato, selezionato === 'App/Nexi'
+                ? 'App / Voucher (come l\'avevi segnato)' : selezionato + ' (come l\'avevi segnato)']);
             return voci.map(([v, l]) => `<option value="${v}" ${selezionato === v ? 'selected' : ''}>${l}</option>`).join('');
         }
 
@@ -6066,7 +6073,136 @@
                     if (n !== null && n > 0 && (massimo === null || n > massimo)) massimo = n;
                 });
             });
+            // Anche il contachilometri scritto nella nota dei rifornimenti
+            // (versione 181): chi non segna i km dei turni li segna li', e la
+            // manutenzione programmata e il Parco auto ne avevano bisogno.
+            // Solo le letture che tornano col rifornimento prima.
+            rifornimentiCarburante().elenco.forEach(x => {
+                if (!x.buono || x.km === null) return;
+                if (da && x.data < da) return;
+                if (a && x.data > a) return;
+                if (massimo === null || x.km > massimo) massimo = x.km;
+            });
             return massimo;
+        }
+
+        // ============================================================
+        //  IL CARBURANTE AL CHILOMETRO (versione 181)
+        //  Il titolare scrive il contachilometri nella nota del rifornimento.
+        //  Da li': i km fatti dal rifornimento prima, e quanto e' costato ogni
+        //  km. Si conta «da pieno a pieno»: il carburante messo oggi e' quello
+        //  consumato dall'ultimo rifornimento coi km a oggi, quindi la spesa di
+        //  oggi (piu' quella dei pieni in mezzo senza km scritti) si divide per
+        //  i km fatti da allora. Se non si fa sempre il pieno, il singolo
+        //  rifornimento oscilla, ma la media del mese o dell'anno torna giusta.
+        //  Non tocca nessun dato e nessun conto: legge le note e basta.
+        // ============================================================
+
+        // Il contachilometri dentro una nota: «km 152340», «152.340 km»,
+        // «152 340». Si prende il numero vicino a «km»; se non c'e', il piu'
+        // grande sopra i mille (cosi' «45 litri» o «1,799 €/l» non contano).
+        function kmDallaNota(nota) {
+            const t = String(nota || '');
+            if (!t) return null;
+            const re = /(\d{1,3}(?:[.\u00a0 ']\d{3})+|\d{4,7})(?![\d,])/g;
+            const trovati = [];
+            let m;
+            while ((m = re.exec(t)) !== null) {
+                const n = parseInt(m[1].replace(/[.\u00a0 ']/g, ''), 10);
+                if (!(n >= 1000 && n <= 2000000)) continue;
+                const prima = t.slice(Math.max(0, m.index - 6), m.index).toLowerCase();
+                const dopo = t.slice(m.index + m[0].length, m.index + m[0].length + 6).toLowerCase();
+                trovati.push({ n, vicinoKm: prima.includes('km') || dopo.includes('km') });
+            }
+            if (!trovati.length) return null;
+            const conKm = trovati.filter(x => x.vicinoKm);
+            const scelta = conKm.length ? conKm : trovati;
+            return Math.max(...scelta.map(x => x.n));
+        }
+
+        // Un rifornimento e' una spesa la cui categoria e' «Carburante»
+        // (anche «Carburante - Gasolio», «Benzina», «GPL»: decide categoriaBase).
+        function eRifornimento(r) {
+            return !!r && r.tipo === 'USCITA' && categoriaBase(r.categoria) === 'Carburante';
+        }
+
+        // Tutti i rifornimenti in ordine, ognuno coi suoi km letti, i km fatti
+        // dal precedente e il costo al km. Si rifa' solo quando i movimenti
+        // cambiano: la giornata lo chiede per ogni riga.
+        let rifornimentiCache = null;
+        let rifornimentiVersione = '';
+        // Fra due pieni piu' di cosi' non torna: e' una nota scritta male.
+        const KM_MAX_FRA_DUE_PIENI = 5000;
+        function rifornimentiCarburante() {
+            const versione = (window.versioneDati || 0) + ':' + (window.dailyRecords || []).length;
+            if (rifornimentiCache && rifornimentiVersione === versione) return rifornimentiCache;
+            const elenco = (window.dailyRecords || [])
+                .filter(eRifornimento)
+                .map(r => ({ id: String(r.id), data: String(r.data || ''), ora: String(r.ora || ''),
+                             importo: importoDi(r.importo), km: kmDallaNota(r.nota),
+                             kmFatti: null, spesa: null, euroKm: null, buono: false, problema: '' }))
+                .sort((x, y) => (x.data + x.ora + x.id).localeCompare(y.data + y.ora + y.id));
+            let ultimoKm = null, speseInMezzo = 0;
+            elenco.forEach(x => {
+                if (x.km === null) { speseInMezzo += x.importo; return; }
+                if (ultimoKm === null) {
+                    x.buono = true;
+                    x.problema = 'primo';
+                } else if (x.km <= ultimoKm) {
+                    x.problema = 'basso';
+                } else if (x.km - ultimoKm > KM_MAX_FRA_DUE_PIENI) {
+                    x.problema = 'troppi';
+                } else {
+                    x.buono = true;
+                    x.kmFatti = x.km - ultimoKm;
+                    x.spesa = Math.round((x.importo + speseInMezzo) * 100) / 100;
+                    x.euroKm = x.spesa / x.kmFatti;
+                }
+                // Una lettura storta non diventa il punto di partenza del
+                // pieno dopo: si riparte dall'ultima buona.
+                if (x.buono) { ultimoKm = x.km; speseInMezzo = 0; }
+            });
+            const perId = new Map(elenco.map(x => [x.id, x]));
+            rifornimentiCache = { elenco, perId };
+            rifornimentiVersione = versione;
+            return rifornimentiCache;
+        }
+
+        function infoRifornimento(r) {
+            if (!eRifornimento(r)) return null;
+            return rifornimentiCarburante().perId.get(String(r.id)) || null;
+        }
+
+        // La media fra due date: la spesa dei rifornimenti coi km calcolati,
+        // divisa per i loro km. Solo quelli buoni: una nota storta non sposta.
+        function carburanteAlKm(da, a) {
+            let km = 0, spesa = 0, n = 0;
+            rifornimentiCarburante().elenco.forEach(x => {
+                if (x.kmFatti === null) return;
+                if (da && x.data < da) return;
+                if (a && x.data > a) return;
+                km += x.kmFatti; spesa += x.spesa; n++;
+            });
+            return { km, spesa: Math.round(spesa * 100) / 100, n, euroKm: km > 0 ? spesa / km : null };
+        }
+
+        // Il costo al km con tre decimali: fra 0,14 e 0,145 €/km, su 60.000 km
+        // l'anno, ballano 300 €.
+        function euroAlKm(x) {
+            return x === null || x === undefined ? '—' : x.toFixed(3).replace('.', ',') + ' €/km';
+        }
+
+        // «420 km · 0,143 €/km», o perche' non si puo' dire.
+        function testoRifornimento(info) {
+            if (!info || info.km === null) return '';
+            const km = numeroIT(info.km) + ' km';
+            if (info.kmFatti !== null) {
+                return `${numeroIT(info.kmFatti)} km dal pieno prima · ${euroAlKm(info.euroKm)}`;
+            }
+            if (info.problema === 'primo') return `contachilometri ${km} · il primo coi km: il conto parte dal prossimo`;
+            if (info.problema === 'basso') return `contachilometri ${km}: più basso del pieno prima, controlla la nota`;
+            if (info.problema === 'troppi') return `contachilometri ${km}: oltre ${numeroIT(KM_MAX_FRA_DUE_PIENI)} km dal pieno prima, controlla la nota`;
+            return '';
         }
 
         // Tutti i conti di una vettura: km, perdita di valore, spese del periodo
@@ -6451,6 +6587,16 @@
                                         ? formatCurrency(s.prezzoAcq)
                                         : `${formatCurrency(s.prezzoAcq)} → ${formatCurrency(s.valoreFinale || 0)}`))}
                         </div>
+                        ${(() => {
+                            // Versione 181: il carburante al km nel periodo di questa vettura,
+                            // dal contachilometri scritto nelle note dei rifornimenti.
+                            const c = carburanteAlKm(s.da, s.a);
+                            return c.n ? `
+                        <p class="text-sm font-bold text-gray-700">
+                            Carburante: <span class="font-black text-gray-900">${euroAlKm(c.euroKm)}</span>
+                            <span class="font-medium text-gray-500">· ${numeroIT(c.km)} km e ${formatCurrency(c.spesa)} di rifornimenti col contachilometri nella nota</span>
+                        </p>` : '';
+                        })()}
 
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
                             <div>
@@ -6524,7 +6670,7 @@
                     <p class="text-xs text-gray-400 mt-2">
                         Il conto alla rovescia riparte da solo quando registri la spesa dell'intervento,
                         scegliendo il tipo fra le sottocategorie di «Manutenzione». I chilometri sono
-                        quelli del contachilometri dei turni.
+                        quelli del contachilometri dei turni e delle note dei rifornimenti.
                     </p>
                 </div>`;
         }
@@ -6685,6 +6831,7 @@
             const shifts = turniAnno().filter(meseOk);
 
             let incassiTot = 0, pos = 0, contanti = 0, conto = 0, satispay = 0, app = 0;
+            let wetaxi = 0, buoni = 0, aggiunta = 0;
             let usciteTot = 0, carburante = 0, manutenzione = 0, altro = 0;
             const perCat = {};
 
@@ -6697,6 +6844,9 @@
                         case 'Contanti': contanti += imp; break;
                         case 'Satispay': satispay += imp; break;
                         case 'Conto': conto += imp; break;
+                        case 'WeTaxi': wetaxi += imp; break;
+                        case 'Buoni': buoni += imp; break;
+                        case 'Aggiunta': aggiunta += imp; break;
                         default: app += imp;
                     }
                 } else if (r.tipo === 'USCITA') {
@@ -6751,7 +6901,7 @@
                 countUscite: records.filter(r => r.tipo === 'USCITA').length,
                 countTurni: shifts.filter(s => !isRiposo(s)).length,
                 countRiposi: shifts.filter(isRiposo).length,
-                incassiTot, pos, contanti, conto, satispay, app,
+                incassiTot, pos, contanti, conto, satispay, app, wetaxi, buoni, aggiunta,
                 usciteTot, carburante, manutenzione, altro,
                 pagamentoSpese: spesePerPagamento(records.filter(r => r.tipo === 'USCITA')),
                 speseCategorie: Object.values(perCat)
@@ -7218,6 +7368,7 @@
         function aggregaCalcola(prefisso) {
             const r = {
                 incassi: 0, contanti: 0, pos: 0, satispay: 0, app: 0, conto: 0,
+                wetaxi: 0, buoni: 0, aggiunta: 0,
                 nCorse: 0, uscite: 0, carburante: 0, manutenzione: 0, altroSpese: 0,
                 // Le stesse tre voci, ma solo per la parte pagata in modo
                 // tracciato: e' quella che va in deduzione.
@@ -7236,6 +7387,9 @@
                         case 'Contanti': r.contanti += imp; break;
                         case 'Satispay': r.satispay += imp; break;
                         case 'Conto': r.conto += imp; break;
+                        case 'WeTaxi': r.wetaxi += imp; break;
+                        case 'Buoni': r.buoni += imp; break;
+                        case 'Aggiunta': r.aggiunta += imp; break;
                         default: r.app += imp;
                     }
                 } else if (x.tipo === 'USCITA') {
@@ -7312,8 +7466,12 @@
         //  Qui il registro si legge come si compila: una riga per data, una
         //  colonna per metodo, il totale in fondo.
         // ============================================================
-        const METODI_CORRISPETTIVI = ['Contanti', 'POS', 'Satispay', 'App', 'Conto'];
-        const METODI_BREVI = { 'Contanti': 'Contanti', 'POS': 'POS', 'Satispay': 'Satispay', 'App': 'App', 'Conto': 'Conto' };
+        // Le famiglie degli incassi, in quest'ordine dappertutto. Una colonna
+        // vuota nel mese non si mostra: WeTaxi, Buoni e Aggiunta (versione 181)
+        // compaiono solo quando ci sono, e «App» resta per le corse di prima.
+        const METODI_CORRISPETTIVI = ['Contanti', 'POS', 'Satispay', 'WeTaxi', 'Buoni', 'Aggiunta', 'App', 'Conto'];
+        const METODI_BREVI = { 'Contanti': 'Contanti', 'POS': 'POS', 'Satispay': 'Satispay', 'WeTaxi': 'WeTaxi',
+                               'Buoni': 'Buoni', 'Aggiunta': 'Aggiunta', 'App': 'App', 'Conto': 'Conto' };
 
         function corrispettiviMese(ym) {
             return memo('corrispettivi:' + ym, () => corrispettiviMeseCalcola(ym));
@@ -7416,11 +7574,16 @@
                 ['Contanti', d.contanti, 'bg-green-500'],
                 ['POS / Carta', d.pos, 'bg-gray-900'],
                 ['Satispay', d.satispay, 'bg-red-500'],
+                ['WeTaxi', d.wetaxi || 0, 'bg-amber-600'],
+                ['Buoni', d.buoni || 0, 'bg-fuchsia-600'],
+                ['Aggiunta importi', d.aggiunta || 0, 'bg-indigo-600'],
                 ['App / Voucher', d.app, 'bg-blue-500'],
                 ['Conto', d.conto, 'bg-indigo-500']
             ];
-            // La riga Conto si mostra solo se c'e' davvero: altrimenti resta sempre a zero
-            const visibili = metodi.filter(m => o.soloConImporto ? m[1] > 0 : (m[0] !== 'Conto' || m[1] > 0));
+            // Contanti, POS e Satispay si vedono sempre; le altre righe solo se
+            // c'e' davvero qualcosa, se no restano sempre a zero.
+            const sempre = ['Contanti', 'POS / Carta', 'Satispay'];
+            const visibili = metodi.filter(m => o.soloConImporto ? m[1] > 0 : (sempre.includes(m[0]) || m[1] > 0));
             const righe = visibili.map(m => rigaMetodo(m[0], m[1], d.incassi, m[2])).join('');
             if (!o.daVersare) return righe;
             return righe + `
@@ -9123,6 +9286,10 @@
             pos:        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
             satispay:   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M15 9.5a3.2 3.2 0 0 0-3-1.5c-1.7 0-3 .9-3 2.2 0 2.9 6 1.6 6 4.4 0 1.3-1.3 2.2-3 2.2a3.2 3.2 0 0 1-3-1.5"/></svg>',
             app:        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10" y1="18" x2="14" y2="18"/></svg>',
+            // WeTaxi: un'auto vista di fronte; Buoni: un biglietto; Aggiunta: il piu'
+            wetaxi:     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14"/><path d="M5 17v2"/><path d="M19 17v2"/><path d="M4 17v-4l2-5h12l2 5v4"/><line x1="4" y1="13" x2="20" y2="13"/><circle cx="7.5" cy="15" r=".6"/><circle cx="16.5" cy="15" r=".6"/></svg>',
+            buoni:      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z"/><line x1="14" y1="7" x2="14" y2="17" stroke-dasharray="2 2"/></svg>',
+            aggiunta:   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
             conto:      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
             bonifico:   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/></svg>',
             carburante: '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="22" x2="13" y2="22"/><path d="M5 22V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v18"/><line x1="5" y1="10" x2="11" y2="10"/><path d="M15 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3"/></svg>'
@@ -9405,8 +9572,16 @@
                     <button onclick="corsaLampo('Satispay')" class="tasto-metodo bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors">
                         ${ICONE_METODO.satispay} Satispay
                     </button>
-                    <button onclick="corsaLampo('App/Nexi')" class="tasto-metodo bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors">
-                        ${ICONE_METODO.app} App / Voucher
+                    <!-- Versione 181: «App / Voucher» diventa tre tasti. Le corse
+                         gia' segnate App/Nexi restano com'erano. -->
+                    <button onclick="corsaLampo('WeTaxi')" class="tasto-metodo bg-amber-600 text-gray-900 shadow-sm transition-colors">
+                        ${ICONE_METODO.wetaxi} WeTaxi
+                    </button>
+                    <button onclick="corsaLampo('Buoni')" class="tasto-metodo bg-fuchsia-600 hover:bg-fuchsia-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.buoni} Buoni
+                    </button>
+                    <button onclick="corsaLampo('Aggiunta importi')" class="tasto-metodo bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors">
+                        ${ICONE_METODO.aggiunta} Aggiunta importi
                     </button>
                 </div>
                 <!-- La domanda sulla corsa sopra soglia (vedi SOGLIA_CORSA_STRANA).
@@ -9574,6 +9749,8 @@
                         ${r.fattura ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Con fattura">fatt.</span>' : ''}
                         ${copertaDalBudget(r) ? '<span class="shrink-0 bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase" title="Voce a budget: non pesa su questa giornata, e\' spalmata su tutto l\'anno">a budget</span>' : ''}
                     </span>
+                    ${(() => { const t = testoRifornimento(infoRifornimento(r));
+                        return t ? `<span class="block text-[11px] font-bold text-gray-500 mt-0.5">${esc(t)}</span>` : ''; })()}
                 </span>
                 <button onclick="apriModificaRecord('${escJs(r.id)}')" title="Modifica questa spesa" aria-label="Modifica la spesa ${esc(r.categoria)} da ${formatCurrency(r.importo)}"
                         class="tasto-icona shrink-0 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
@@ -9735,7 +9912,7 @@
             // Ripartizione del periodo, calcolata prima del filtro metodo: serve a
             // far vedere quanto pesa ogni voce prima di selezionarla.
             const perMetodo = {};
-            ['Contanti', 'POS', 'Satispay', 'App', 'Conto'].forEach(k => perMetodo[k] = { n: 0, tot: 0 });
+            METODI_CORRISPETTIVI.forEach(k => perMetodo[k] = { n: 0, tot: 0 });
             corsePeriodo.forEach(r => {
                 const famiglia = famigliaMetodo(r.metodo);
                 const f = perMetodo[famiglia] ? famiglia : 'App';
@@ -9842,7 +10019,7 @@
             // toglie e basta, e la riga sotto dice perche'.
             // I riquadri dei metodi si mostrano solo se hanno qualcosa dentro:
             // cinque riquadri di cui tre a 0,00 € sono tre righe di niente.
-            const metodiPieni = ['Contanti', 'POS', 'Satispay', 'App', 'Conto'].filter(k => perMetodo[k].n > 0);
+            const metodiPieni = METODI_CORRISPETTIVI.filter(k => perMetodo[k].n > 0);
             // ============================================================
             //  LA DIVISIONE PER METODO, SU FONDO SCURO
             //  Sono i soldi divisi per come sono entrati: la stessa cosa che
@@ -9886,6 +10063,9 @@
                                     <option value="Contanti" ${metodo==='Contanti'?'selected':''}>Contanti</option>
                                     <option value="POS" ${metodo==='POS'?'selected':''}>POS / Carta</option>
                                     <option value="Satispay" ${metodo==='Satispay'?'selected':''}>Satispay</option>
+                                    <option value="WeTaxi" ${metodo==='WeTaxi'?'selected':''}>WeTaxi</option>
+                                    <option value="Buoni" ${metodo==='Buoni'?'selected':''}>Buoni</option>
+                                    <option value="Aggiunta" ${metodo==='Aggiunta'?'selected':''}>Aggiunta importi</option>
                                     <option value="App" ${metodo==='App'?'selected':''}>App / Voucher</option>
                                     <option value="Conto" ${metodo==='Conto'?'selected':''}>Conto</option>
                                 </select>
@@ -10768,8 +10948,41 @@
                       : periodoDash() === 'mese' ? renderRiepilogoMensile()
                       : renderRiepilogoAnnuale()}
 
+                    <!-- Sotto il riepilogo, non sopra: e' quello che si guarda prima -->
+                    ${periodoDash() !== 'giorno' ? bloccoCarburanteAlKm(meseSelezionato(), annoAttivo()) : ''}
+
                 </div>
             `;
+        }
+
+        // IL CARBURANTE AL KM, IN ANDAMENTO (versione 181)
+        // Il mese che si sta guardando e l'anno: quanto costa in media un km
+        // di carburante. Se ci sono rifornimenti ma nessuno ha i km nella
+        // nota, si dice come fare invece di sparire.
+        function bloccoCarburanteAlKm(ym, anno) {
+            const rifAnno = (window.dailyRecords || []).filter(r => eRifornimento(r) && String(r.data || '').slice(0, 4) === String(anno));
+            if (!rifAnno.length) return '';
+            const fine = (y) => { const [a, m] = y.split('-').map(Number); return `${y}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`; };
+            const mese = carburanteAlKm(`${ym}-01`, fine(ym));
+            const tutto = carburanteAlKm(`${anno}-01-01`, `${anno}-12-31`);
+            const [, nm] = ym.split('-').map(Number);
+            const riga = (titolo, c) => `
+                <div class="min-w-0">
+                    <p class="text-[10.5px] font-bold uppercase tracking-wider text-gray-400">${titolo}</p>
+                    <p class="text-lg font-black text-gray-900 mt-0.5">${c.euroKm !== null ? euroAlKm(c.euroKm) : '—'}</p>
+                    <p class="text-[11px] font-medium text-gray-500">${c.n ? `${numeroIT(c.km)} km · ${formatCurrency(c.spesa)}` : 'nessun pieno coi km'}</p>
+                </div>`;
+            return `
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                    <p class="text-xs font-black uppercase tracking-wider text-gray-400">Carburante al chilometro</p>
+                    ${tutto.n ? `
+                        <div class="grid grid-cols-2 gap-3 mt-2">
+                            ${riga(nomeMese(nm), mese)}
+                            ${riga('Anno ' + anno, tutto)}
+                        </div>
+                        <p class="text-[11px] text-gray-400 mt-2">Dal contachilometri scritto nella nota di ogni rifornimento: la spesa divisa per i km fatti dal pieno prima.</p>`
+                    : `<p class="text-xs text-gray-500 mt-1.5">Scrivi il contachilometri nella nota del rifornimento, per esempio «km 152340»: da lì l'app calcola quanto ti costa ogni chilometro.</p>`}
+                </div>`;
         }
 
         function renderSchedaOggi() {
@@ -11021,6 +11234,8 @@
                                                 ${r.serie ? `<span class="ml-2 bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs font-black uppercase whitespace-nowrap">ricorrente</span>` : ''}
                                                 ${r.fattura ? `<span class="ml-2 bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs font-black uppercase whitespace-nowrap">con fattura</span>` : ''}
                                                 ${r.nota ? `<span class="block text-xs font-medium text-gray-500 mt-0.5">${esc(r.nota)}</span>` : ''}
+                                                ${(() => { const t = testoRifornimento(infoRifornimento(r));
+                                                    return t ? `<span class="block text-xs font-bold text-gray-600 mt-0.5">${esc(t)}</span>` : ''; })()}
                                             </td>
                                             <td class="p-4 text-sm"><span class="${metodoBadgeClass(r.metodo)} px-2.5 py-1 rounded-md text-xs font-bold">${esc(r.metodo)}</span></td>
                                             <td class="p-4 text-right text-base font-black text-red-600">-${formatCurrency(r.importo)}</td>
@@ -12249,6 +12464,13 @@
                                         <span class="text-gray-600 font-medium flex items-start gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 mt-1.5"></span><span class="min-w-0">Conto:</span></span>
                                         <span class="font-black text-gray-900 whitespace-nowrap shrink-0">${formatCurrency(rep.conto)}</span>
                                     </div>
+                                    ${[['WeTaxi', rep.wetaxi, 'bg-amber-600'], ['Buoni', rep.buoni, 'bg-fuchsia-600'],
+                                       ['Aggiunta importi', rep.aggiunta, 'bg-indigo-600']]
+                                      .filter(m => m[1] > 0).map(m => `
+                                    <div class="flex justify-between py-1 border-b border-gray-200/60">
+                                        <span class="text-gray-600 font-medium flex items-start gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full ${m[2]} shrink-0 mt-1.5"></span><span class="min-w-0">${m[0]}:</span></span>
+                                        <span class="font-black text-gray-900 whitespace-nowrap shrink-0">${formatCurrency(m[1])}</span>
+                                    </div>`).join('')}
                                     <div class="flex justify-between py-1">
                                         <span class="text-gray-600 font-medium flex items-start gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 mt-1.5"></span><span class="min-w-0">App / Voucher:</span></span>
                                         <span class="font-black text-gray-900 whitespace-nowrap shrink-0">${formatCurrency(rep.app)}</span>
@@ -14393,6 +14615,13 @@
             if (m.includes('pos') || m.includes('carta')) return 'POS';
             if (m.includes('contant')) return 'Contanti';
             if (m.includes('satispay')) return 'Satispay';
+            // Versione 181: «App / Voucher» si divide. Le corse nuove si
+            // segnano WeTaxi, Buoni o Aggiunta importi; quelle gia' registrate
+            // come «App/Nexi» restano nel mucchio App, com'erano. Per le tasse
+            // sono tutti incassi tracciati, come prima (metodoTracciato).
+            if (m.includes('wetaxi')) return 'WeTaxi';
+            if (m.includes('buon')) return 'Buoni';
+            if (m.includes('aggiunt')) return 'Aggiunta';
             // «Conto» e' la corsa che il cliente non paga al momento: albergo,
             // agenzia, ditta in convenzione. Si segna sul conto e si incassa
             // dopo. Fino alla v103 si chiamava «Fattura», che era il documento e
@@ -14412,6 +14641,9 @@
             'Contanti': { punto: 'bg-green-400',  testo: 'text-green-400',  pieno: 'bg-green-600 text-white' },
             'POS':      { punto: 'bg-yellow-400', testo: 'text-yellow-400', pieno: 'bg-yellow-400 text-gray-900' },
             'Satispay': { punto: 'bg-red-400',    testo: 'text-red-400',    pieno: 'bg-red-600 text-white' },
+            'WeTaxi':   { punto: 'bg-amber-600',  testo: 'text-amber-600',  pieno: 'bg-amber-600 text-gray-900' },
+            'Buoni':    { punto: 'bg-fuchsia-600', testo: 'text-purple-500', pieno: 'bg-fuchsia-600 text-white' },
+            'Aggiunta': { punto: 'bg-indigo-500', testo: 'text-indigo-400', pieno: 'bg-indigo-600 text-white' },
             'App':      { punto: 'bg-blue-400',   testo: 'text-blue-400',   pieno: 'bg-blue-600 text-white' },
             'Conto':    { punto: 'bg-sky-300',    testo: 'text-sky-300',    pieno: 'bg-sky-500 text-white' }
         };
@@ -14434,6 +14666,9 @@
             'Contanti': 'Contanti',
             'POS': 'POS / Carta',
             'Satispay': 'Satispay',
+            'WeTaxi': 'WeTaxi',
+            'Buoni': 'Buoni',
+            'Aggiunta': 'Aggiunta importi',
             'App': 'App / Voucher',
             'Conto': 'Conto'
         };

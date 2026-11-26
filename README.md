@@ -148,6 +148,60 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## WeTaxi, Buoni, Aggiunta importi, e il carburante al chilometro (versione 181)
+
+### I tasti della corsa: «App / Voucher» diventa tre
+
+Il tasto blu «App / Voucher» metteva insieme cose diverse. Adesso la corsa veloce ha sei
+tasti: **Contanti, POS, Satispay, WeTaxi, Buoni, Aggiunta importi**. Ognuno ha il suo
+mucchio dappertutto: nella scheda «Filtra per metodo», nel registro dei corrispettivi (la
+colonna compare solo nei mesi in cui c'è qualcosa), nel riepilogo per il commercialista e
+nella modifica di una corsa.
+
+Per le tasse **non cambia niente**: WeTaxi, Buoni e Aggiunta importi sono incassi
+tracciati, come lo era App / Voucher, e entrano nella base imponibile allo stesso modo.
+Le corse già registrate come «App / Voucher» **restano com'erano**: nessun dato storico
+cambia, e aprendo la modifica di una corsa vecchia il metodo resta «App / Voucher».
+
+Con sei tasti la scheda è più alta: tasti e cifra occupano circa 270 punti, e stanno sopra
+la tastiera anche sull'iPhone più piccolo, che ne lascia circa 300.
+
+### Il carburante al chilometro
+
+Il titolare scrive il **contachilometri nella nota del rifornimento**. Adesso l'app lo
+legge — «km 152340», «152.340», «152 340 km»; i litri e il prezzo al litro no, e se nella
+nota ci sono più numeri conta quello vicino a «km» — e calcola, rifornimento per
+rifornimento, i **km fatti dal pieno prima** e **quanto è costato ogni chilometro**.
+
+Il conto è «da pieno a pieno»: il carburante messo oggi è quello consumato dall'ultimo
+rifornimento coi km, quindi la spesa di oggi — più quella dei rabbocchi in mezzo, se nella
+loro nota i km non ci sono — si divide per i km fatti da allora. Se non si fa sempre il
+pieno, il singolo rifornimento oscilla, ma la media del mese e dell'anno torna giusta.
+
+Si vede in tre posti:
+- **sulla riga del rifornimento**, nel registro e nella scheda Spese: «650 km dal pieno
+  prima · 0,146 €/km»;
+- **in Andamento**, sotto il riepilogo del mese o dell'anno: la media del mese e quella
+  dell'anno, con i km e la spesa;
+- **nel Parco auto**, per ogni vettura: la media nel periodo in cui l'hai avuta.
+
+Il costo al km ha tre decimali: fra 0,14 e 0,145 €/km, su 60.000 km l'anno, ballano 300 €.
+
+Una nota scritta male non sporca i conti: un contachilometri **più basso** del pieno prima,
+o più di **5.000 km** dal pieno prima (una cifra in più), dice «controlla la nota» sulla
+riga e resta fuori dalle medie; il pieno dopo riparte dall'ultima lettura buona.
+
+E le letture buone servono anche alla **manutenzione programmata** e ai km del Parco auto,
+che prima vedevano solo il contachilometri dei turni: chi non segna i km dei turni ma li
+scrive nei rifornimenti adesso ha il conto alla rovescia dei tagliandi.
+
+**Da sapere**: i rifornimenti non sono legati a una vettura; con due auto in uso negli
+stessi giorni i contachilometri si mescolerebbero. E la parola «km» nella nota è la cosa
+più sicura: senza, l'app prende il numero più grande sopra i mille.
+
+`prove/testMetodiCarburante.mjs` controlla le due cose; `testCorsaStrana` e
+`testTastiSopra` aggiornate ai sei tasti.
+
 ## Dopo la corsa, solo «Annulla» (versione 180)
 
 Dopo ogni corsa veloce compariva in basso un riquadro nero: «25,00 € · POS — in giornata

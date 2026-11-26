@@ -177,12 +177,13 @@ await tocca(p, 'POS');
 c = await corse(p);
 ok(c.length === 2 && c[1].importo === 2350 && c[1].metodo === 'POS', 'POS ritoccato: salvata la corsa POS', JSON.stringify(c));
 
-// Il nome sul tasto «App / Voucher» non e' il metodo «App/Nexi»: la domanda
-// deve usare le parole che si leggono sotto il pollice.
+// La domanda usa le parole che si leggono sotto il pollice. Fino alla v180
+// c'era «App / Voucher», salvato come «App/Nexi»; dalla v181 quel tasto e'
+// diventato WeTaxi, Buoni e Aggiunta importi, che si salvano col loro nome.
 await scrivi(p, '450');
-await tocca(p, 'App/Nexi');
+await tocca(p, 'Aggiunta importi');
 a = await avviso(p);
-ok(a.testo === domanda('450,00', 'App / Voucher'), 'su App / Voucher la domanda usa il nome del tasto', JSON.stringify(a.testo));
+ok(a.testo === domanda('450,00', 'Aggiunta importi'), 'su Aggiunta importi la domanda usa il nome del tasto', JSON.stringify(a.testo));
 
 // Cambiare la cifra riparte da capo.
 await scrivi(p, '2350');
@@ -445,7 +446,8 @@ for (const [larghezza, tema] of [[320, 'chiaro'], [320, 'scuro'], [390, 'scuro']
   p = await apri(larghezza, tema);
   // la cifra piu' larga che si possa scrivere davvero
   await scrivi(p, '99999,99');
-  await tocca(p, 'App/Nexi');
+  // il nome piu' lungo fra i tasti: la domanda piu' larga che possa uscire
+  await tocca(p, 'Aggiunta importi');
   const m = await p.evaluate(() => {
     const e = document.getElementById('corsa-lampo-avviso');
     if (!e) return null;
