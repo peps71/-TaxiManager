@@ -57,8 +57,9 @@ console.log('\n  A) i tre tasti nuovi della corsa veloce');
 await p.evaluate(() => switchTab('giornata'));
 await p.waitForTimeout(300);
 const tasti = await p.evaluate(() => [...document.querySelectorAll('[data-scheda-corsa] .tasto-metodo')].map(t => t.textContent.trim()));
-ok(JSON.stringify(tasti) === JSON.stringify(['Contanti', 'POS', 'Satispay', 'WeTaxi', 'Buoni', 'Aggiunta importi']),
-   'sei tasti: Contanti, POS, Satispay, WeTaxi, Buoni, Aggiunta importi', JSON.stringify(tasti));
+// versione 183: il tasto «Aggiunta importi» si legge «Importi»; il metodo salvato non cambia
+ok(JSON.stringify(tasti) === JSON.stringify(['Contanti', 'POS', 'Satispay', 'WeTaxi', 'Buoni', 'Importi']),
+   'sei tasti: Contanti, POS, Satispay, WeTaxi, Buoni, Importi', JSON.stringify(tasti));
 const imponibilePrima = await p.evaluate(() => { const st = getStats(); return st.entrateTracciateCorse; }).catch(() => null);
 for (const [imp, met] of [['20', 'WeTaxi'], ['15', 'Buoni'], ['5', 'Aggiunta importi']]) {
   await p.fill('#corsa-lampo', imp);

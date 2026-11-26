@@ -2664,7 +2664,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 182;
+        const VERSIONE_APP = 183;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -4319,7 +4319,7 @@
                 ? [['Contanti', 'Contanti'], ['POS', 'POS / Carta'], ['Satispay', 'Satispay'],
                    ['Carta Carburante', 'Carta Carburante'], ['Conto', 'Conto'], ['Bonifico', 'Bonifico']]
                 : [['Contanti', 'Contanti'], ['POS', 'POS / Carta'], ['Satispay', 'Satispay'],
-                   ['WeTaxi', 'WeTaxi'], ['Buoni', 'Buoni'], ['Aggiunta importi', 'Aggiunta importi'],
+                   ['WeTaxi', 'WeTaxi'], ['Buoni', 'Buoni'], ['Aggiunta importi', 'Importi'],
                    ['Conto', 'Conto']];
             // Un movimento vecchio puo' avere un metodo che non e' piu' in
             // elenco («Fattura» prima della v104): se sparisse dalla tendina,
@@ -7646,7 +7646,7 @@
         // compaiono solo quando ci sono, e «App» resta per le corse di prima.
         const METODI_CORRISPETTIVI = ['Contanti', 'POS', 'Satispay', 'WeTaxi', 'Buoni', 'Aggiunta', 'App', 'Conto'];
         const METODI_BREVI = { 'Contanti': 'Contanti', 'POS': 'POS', 'Satispay': 'Satispay', 'WeTaxi': 'WeTaxi',
-                               'Buoni': 'Buoni', 'Aggiunta': 'Aggiunta', 'App': 'App', 'Conto': 'Conto' };
+                               'Buoni': 'Buoni', 'Aggiunta': 'Importi', 'App': 'App', 'Conto': 'Conto' };
 
         function corrispettiviMese(ym) {
             return memo('corrispettivi:' + ym, () => corrispettiviMeseCalcola(ym));
@@ -7751,7 +7751,7 @@
                 ['Satispay', d.satispay, 'bg-red-500'],
                 ['WeTaxi', d.wetaxi || 0, 'bg-amber-600'],
                 ['Buoni', d.buoni || 0, 'bg-fuchsia-600'],
-                ['Aggiunta importi', d.aggiunta || 0, 'bg-indigo-600'],
+                ['Importi', d.aggiunta || 0, 'bg-indigo-600'],
                 ['App / Voucher', d.app, 'bg-blue-500'],
                 ['Conto', d.conto, 'bg-indigo-500']
             ];
@@ -9756,7 +9756,7 @@
                         ${ICONE_METODO.buoni} Buoni
                     </button>
                     <button onclick="corsaLampo('Aggiunta importi')" class="tasto-metodo bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-colors">
-                        ${ICONE_METODO.aggiunta} Aggiunta importi
+                        ${ICONE_METODO.aggiunta} Importi
                     </button>
                 </div>
                 <!-- La domanda sulla corsa sopra soglia (vedi SOGLIA_CORSA_STRANA).
@@ -10240,7 +10240,7 @@
                                     <option value="Satispay" ${metodo==='Satispay'?'selected':''}>Satispay</option>
                                     <option value="WeTaxi" ${metodo==='WeTaxi'?'selected':''}>WeTaxi</option>
                                     <option value="Buoni" ${metodo==='Buoni'?'selected':''}>Buoni</option>
-                                    <option value="Aggiunta" ${metodo==='Aggiunta'?'selected':''}>Aggiunta importi</option>
+                                    <option value="Aggiunta" ${metodo==='Aggiunta'?'selected':''}>Importi</option>
                                     <option value="App" ${metodo==='App'?'selected':''}>App / Voucher</option>
                                     <option value="Conto" ${metodo==='Conto'?'selected':''}>Conto</option>
                                 </select>
@@ -10336,18 +10336,17 @@
                         </div>
 
                         <p class="flex items-center gap-2">
-                            <!-- Versione 182: un po' piu' piccola (36 punti invece di 42) e la scheda
-                             piu' stretta, su richiesta del titolare: la corsa veloce sale. -->
-                            <span class="cifra text-4xl leading-none">${cifraEuroCoperta(totCorse)}</span>
+                            <!-- Versione 182: 36 punti invece di 42; versione 183: 30, su
+                             richiesta del titolare. La scheda si stringe e la corsa veloce sale. -->
+                            <span class="cifra text-3xl leading-none">${cifraEuroCoperta(totCorse)}</span>
                             ${occhioIncasso(true)}
                         </p>
                         <p class="text-xs font-medium text-white/50 mt-1">
                             incassato${metodo !== 'ALL' ? ' in ' + NOMI_METODO[metodo] : ''} · ${corseFiltrate.length} ${corseFiltrate.length === 1 ? 'corsa' : 'corse'}${corseFiltrate.length ? ' · ' + formatCurrency(mediaCorsa) + ' a corsa' : ''}
                         </p>
-                        ${turniLavorati.length ? `
-                            <p class="text-xs font-medium text-white/35 mt-0.5">
-                                ${turniLavorati.length} ${turniLavorati.length === 1 ? 'turno' : 'turni'} · ${oreScritte(oreTot)} h${kmTot ? ' · ' + numeroIT(kmTot) + ' km' : ''}
-                            </p>` : ''}
+                        <!-- Qui c'era la riga «1 turno · 12 h · km». Tolta su richiesta del
+                             titolare (versione 183): turno, ore e km si leggono nel registro
+                             della giornata, subito sotto. -->
                         <!-- Qui c'era «X € pagati oggi sono già a budget: non pesano su
                              questa giornata…». Tolta su richiesta del titolare (versione
                              179): ripeteva quello che il costo del giorno gia' fa, e
@@ -12783,7 +12782,7 @@
                                         <span class="font-black text-gray-900 whitespace-nowrap shrink-0">${formatCurrency(rep.conto)}</span>
                                     </div>
                                     ${[['WeTaxi', rep.wetaxi, 'bg-amber-600'], ['Buoni', rep.buoni, 'bg-fuchsia-600'],
-                                       ['Aggiunta importi', rep.aggiunta, 'bg-indigo-600']]
+                                       ['Importi', rep.aggiunta, 'bg-indigo-600']]
                                       .filter(m => m[1] > 0).map(m => `
                                     <div class="flex justify-between py-1 border-b border-gray-200/60">
                                         <span class="text-gray-600 font-medium flex items-start gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full ${m[2]} shrink-0 mt-1.5"></span><span class="min-w-0">${m[0]}:</span></span>
@@ -13852,8 +13851,13 @@
 
         // I nomi come sono scritti sui tasti, per dire «tocca di nuovo X»
         // con le stesse parole che si leggono sotto il pollice.
+        // Versione 183: il tasto «Aggiunta importi» si chiama «Importi». Le corse
+        // si salvano ancora col nome di prima, cosi' vecchie e nuove stanno nello
+        // stesso mucchio; cambia solo quello che si legge.
         function nomeTastoMetodo(metodo) {
-            return metodo === 'App/Nexi' ? 'App / Voucher' : metodo;
+            if (metodo === 'App/Nexi') return 'App / Voucher';
+            if (metodo === 'Aggiunta importi') return 'Importi';
+            return metodo;
         }
 
         function nascondiAvvisoCorsaStrana() {
@@ -13933,7 +13937,7 @@
                 // titolare): la cifra si svuota e la corsa e' gia' nel registro.
                 // Resta solo «Annulla», per 3 secondi, per lo sbaglio di dito.
                 showToast('', null, annullaCorsa,
-                    { soloAnnulla: true, durata: 3000, etichetta: `Annulla la corsa da ${formatCurrency(importo)} · ${metodo}` });
+                    { soloAnnulla: true, durata: 3000, etichetta: `Annulla la corsa da ${formatCurrency(importo)} · ${nomeTastoMetodo(metodo)}` });
             }
             renderContent();
             // Il campo torna vuoto e tiene il cursore: la corsa dopo si scrive
@@ -14986,7 +14990,7 @@
             'Satispay': 'Satispay',
             'WeTaxi': 'WeTaxi',
             'Buoni': 'Buoni',
-            'Aggiunta': 'Aggiunta importi',
+            'Aggiunta': 'Importi',
             'App': 'App / Voucher',
             'Conto': 'Conto'
         };
