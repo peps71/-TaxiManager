@@ -148,6 +148,51 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## Il calendario di famiglia, e la scheda nera più stretta (versione 182)
+
+### I turni di tua moglie e gli avvenimenti, nel calendario
+
+Il titolare organizza i suoi riposi in base ai turni della moglie, e vuole vedere a colpo
+d'occhio i giorni in cui ha un impegno personale e deve prendere riposo. Adesso il
+calendario lo fa:
+
+- **nella griglia del mese**, in alto a sinistra di ogni giorno, una lettera colorata col
+  turno della moglie: **M** mattina, **P** pomeriggio, **N** notte, **R** riposo; in alto a
+  destra una stellina **★** se quel giorno c'è un avvenimento. La legenda è sotto il
+  calendario;
+- **aprendo un giorno**, la sezione **«Famiglia»**: quattro tasti per il turno della moglie
+  (toccando di nuovo quello scelto lo si toglie) e un campo per l'avvenimento, con «Salva»
+  e «Togli». L'avvenimento compare anche in giallo in cima al giorno.
+
+È solo un appunto da vedere: **nessun promemoria**, come chiesto. Non tocca corse, spese,
+tasse né i turni del titolare. Un testo scritto e non salvato vale per il suo giorno:
+aprendo un altro giorno si lascia andare.
+
+I dati stanno in un archivio nuovo, `taxi_famiglia`, **un documento per giorno** (`id` =
+la data, `moglie`, `avvenimento` fino a 200 caratteri; un giorno senza niente si cancella).
+Si sincronizza sul Cloud come le note e i versamenti, passa dal registro delle modifiche in
+attesa (senza campo resta sul telefono e parte dopo), entra nel backup come `famiglia` e ne
+rientra; un backup vecchio, senza calendario, rientra identico. Le regole di Firestore non
+cambiano: coprono già tutta la cartella del titolare. Se telefono e Mac cambiano lo stesso
+giorno quasi insieme, vale l'ultima modifica, come per le note.
+
+### La scheda nera di «Oggi» più stretta
+
+Il totale dell'incasso passa da 42 a 36 punti e gli spazi interni si stringono: 20 punti
+in meno di scheda, e la corsa veloce sale.
+
+### Le prove
+
+`prove/testFamiglia.mjs` (nuova): i dati, due dispositivi sul Firebase finto, la riapertura
+senza campo, il cambio di account, il backup dai tasti veri, l'interfaccia a 320, 390 e 1280
+punti di giorno e al buio, un avvenimento con codice dentro, la bozza. `testArchivi` conta
+sei archivi, `testGrafica` misura la scheda nera, `testAccount` e `testOffline` hanno il
+testo nuovo dell'avviso del cambio di account. Ognuna fallisce sulla versione di prima.
+
+**Da vedere sul telefono**: le lettere M P N R e la stellina nelle caselle del calendario
+(il carattere dell'iPhone è diverso da quello delle prove), il tasto «Fine» della tastiera
+nel campo dell'avvenimento.
+
 ## WeTaxi, Buoni, Aggiunta importi, e il carburante al chilometro (versione 181)
 
 ### I tasti della corsa: «App / Voucher» diventa tre
