@@ -14922,6 +14922,9 @@
                 vociFisse: window.vociFisse || [],
                 note: window.note || [],
                 versamenti: window.versamenti || [],
+                // Il calendario di famiglia: un backup di prima non ce l'ha,
+                // e rientra lo stesso (vedi righeDelBackup).
+                famiglia: window.famiglia || [],
                 impostazioniFiscali: window.fiscalSettings,
                 profilo: window.profilo || null,
                 date: new Date().toISOString()
@@ -15376,8 +15379,13 @@
                 .filter(x => valida(x) && (typeof x.importo === 'number' || typeof x.importo === 'string')
                              && Number.isFinite(parseFloat(x.importo)) && parseFloat(x.importo) > 0)
                 .map(x => pulisciCampiBackup(x, ['dove', 'nota', 'creato']));
+            // Il calendario di famiglia: la stessa pulizia di quando arriva
+            // dal Cloud (pulisciGiornoFamiglia). Un giorno che non dice niente
+            // non entra; un backup fatto prima che ci fosse non ha questo elenco,
+            // e qui resta vuoto.
+            const famiglia = elenco('famiglia').map(pulisciGiornoFamiglia).filter(Boolean);
             return {
-                records, shifts, scadenze, veicoli, vociFisse, note, versamenti,
+                records, shifts, scadenze, veicoli, vociFisse, note, versamenti, famiglia,
                 scartati: elenco('records').length - records.length + elenco('shifts').length - shifts.length
             };
         }
@@ -15456,6 +15464,7 @@
             if (righe.versamenti.length) altre.push('versamenti');
             if (righe.veicoli.length) altre.push('vetture');
             if (righe.vociFisse.length) altre.push('voci di budget');
+            if (righe.famiglia.length) altre.push('calendario di famiglia');
             if (imp && typeof imp === 'object' && chiaviFiscali.some(k => k in imp)) altre.push('impostazioni');
             const quando = new Date(data.date);
             return {
@@ -15504,7 +15513,8 @@
             const altre = r.altre || [];
             if (altre.length) {
                 const articolo = { scadenze: 'le scadenze', note: 'le note', versamenti: 'i versamenti',
-                                   vetture: 'le vetture', 'voci di budget': 'le voci di budget', impostazioni: 'le impostazioni' };
+                                   vetture: 'le vetture', 'voci di budget': 'le voci di budget', impostazioni: 'le impostazioni',
+                                   'calendario di famiglia': 'i turni di tua moglie e gli avvenimenti' };
                 const elenco = altre.length === 1
                     ? articolo[altre[0]]
                     : altre.slice(0, -1).join(', ') + ' e ' + altre[altre.length - 1];
@@ -15536,6 +15546,7 @@
             const vociImportate = righe.vociFisse;
             const noteImportate = righe.note;
             const versamentiImportati = righe.versamenti;
+            const famigliaImportata = righe.famiglia;
             const scartati = righe.scartati;
 
             // La scheda del tassista si rimette per prima, e fuori dal controllo
@@ -15566,7 +15577,7 @@
                 }
             }
 
-            if (!records.length && !shifts.length && !scadenze.length && !veicoli.length && !vociImportate.length && !noteImportate.length && !versamentiImportati.length) {
+            if (!records.length && !shifts.length && !scadenze.length && !veicoli.length && !vociImportate.length && !noteImportate.length && !versamentiImportati.length && !famigliaImportata.length) {
                 showToast(schedaTornata
                     ? 'Rimessa la tua scheda. Di movimenti e turni in questo backup non ce n\'erano.'
                     : 'Non ci sono movimenti, turni o scadenze validi da rimettere.');
@@ -15610,6 +15621,16 @@
                 window.versamenti = Array.from(mappa.values()).sort(perDataDecrescente);
                 salvaVersamenti();
                 if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_versamenti', versamentiImportati);
+            }
+
+            // Il calendario di famiglia: un giorno del backup prende il posto
+            // dello stesso giorno di adesso, gli altri giorni restano.
+            if (famigliaImportata.length) {
+                const mappa = new Map(elencoFamiglia().map(x => [String(x && x.id), x]));
+                famigliaImportata.forEach(x => mappa.set(String(x.id), x));
+                window.famiglia = Array.from(mappa.values()).sort(perDataCrescente);
+                salvaFamiglia();
+                if (window.salvaElencoSulCloud) window.salvaElencoSulCloud('taxi_famiglia', famigliaImportata);
             }
 
             if (vociImportate.length) {
@@ -15676,6 +15697,7 @@
             if (scadenze.length) pezzi.push(`${scadenze.length} scadenze`);
             if (veicoli.length) pezzi.push(`${veicoli.length} vetture`);
             if (versamentiImportati.length) pezzi.push(`${versamentiImportati.length} versamenti`);
+            if (famigliaImportata.length) pezzi.push(`${famigliaImportata.length} ${famigliaImportata.length === 1 ? 'giorno' : 'giorni'} del calendario di famiglia`);
             if (impostazioni) pezzi.push('le impostazioni fiscali');
             if (schedaTornata) pezzi.push('la tua scheda');
             const coda = pezzi.length ? ' e ' + pezzi.join(', ') : '';
