@@ -1554,8 +1554,9 @@
             }
             signOut(auth).catch(err => console.warn('Uscita non riuscita:', err));
             // Azzerare movimenti e turni basta per la domanda, non per il
-            // resto: note, scadenze, vetture, versamenti, voci di budget, la
-            // scheda e le impostazioni fiscali del telefono, entrando, vanno
+            // resto: note, scadenze, vetture, versamenti, voci di budget, il
+            // calendario di famiglia, la scheda e le impostazioni fiscali del
+            // telefono, entrando, vanno
             // da sole nelle cartelle di B ancora vuote (la migrazione), senza
             // chiedere. L'avviso lo dice, invece di far credere che basti.
             if (window.showToast) window.showToast(`Per usare ${email} con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra. Attenzione: note, scadenze, vetture, versamenti, voci di budget, calendario di famiglia, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in ${email} dove lì non ce ne sono ancora.`, 'avviso');
@@ -3164,7 +3165,7 @@
         // account, quello che era suo non deve partire verso questo: le
         // cancellazioni (in B toglierebbero righe che B ha per conto suo),
         // il profilo, le impostazioni fiscali e le voci di budget (i valori
-        // di A scritti sopra quelli di B). Le scritte dei sei archivi
+        // di A scritti sopra quelli di B). Le scritte dei sette archivi
         // diventano candidati: partono solo se B non le ha gia' (vedi
         // segnaTuttoIlLocale e risolviCandidati).
         // opz.conIlLocale: e' l'OK alla domanda; anche i dati del telefono
@@ -3228,7 +3229,7 @@
         }
 
         // Le modifiche scritte qui e non ancora partite che OK porterebbe
-        // nel nuovo account: quelle dei sei archivi (profilo, fiscali e
+        // nel nuovo account: quelle dei sette archivi (profilo, fiscali e
         // voci di budget restano fuori, vedi adottaAccount).
         function contaSospesiDaPortare() {
             const reg = leggiSospesi();
@@ -10506,6 +10507,10 @@
         function toccaGiornoCalendario(iso) {
             if (window.spostaTurnoId) { concludiSpostamento(iso); return; }
             window.giornoCalendarioAperto = window.giornoCalendarioAperto === iso ? null : iso;
+            // Un avvenimento scritto e non salvato vale per il giorno su cui
+            // lo si scriveva: aprendo un altro giorno si lascia andare, se no
+            // tornando dopo un'ora sembrerebbe salvato.
+            window.bozzaAvvenimento = null;
             renderContent();
         }
 
@@ -15554,8 +15559,9 @@
                 .filter(x => valida(x) && (typeof x.importo === 'number' || typeof x.importo === 'string')
                              && Number.isFinite(parseFloat(x.importo)) && parseFloat(x.importo) > 0)
                 .map(x => pulisciCampiBackup(x, ['dove', 'nota', 'creato']));
-            // Il calendario di famiglia: la stessa pulizia di quando arriva
-            // dal Cloud (pulisciGiornoFamiglia). Un giorno che non dice niente
+            // Il calendario di famiglia: la stessa pulizia che si fa leggendo un
+            // giorno (pulisciGiornoFamiglia; dal Cloud le righe entrano come
+            // sono e si puliscono in lettura). Un giorno che non dice niente
             // non entra; un backup fatto prima che ci fosse non ha questo elenco,
             // e qui resta vuoto.
             const famiglia = elenco('famiglia').map(pulisciGiornoFamiglia).filter(Boolean);
