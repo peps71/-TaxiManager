@@ -2185,6 +2185,17 @@
                             soloQui: 'Note salvate solo qui: il Cloud ha rifiutato la scrittura.' }
             }));
 
+            // Il calendario di famiglia: stesso trattamento delle note. Uno
+            // snapshot vuoto si applica solo dopo aver visto che il Cloud
+            // accetta i dati, se no il primo accesso da un telefono nuovo
+            // cancellerebbe i giorni segnati qui.
+            annullaAscolti.push(ascoltaArchivio({
+                nome: 'famiglia', chiave: 'taxi_famiglia', etichetta: 'Calendario di famiglia',
+                ordina: perDataCrescente,
+                messaggi: { caricato: 'Calendario di famiglia caricato sul Cloud.',
+                            soloQui: 'Calendario di famiglia salvato solo qui: il Cloud ha rifiutato la scrittura.' }
+            }));
+
             // Parco auto: stesso trattamento delle scadenze. Uno snapshot vuoto si
             // applica solo dopo aver visto che il Cloud accetta i dati, altrimenti
             // al primo avvio cancellerebbe le vetture salvate solo qui.
@@ -2427,6 +2438,14 @@
 
         window.deleteNotaFromCloud = async function(id) {
             return spedisci('taxi_note', id, 'd');
+        };
+
+        window.saveGiornoFamigliaToCloud = async function(giorno) {
+            return spedisci('taxi_famiglia', giorno && giorno.id, 's', giorno, 'Calendario di famiglia salvato solo su questo dispositivo.');
+        };
+
+        window.deleteGiornoFamigliaFromCloud = async function(id) {
+            return spedisci('taxi_famiglia', id, 'd');
         };
 
         window.deleteScadenzaFromCloud = async function(id) {
