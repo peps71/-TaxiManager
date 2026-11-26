@@ -4329,7 +4329,13 @@
         }
 
         function rimettiTurniPersona() {
-            bozzaPersona().turni = turniPersonaPredefiniti();
+            // I giorni segnati con un turno che non e' fra i predefiniti non si
+            // perdono, ma diventano grigi: meglio chiederlo prima.
+            const prima = JSON.stringify((bozzaPersona().turni || []).map(t => t.nome));
+            const predefiniti = turniPersonaPredefiniti();
+            if (prima !== JSON.stringify(predefiniti.map(t => t.nome))
+                && !confirm('Rimettere i turni predefiniti?\n\nI giorni già segnati con un turno diverso restano, ma si vedono in grigio finché non rimetti un turno con quel nome.')) return;
+            bozzaPersona().turni = predefiniti;
             renderContent();
             rimettiFuocoNelModulo('prof-persona-predefiniti');
         }
@@ -4356,7 +4362,7 @@
                     <div class="grid grid-cols-2 gap-2">
                         <div class="min-w-0">
                             <label for="prof-persona-sigla-${i}" class="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1">Sigla</label>
-                            <input type="text" id="prof-persona-sigla-${i}" value="${esc(t.sigla)}" maxlength="1" autocomplete="off" autocapitalize="characters"
+                            <input type="text" id="prof-persona-sigla-${i}" value="${esc(t.sigla)}" maxlength="2" autocomplete="off" autocapitalize="characters"
                                    oninput="bozzaTurnoPersona(${i}, 'sigla', this.value)"
                                    class="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 font-black text-gray-900 text-center" />
                         </div>
@@ -4433,9 +4439,16 @@
             const anno = String(new Date().getFullYear());
             const bozzaP = window.bozzaProfilo && window.bozzaProfilo.altraPersona;
             if (bozzaP) {
-                const nomi = (bozzaP.turni || []).map(x => String(x.nome || '').trim()).filter(Boolean);
+                const tutti = (bozzaP.turni || []).map(x => String(x.nome || '').trim());
+                // «Notte» e «notte» nella legenda escono uguali: contano come doppioni
+                const nomi = tutti.filter(Boolean).map(n => n.toLowerCase());
                 if (bozzaP.attivo && new Set(nomi).size < nomi.length) {
                     showToast('Due turni hanno lo stesso nome: cambiane uno, è il nome che lega i giorni al turno.', 'avviso');
+                    return;
+                }
+                // Una riga lasciata senza nome sparirebbe in silenzio: si dice.
+                if (bozzaP.attivo && tutti.some(n => !n)) {
+                    showToast('Un turno non ha il nome: scrivilo, oppure toglilo con ×.', 'avviso');
                     return;
                 }
                 dati.altraPersona = pulisciConfigPersona(bozzaP);
@@ -11401,9 +11414,12 @@
         //  la domanda arriva dal gennaio dopo. Chi compila la scheda per la
         //  prima volta ha davanti la sezione nel modulo, e salvando l'anno
         //  si scrive li' (vedi salvaProfiloDalModulo): niente domanda subito.
-        //  L'anno scritto senza chiedere resta su questo disco e non si
-        //  spedisce: e' lo stesso valore su ogni dispositivo, e spedirlo da
+        //  L'anno scritto senza chiedere resta su questo disco e di solito non
+        //  si spedisce: e' lo stesso valore su ogni dispositivo, e spedirlo da
         //  uno rimasto indietro coprirebbe una risposta vera data sull'altro.
+        //  Parte solo insieme al profilo intero, nei due casi in cui il profilo
+        //  si spedisce tutto: il primo caricamento su un Cloud vuoto e la
+        //  scrittura di riserva senza registro (disco pieno).
         // ============================================================
         function assicuraAnnoPersona() {
             const p = window.profilo || {};
