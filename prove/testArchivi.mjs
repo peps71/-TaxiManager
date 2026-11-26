@@ -1,6 +1,7 @@
 // GLI ARCHIVI CHE SI SINCRONIZZANO
-// Cinque archivi - scadenze, versamenti, note, parco auto, voci di budget -
-// passano tutti dallo stesso pezzo di codice. Su quel pezzo ci sono i dati di
+// Sei archivi - scadenze, versamenti, note, calendario di famiglia, parco
+// auto, voci di budget - passano tutti dallo stesso pezzo di codice (il
+// calendario di famiglia dalla 964eae1). Su quel pezzo ci sono i dati di
 // anni di lavoro, e fino alla versione 157 non lo provava niente: senza un
 // Cloud vero non si poteva. Adesso la logica e' separata dal cablaggio, e si
 // puo' chiamare a mano con elenchi finti.
@@ -138,13 +139,55 @@ r = await p.evaluate(async () => {
 });
 c('la chiave slug arriva intera', r.join(',') === 'assic:Assicurazione');
 
-// 7) tutti e cinque gli archivi sono agganciati con i dati giusti
+// 7) tutti e sei gli archivi sono agganciati con i dati giusti
 const agganci = await p.evaluate(() => {
   const t = document.documentElement.innerHTML;
-  return ['taxi_scadenze', 'taxi_versamenti', 'taxi_note', 'taxi_veicoli', 'taxi_voci_fisse']
+  return ['taxi_scadenze', 'taxi_versamenti', 'taxi_note', 'taxi_famiglia', 'taxi_veicoli', 'taxi_voci_fisse']
     .map(k => ({ chiave: k, agganciato: t.includes(`chiave: '${k}'`) }));
 });
 for (const a of agganci) c(`${a.chiave} passa dallo schema comune`, a.agganciato);
+
+// 7b) il calendario di famiglia con le regole delle note, non con quelle
+// delle voci di budget: niente «maiVuoto» (cancellato l'ultimo giorno dal
+// Mac, deve sparire anche dal telefono), la chiave e' «id» (il giorno), e
+// sta nel registro delle modifiche in attesa e fra i candidati del cambio
+// di account. Se mancasse da uno di quei due elenchi, un giorno segnato
+// senza campo non partirebbe mai, o passando a un altro account si
+// perderebbe.
+const fam = await p.evaluate(() => {
+  const t = document.documentElement.innerHTML;
+  const i = t.indexOf("chiave: 'taxi_famiglia'");
+  const blocco = i < 0 ? '' : t.slice(t.lastIndexOf('ascoltaArchivio({', i), t.indexOf('}));', i));
+  const elenco = (nome) => { const m = t.match(new RegExp('const ' + nome + ' = \\[([^\\]]*)\\]')); return m ? m[1] : ''; };
+  return { blocco, sospesi: elenco('ARCHIVI_SOSPESI'), candidati: elenco('ARCHIVI_CANDIDATI') };
+});
+c('famiglia: nome «famiglia», id per chiave, ordinata per data crescente',
+  /nome: 'famiglia'/.test(fam.blocco) && !/campoId/.test(fam.blocco) && /ordina: perDataCrescente/.test(fam.blocco));
+c('famiglia: senza «maiVuoto» (si svuota come le note)', fam.blocco !== '' && !/maiVuoto/.test(fam.blocco));
+c('famiglia: nel registro delle modifiche in attesa', fam.sospesi.includes("'taxi_famiglia'"));
+c('famiglia: fra i candidati del cambio di account', fam.candidati.includes("'taxi_famiglia'"));
+
+// 7c) e lo schema comune, chiamato con le opzioni vere del calendario, fa
+// quello che fa per le altre: Cloud vuoto non svuota, porta su; poi il
+// Cloud consegna e si prende quello, in ordine di data.
+r = await p.evaluate(async () => {
+  const opz = { nome: 'famiglia', chiave: 'taxi_famiglia', etichetta: 'Calendario di famiglia', ordina: perDataCrescente };
+  const scriviVero = window.scriviLocale;
+  const scritti = []; const mandati = [];
+  window.scriviLocale = (k, v) => { scritti.push(k + ':' + (v || []).length); return true; };
+  window.famiglia = [{ id: '2026-11-20', data: '2026-11-20', moglie: 'Notte', avvenimento: '' }];
+  let e1, e2;
+  try {
+    e1 = await window.applicaSnapshotArchivio(opz, [], true, async (x) => { mandati.push(x.id); });
+    const dopoVuoto = (window.famiglia || []).map(x => x.id).join(',');
+    e2 = await window.applicaSnapshotArchivio(opz,
+      [{ id: '2026-12-02', data: '2026-12-02', moglie: 'Riposo', avvenimento: '' }, { id: '2026-11-20', data: '2026-11-20', moglie: 'Notte', avvenimento: '' }],
+      false, async () => {});
+    return { e1, e2, dopoVuoto, mandati: mandati.join(','), dopo: (window.famiglia || []).map(x => x.id).join(','), scritti };
+  } finally { window.scriviLocale = scriviVero; }
+});
+c('famiglia, Cloud vuoto: il giorno del telefono resta e sale (migrato)', r.e1 === 'migrato' && r.dopoVuoto === '2026-11-20' && r.mandati === '2026-11-20');
+c('famiglia, il Cloud consegna: si prende quello, in ordine di data', r.e2 === 'applicato' && r.dopo === '2026-11-20,2026-12-02' && r.scritti.includes('taxi_famiglia:2'));
 
 // 8) movimenti e turni NON devono passare di qui: hanno il loro meccanismo
 const fuori = await p.evaluate(() => {

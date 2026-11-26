@@ -279,6 +279,42 @@ ok(inStampa && inStampa.ombra === 'none' && parseFloat(inStampa.bordo) >= 3,
    'sulla carta la barretta diventa un bordo, che si stampa',
    inStampa ? `bordo ${inStampa.bordo} ${inStampa.colore}` : 'nessun riquadro in stampa');
 
+// ------------------------------------------------------------------
+console.log('\n5. LA SCHEDA NERA DI «OGGI», PIU\' BASSA (8802a85)');
+// ------------------------------------------------------------------
+// Su richiesta del titolare il totale e' sceso da 41,6 a 36 punti e gli
+// spazi interni si sono stretti: 20 punti in meno di scheda, e la corsa
+// veloce sale sullo schermo dell'iPhone. Un ritocco qualsiasi (un margine
+// rimesso, una classe di corpo cambiata) la riallungherebbe in silenzio.
+// Orologio fermo, cosi' la giornata e' sempre quella: otto corse, una
+// spesa e il turno chiuso, cioe' le righe che la scheda mostra di solito.
+// Le misure sono quelle di Chromium: sull'iPhone il carattere di sistema e'
+// un altro, l'altezza esatta va vista li'.
+for (const [w, caso, tetto] of [[390, 'corse', 220], [390, 'giornata', 308], [320, 'giornata', 305]]) {
+  const q = await b.newPage({ viewport: { width: w, height: 844 }, locale: 'it-IT', timezoneId: 'Europe/Rome' });
+  await q.clock.setFixedTime(new Date('2026-03-11T12:00:00+01:00'));
+  await q.goto(APP); await q.evaluate(() => localStorage.clear()); await q.goto(APP);
+  await q.waitForFunction(() => typeof window.switchTab === 'function');
+  const m = await q.evaluate((caso) => {
+    window.incassoVisibile = true;
+    window.dailyRecords = [1, 2, 3, 4, 5, 6, 7, 8].map(i => ({ id: 'e' + i, data: '2026-03-11', tipo: 'ENTRATA', categoria: 'Corsa',
+      metodo: i % 2 ? 'POS' : 'Contanti', importo: 1518.5 + i, ora: '0' + i + ':10' }))
+      .concat([{ id: 'u1', data: '2026-03-11', tipo: 'USCITA', categoria: 'Carburante', metodo: 'POS', importo: 40 }]);
+    window.shifts = caso === 'giornata' ? [{ id: 't1', data: '2026-03-11', turno: 'Le otto', inizio: '08:00', fine: '20:00', ore: 12, lavorato: true, kmTot: 170 }] : [];
+    window.versioneDati = (window.versioneDati || 0) + 1;
+    switchTab('giornata'); setVistaGiornata('oggi');
+    const e = [...document.querySelectorAll('#main-container div.eroe')].find(x => x.querySelector('.cifra'));
+    if (!e) return null;
+    const c = e.querySelector('.cifra'), r = e.getBoundingClientRect(), rc = c.getBoundingClientRect();
+    return { alta: +r.height.toFixed(1), corpo: getComputedStyle(c).fontSize, testo: c.textContent.trim(),
+             dentro: rc.left >= r.left && rc.right <= r.right, sbordo: document.documentElement.scrollWidth - innerWidth };
+  }, caso);
+  ok(m && m.corpo === '36px', `${w} px, ${caso}: il totale e' a 36 px`, m && `${m.corpo}, «${m.testo}»`);
+  ok(m && m.alta <= tetto, `${w} px, ${caso}: la scheda nera e' alta al massimo ${tetto} px`, m && `${m.alta} px`);
+  ok(m && m.dentro && m.sbordo <= 0, `${w} px, ${caso}: la cifra di cinque cifre sta nella scheda e la pagina non sborda`, m && JSON.stringify(m));
+  await q.close();
+}
+
 await b.close();
 console.log(`\n  ${guai === 0 ? 'tutto a posto' : guai + ' controlli falliti'}`);
 process.exit(guai ? 1 : 0);
