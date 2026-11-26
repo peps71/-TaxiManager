@@ -715,8 +715,14 @@
            proprio mentre dice «corsa registrata». Qui l'altezza si somma
            invece di indovinarla. Da tablet in su la barra non c'e' e il
            messaggio torna in basso a destra. */
-        #toast { bottom: calc(6rem + env(safe-area-inset-bottom)); }
-        @media (min-width: 768px) { #toast { bottom: 1.25rem; } }
+        /* I MESSAGGI IN CIMA (versione 184)
+           Stavano in basso, sopra la barra di navigazione: aprendo l'app
+           «Cloud attivo per…» copriva i tasti della corsa, proprio quelli che
+           si cercano col pollice. Su richiesta del titolare stanno in cima,
+           sotto la tacca o la fotocamera (safe-area), anche il tasto «Annulla».
+           Lassu' la tastiera non li copre mai. */
+        #toast { top: calc(0.75rem + env(safe-area-inset-top)); bottom: auto; }
+        @media (min-width: 768px) { #toast { top: 1.25rem; } }
         /* IL MESSAGGIO NON RUBA I TOCCHI
            Il messaggio sta proprio sopra i tasti della scheda Giornate, e
            per tre secondi un tocco li' finiva sul messaggio invece che sul
@@ -2664,7 +2670,7 @@
         // Versione di questa pagina. Serve a sapere in un colpo d'occhio se il
         // telefono sta usando l'ultima copia o una vecchia rimasta in cache:
         // finora c'era scritto "V28" a mano e non voleva dire niente.
-        const VERSIONE_APP = 183;
+        const VERSIONE_APP = 184;
 
         function profiloCompilato() {
             const p = window.profilo || {};
@@ -3854,45 +3860,23 @@
         }
 
         // ============================================================
-        //  IL MESSAGGIO SOPRA LA TASTIERA, NON DIETRO
-        //  Dopo una corsa veloce il campo riprende il fuoco e sull'iPhone la
-        //  tastiera resta aperta. Un elemento fixed, su Safari iOS, si misura
-        //  sull'area della pagina, non su quella visibile: a 6rem dal fondo
-        //  finiva dietro la tastiera, proprio il messaggio con «Annulla».
-        //  Con la tastiera aperta (visualViewport piu' basso della finestra)
-        //  il messaggio si appoggia sopra la tastiera, 8 punti di margine:
-        //  la barra in basso li' non si vede, dietro la tastiera c'e' lei.
-        //  Ma non sopra la scheda della corsa, il tasto «Aggiungi spesa» o la
-        //  scheda della spesa (data-non-coprire): a 320 punti la tastiera
-        //  lascia meno spazio della scheda, e «Annulla» sarebbe finito sui
-        //  tasti POS o App - il tocco della corsa dopo avrebbe annullato
-        //  quella prima. Se non c'e' posto fuori dalla scheda, il
-        //  messaggio resta dov'era: non si vede, ma non ruba tocchi.
-        //  Tastiera chiusa, Mac, o niente visualViewport: nessun cambiamento,
-        //  vale il foglio di stile (6rem sopra la barra, o in basso a destra).
+        //  IL MESSAGGIO IN CIMA ALLA PARTE VISIBILE
+        //  Dalla versione 184 i messaggi stanno in cima (vedi il foglio di
+        //  stile). Con la tastiera aperta, pero', Safari sull'iPhone fa
+        //  scorrere l'area visibile verso il basso: la cima della pagina esce
+        //  dallo schermo e un elemento fixed in cima uscirebbe con lei - e con
+        //  lui il tasto «Annulla» dopo una corsa veloce. Allora il messaggio
+        //  si aggancia alla cima dell'area visibile (visualViewport.offsetTop),
+        //  12 punti sotto. Tastiera chiusa, Android che rimpicciolisce la
+        //  finestra, Mac, o niente visualViewport: vale il foglio di stile.
         // ============================================================
         function posizionaToast() {
             const toast = document.getElementById('toast');
             if (!toast) return;
+            toast.style.bottom = '';
             const vv = window.visualViewport;
-            if (toast.classList.contains('hidden') || !vv) { toast.style.bottom = ''; return; }
-            // Quanto dell'area della pagina sta sotto quella visibile: con la
-            // tastiera aperta e' la tastiera, altrimenti zero (o quasi).
-            const sotto = window.innerHeight - (vv.offsetTop + vv.height);
-            if (sotto < 80) { toast.style.bottom = ''; return; }
-            const fondo = Math.round(sotto + 8);
-            const cima = window.innerHeight - fondo - toast.offsetHeight;
-            const schede = document.querySelectorAll('[data-scheda-corsa], [data-non-coprire]');
-            for (const scheda of schede) {
-                const r = scheda.getBoundingClientRect();
-                if (!r.height) continue;
-                // La scheda e' nella parte visibile e il messaggio ci cadrebbe sopra
-                if (r.bottom + 8 > cima && r.top < window.innerHeight - fondo) {
-                    toast.style.bottom = '';
-                    return;
-                }
-            }
-            toast.style.bottom = fondo + 'px';
+            if (toast.classList.contains('hidden') || !vv || vv.offsetTop < 1) { toast.style.top = ''; return; }
+            toast.style.top = Math.round(vv.offsetTop + 12) + 'px';
         }
         if (window.visualViewport) {
             let attesaToast = 0;
