@@ -10114,7 +10114,7 @@
                          turno - quanto e' uscito, quanto resta, quanto rende
                          un'ora.
                          ============================================================ -->
-                    <div class="eroe text-white p-5">
+                    <div class="eroe text-white p-4">
                         <!-- La riga va a capo. Mentre sei in turno qui compare la
                              pastiglia «in turno», e a 320px si mangiava settanta
                              pixel alla data: si leggeva «sabato 3» e «ottobre
@@ -10122,7 +10122,7 @@
                              turno - cioe' proprio quando questa schermata si
                              guarda. Adesso la pastiglia scende sotto invece di
                              stringere la data. -->
-                        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                             <!-- A 320 punti qui dentro ci stanno due frecce da 44 e la
                                  data: gli spazi fra l'una e l'altra si contano, e
                                  quelli che si sono tolti da qui sono i punti che
@@ -10161,10 +10161,12 @@
                         </div>
 
                         <p class="flex items-center gap-2">
-                            <span class="cifra text-[2.6rem] leading-none">${cifraEuroCoperta(totCorse)}</span>
+                            <!-- Versione 182: un po' piu' piccola (36 punti invece di 42) e la scheda
+                             piu' stretta, su richiesta del titolare: la corsa veloce sale. -->
+                            <span class="cifra text-4xl leading-none">${cifraEuroCoperta(totCorse)}</span>
                             ${occhioIncasso(true)}
                         </p>
-                        <p class="text-xs font-medium text-white/50 mt-1.5">
+                        <p class="text-xs font-medium text-white/50 mt-1">
                             incassato${metodo !== 'ALL' ? ' in ' + NOMI_METODO[metodo] : ''} · ${corseFiltrate.length} ${corseFiltrate.length === 1 ? 'corsa' : 'corse'}${corseFiltrate.length ? ' · ' + formatCurrency(mediaCorsa) + ' a corsa' : ''}
                         </p>
                         ${turniLavorati.length ? `
@@ -10177,7 +10179,7 @@
                              allungava la scheda proprio nei giorni delle scadenze. La
                              stessa frase resta nel dettaglio della giornata in Andamento. -->
 
-                        <div class="flex mt-4 pt-3.5 border-t border-white/10">
+                        <div class="flex mt-3 pt-3 border-t border-white/10">
                             <div class="flex-1 min-w-0" ${costoPieno
                                 ? `title="Quota dei costi a budget ${formatCurrency(costoG.budget)} + spese di questa giornata ${formatCurrency(costoG.fuoriBudget)}${costoG.irpef > 0 ? ` + IRPEF stimata ${formatCurrency(costoG.irpef)}` : ''}"`
                                 : (spalm ? `title="Spese del giorno ${formatCurrency(spalm.fuoriBudget)} + quota dei costi a budget ${formatCurrency(spalm.quotaBudget)}"` : '')}>
