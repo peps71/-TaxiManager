@@ -21,6 +21,11 @@
 //      la bozza che sopravvive ai ridisegni dello stesso giorno (ma non
 //      al cambio di giorno), un avvenimento con dentro del
 //      codice che resta testo, e uno di 200 caratteri che non sborda.
+// Dalla v185 i turni non sono piu' «della moglie» per tutti ma di
+// un'altra persona, facoltativi e coi nomi scelti nella scheda (li prova
+// testAltraPersona.mjs): qui il nome di un turno e' ogni testo da 1 a 20
+// caratteri, e l'interfaccia gira con l'opzione accesa, nome «Moglie» e i
+// quattro turni di sempre. L'archivio e il suo campo «moglie» non cambiano.
 // Ogni caso gira dentro una protezione: sulla versione di prima (dove le
 // funzioni non ci sono) segna «***» invece di morire al primo errore.
 // Chromium non e' Safari: la tastiera vera, l'Invio «Fine» della tastiera
@@ -86,8 +91,13 @@ await caso('1. I DATI: COSA SI ACCETTA, UN CAMPO ALLA VOLTA', async () => {
     o.vuoto = JSON.stringify(giornoFamiglia('2026-12-01'));
     o.rifiuti = [
       salvaGiornoFamiglia('2026-02-30', { moglie: 'Notte' }),      // giorno che non esiste
-      salvaGiornoFamiglia('2026-12-01', { moglie: 'notte' }),      // minuscolo: non e' fra i quattro
-      salvaGiornoFamiglia('2026-12-01', { moglie: 'Festivo' }),    // turno del tassista, non della moglie
+      // Dalla v185 i turni si rinominano: ogni nome da 1 a 20 caratteri e'
+      // ammesso («notte», «Festivo» si'), e si rifiuta solo quello che un
+      // nome di turno non puo' essere.
+      salvaGiornoFamiglia('2026-12-01', { moglie: '   ' }),        // solo spazi: e' vuoto, ma non e' «togli»
+      salvaGiornoFamiglia('2026-12-01', { moglie: 'x'.repeat(21) }), // oltre i 20 caratteri
+      salvaGiornoFamiglia('2026-12-01', { moglie: 7 }),            // non e' testo
+      salvaGiornoFamiglia('2026-12-01', { moglie: { nome: 'Notte' } }), // un oggetto
       salvaGiornoFamiglia('2026-12-01', { avvenimento: 5 }),       // non e' testo
       salvaGiornoFamiglia('2026-1-01', { moglie: 'Notte' }),       // data scritta male
       salvaGiornoFamiglia(20261201, { moglie: 'Notte' }),          // numero
@@ -95,6 +105,11 @@ await caso('1. I DATI: COSA SI ACCETTA, UN CAMPO ALLA VOLTA', async () => {
     ];
     o.bisestile = salvaGiornoFamiglia('2028-02-29', { moglie: 'Riposo' });
     o.dopoRifiuti = (window.famiglia || []).map(x => x.id).join(',');
+    // I nomi liberi: minuscolo, un turno nuovo, 20 caratteri esatti, spazi ai lati tolti
+    o.liberi = [['notte', 'notte'], ['Festivo', 'Festivo'], ['y'.repeat(20), 'y'.repeat(20)], ['  Scuola  ', 'Scuola']]
+      .map(([v, atteso], i) => { const d = '2026-12-1' + i; return salvaGiornoFamiglia(d, { moglie: v }) && giornoFamiglia(d).moglie === atteso; });
+    ['2026-12-10', '2026-12-11', '2026-12-12', '2026-12-13'].forEach(d => salvaGiornoFamiglia(d, { moglie: '' }));
+    o.dopoLiberi = (window.famiglia || []).map(x => x.id).join(',');
     o.si1 = salvaGiornoFamiglia('2026-12-01', { moglie: 'Notte' });
     o.si2 = salvaGiornoFamiglia('2026-12-01', { avvenimento: '  compleanno di Anna  ' + 'x'.repeat(300) });
     o.g = giornoFamiglia('2026-12-01');
@@ -117,9 +132,11 @@ await caso('1. I DATI: COSA SI ACCETTA, UN CAMPO ALLA VOLTA', async () => {
   ok(r.turni === '["Mattina","Pomeriggio","Notte","Riposo"]' && r.congelati, 'quattro turni della moglie, in ordine, che non si cambiano per sbaglio', r.turni);
   ok(r.max === 200, 'l\'avvenimento tiene al massimo 200 caratteri', r.max);
   ok(r.vuoto === '{"moglie":"","avvenimento":""}', 'un giorno mai toccato si legge vuoto', r.vuoto);
-  ok(r.rifiuti.every(x => x === false), 'si rifiuta: 30 febbraio, «notte» minuscolo, «Festivo», un numero per testo, data storta, 29/02/2027', r.rifiuti);
+  ok(r.rifiuti.every(x => x === false), 'si rifiuta: 30 febbraio, turno di soli spazi, oltre 20 caratteri, numero o oggetto per turno, un numero per avvenimento, data storta, 29/02/2027', r.rifiuti);
   ok(r.bisestile === true, 'il 29 febbraio 2028 si', r.bisestile);
   ok(r.dopoRifiuti === '2028-02-29', 'e dai rifiuti non resta niente in archivio', r.dopoRifiuti);
+  ok(r.liberi.every(x => x === true), 'i nomi di turno sono liberi: «notte», «Festivo», 20 caratteri esatti, «  Scuola  » che diventa «Scuola»', r.liberi);
+  ok(r.dopoLiberi === '2028-02-29', 'e tolti di nuovo non lasciano righe', r.dopoLiberi);
   ok(r.si1 && r.si2 && r.g.moglie === 'Notte', 'turno e avvenimento si salvano un campo alla volta, l\'altro resta', r.g);
   ok(r.g.avvenimento.length === 200 && r.g.avvenimento.startsWith('compleanno di Anna'), 'l\'avvenimento si pulisce degli spazi e si taglia a 200', r.g.avvenimento.length);
   ok(r.disco.length === 2 && (r.disco.find(x => x.id === '2026-12-01') || {}).data === '2026-12-01', 'sul disco, un documento per giorno con id = data', r.disco);
@@ -302,14 +319,25 @@ await caso('4. IL BACKUP, DAI TASTI VERI', async () => {
   const ancora = await scarica();
   ok(JSON.stringify(ancora.famiglia) === JSON.stringify(pacco.famiglia), 'riscaricato, il backup dice lo stesso calendario (esce e rientra identico)');
 
-  // Solo il calendario: la domanda lo dice con le sue parole
-  await iniziaCon(p, { taxi_in_sospeso: REGISTRO });
-  await p.evaluate(() => switchTab('cloud')); await p.waitForTimeout(250);
-  p.dialoghi.length = 0;
-  await carica({ versione: 3, date: '2026-11-20T10:00:00.000Z', records: [], shifts: [], famiglia: [giorni[0]] });
-  ok((p.dialoghi[0] || '').includes('\n\nAnche i turni di tua moglie e gli avvenimenti tornano come nel backup; quello che hai aggiunto dopo resta.\n\n'),
-    'un backup col solo calendario: «Anche i turni di tua moglie e gli avvenimenti tornano...»', p.dialoghi[0]);
-  ok((await p.evaluate(() => giornoFamiglia('2026-11-02').moglie)) === 'Mattina', 'e non si scarta perche\' non ha movimenti');
+  // Solo il calendario: la domanda lo dice con le sue parole. Dalla v185
+  // il nome e' quello scelto nella scheda (non piu' «tua moglie» per
+  // tutti); senza l'opzione accesa, o senza un nome, si dice il calendario.
+  const soloCalendario = { versione: 3, date: '2026-11-20T10:00:00.000Z', records: [], shifts: [], famiglia: [giorni[0]] };
+  const FRASE = (chi) => `\n\nAnche ${chi} tornano come nel backup; quello che hai aggiunto dopo resta.\n\n`;
+  const PROF = { nome: 'Giuseppe', cognome: 'Rossi', licenza: '57', sigla: '', colore: '', piva: '', logo: '' };
+  for (const [profilo, chi, titolo] of [
+    [null, 'i giorni del calendario di famiglia', 'telefono senza scheda'],
+    [Object.assign({}, PROF, { altraPersona: { attivo: true, nome: 'Maria', turni: [{ nome: 'Mattina', sigla: 'M', colore: 'celeste' }] }, altraPersonaAnno: '2026' }), 'i turni di Maria e gli avvenimenti', 'turni accesi col nome «Maria»'],
+    [Object.assign({}, PROF, { altraPersona: { attivo: false, nome: 'Maria', turni: [] }, altraPersonaAnno: '2026' }), 'i giorni del calendario di famiglia', 'turni spenti'],
+    [Object.assign({}, PROF, { altraPersona: { attivo: true, nome: '', turni: [] }, altraPersonaAnno: '2026' }), 'i giorni del calendario di famiglia', 'turni accesi senza nome']]) {
+    await iniziaCon(p, Object.assign({ taxi_in_sospeso: REGISTRO }, profilo ? { taxi_profilo: profilo } : {}));
+    await p.evaluate(() => switchTab('cloud')); await p.waitForTimeout(250);
+    p.dialoghi.length = 0;
+    await carica(soloCalendario);
+    ok((p.dialoghi[0] || '').includes(FRASE(chi)), `un backup col solo calendario, ${titolo}: «Anche ${chi} tornano...»`, p.dialoghi[0]);
+    ok(!/tua moglie/.test(p.dialoghi[0] || ''), '  e «tua moglie» non c\'e\' piu\'');
+    ok((await p.evaluate(() => giornoFamiglia('2026-11-02').moglie)) === 'Mattina', '  e non si scarta perche\' non ha movimenti');
+  }
 
   // Un backup vecchio, senza «famiglia»: il calendario di adesso resta byte per byte
   await iniziaCon(p, { taxi_in_sospeso: REGISTRO, taxi_famiglia: giorni });
@@ -330,6 +358,8 @@ await caso('4. IL BACKUP, DAI TASTI VERI', async () => {
     { id: '2026-11-05', data: '1999-01-01', moglie: 'notte', avvenimento: '  gita  ' },
     { id: '2026-11-06', moglie: { a: 1 }, avvenimento: ['x'] },
     { id: '2026-11-07', moglie: 'Pomeriggio', avvenimento: 'y'.repeat(500) },
+    { id: '2026-11-08', moglie: 'w'.repeat(21), avvenimento: '' },
+    { id: '2026-11-09', moglie: '  Ferie  ', avvenimento: 5 },
     { id: '2026-11-02', data: '2026-11-02', moglie: 'Notte', avvenimento: '' }] };
   p.dialoghi.length = 0;
   await carica(storto);
@@ -338,10 +368,11 @@ await caso('4. IL BACKUP, DAI TASTI VERI', async () => {
   ok(ord(dopo) === ord([
       { id: '2026-11-02', data: '2026-11-02', moglie: 'Notte', avvenimento: '' },
       giorni[1],
-      { id: '2026-11-05', data: '2026-11-05', moglie: '', avvenimento: 'gita' },
-      { id: '2026-11-07', data: '2026-11-07', moglie: 'Pomeriggio', avvenimento: 'y'.repeat(200) }]),
-    'righe storte: fuori id falsi, date impossibili, «../x», campi non testo; la data segue l\'id, il turno sconosciuto si svuota, l\'avvenimento si taglia a 200; il giorno di adesso che il backup non ha resta', dopo);
-  ok(await p.evaluate(() => (window.famiglia || []).every(x => giornoFamigliaValido(x.id) && x.data === x.id && (x.moglie === '' || TURNI_MOGLIE.includes(x.moglie)) && typeof x.avvenimento === 'string' && x.avvenimento.length <= 200)),
+      { id: '2026-11-05', data: '2026-11-05', moglie: 'notte', avvenimento: 'gita' },
+      { id: '2026-11-07', data: '2026-11-07', moglie: 'Pomeriggio', avvenimento: 'y'.repeat(200) },
+      { id: '2026-11-09', data: '2026-11-09', moglie: 'Ferie', avvenimento: '' }]),
+    'righe storte: fuori id falsi, date impossibili, «../x», campi non testo, turno oltre 20 caratteri; la data segue l\'id, un turno qualsiasi («notte») resta, gli spazi ai lati si tolgono, l\'avvenimento si taglia a 200; il giorno di adesso che il backup non ha resta', dopo);
+  ok(await p.evaluate(() => (window.famiglia || []).every(x => giornoFamigliaValido(x.id) && x.data === x.id && typeof x.moglie === 'string' && x.moglie === x.moglie.trim() && x.moglie.length <= 20 && typeof x.avvenimento === 'string' && x.avvenimento.length <= 200 && (x.moglie || x.avvenimento))),
     'e ogni giorno rimasto e\' una riga buona');
   ok(p.errori.length === 0, 'nessun errore JS', p.errori);
   await p.context().close();
@@ -357,7 +388,13 @@ const DUECENTO = (LUNGO + ' ' + LUNGO).slice(0, 199) + '.';
 const INIEZIONE = '<img src=x onerror="window.__bucato=1"> " onmouseover="window.__bucato=2" \' ${alert(1)}';
 const apriCalendario = async (larghezza, scuro) => {
   const p = await paginaSenzaCloud({ viewport: { width: larghezza, height: 900 }, colorScheme: scuro ? 'dark' : 'light' });
-  await iniziaCon(p, {});
+  // Dalla v185 i turni dell'altra persona sono facoltativi: qui accesi, col
+  // nome «Moglie» e i quattro turni di sempre (quello che la migrazione da'
+  // a chi li usava gia'). L'anno e' quello di adesso: niente domanda.
+  await iniziaCon(p, { taxi_profilo: { nome: 'Giuseppe', cognome: 'Rossi', licenza: '57', sigla: '', colore: '', piva: '', logo: '',
+    altraPersona: { attivo: true, nome: 'Moglie', turni: [{ nome: 'Mattina', sigla: 'M', colore: 'celeste' }, { nome: 'Pomeriggio', sigla: 'P', colore: 'arancio' },
+      { nome: 'Notte', sigla: 'N', colore: 'indaco' }, { nome: 'Riposo', sigla: 'R', colore: 'verde' }] },
+    altraPersonaAnno: String(new Date().getFullYear()) } });
   await p.evaluate(() => { window.meseCalendario = '2026-11'; switchTab('giornata'); setVistaGiornata('calendario'); });
   await p.waitForTimeout(200);
   return p;
@@ -379,6 +416,9 @@ for (const scuro of [false, true]) for (const w of [320, 390, 1280]) {
     await casella(p, GIORNO).click();
     await p.waitForTimeout(150);
     ok(await p.locator('#fam-moglie-N').count() === 1 && await p.locator('#fam-avvenimento').count() === 1, 'aperta la giornata c\'e\' la sezione «Famiglia», coi quattro turni e il campo');
+    const titoli = await p.evaluate(() => ({ sezione: [...document.querySelectorAll('#main-container p')].some(x => x.textContent.trim() === 'Famiglia e impegni'),
+      turno: (document.getElementById('fam-moglie-titolo') || {}).textContent }));
+    ok(titoli.sezione && titoli.turno === 'Turno di Moglie', 'la sezione si chiama «Famiglia e impegni» e i turni «Turno di Moglie»', titoli);
     ok((await premuti(p)) === 'M:false P:false N:false R:false', 'nessun turno premuto all\'inizio', await premuti(p));
 
     // Il turno della moglie, dal tasto
@@ -386,7 +426,7 @@ for (const scuro of [false, true]) for (const w of [320, 390, 1280]) {
     ok((await premuti(p)) === 'M:false P:false N:true R:false', 'toccato «Notte»: premuto quello solo', await premuti(p));
     ok((await p.evaluate((g) => giornoFamiglia(g).moglie, GIORNO)) === 'Notte', 'e salvato');
     let c = await statoCasella(p, GIORNO);
-    ok(c && c.sinistra === 'N' && c.etichetta === 'moglie Notte' && c.title === 'tua moglie: Notte', 'nella griglia la pastiglia «N» col suo nome, e il title della casella', c);
+    ok(c && c.sinistra === 'N' && c.etichetta === 'Moglie Notte' && c.title === 'Moglie: Notte', 'nella griglia la pastiglia «N» col suo nome, e il title della casella', c);
     await p.click('#fam-moglie-P'); await p.waitForTimeout(120);
     ok((await premuti(p)) === 'M:false P:true N:false R:false' && (await statoCasella(p, GIORNO)).sinistra === 'P', 'toccato «Pomeriggio»: cambia', await premuti(p));
     await p.click('#fam-moglie-P'); await p.waitForTimeout(120);
@@ -404,7 +444,7 @@ for (const scuro of [false, true]) for (const w of [320, 390, 1280]) {
     const riga = await p.evaluate(() => { const e = document.querySelector('#main-container .testo-avvenimento'); return e ? e.textContent.replace(/\s+/g, ' ').trim() : null; });
     ok(riga === ('★ Avvenimento: ' + INIEZIONE.trim()).replace(/\s+/g, ' '), 'in cima alla giornata «★ Avvenimento: ...», scritto tale e quale', riga);
     c = await statoCasella(p, GIORNO);
-    ok(c && c.stella === '★' && c.sinistra === 'R' && c.title === 'tua moglie: Riposo, avvenimento: ' + INIEZIONE.trim(), 'nella griglia la stellina e la «R», e il title col testo intero (virgolette comprese)', c);
+    ok(c && c.stella === '★' && c.sinistra === 'R' && c.title === 'Moglie: Riposo, avvenimento: ' + INIEZIONE.trim(), 'nella griglia la stellina e la «R», e il title col testo intero (virgolette comprese)', c);
     // il title con le virgolette non apre attributi nuovi
     ok(await p.evaluate(() => ![...document.querySelectorAll('#main-container [onmouseover]')].length), 'le virgolette del testo non aprono attributi nella casella');
 
@@ -452,7 +492,7 @@ for (const scuro of [false, true]) for (const w of [320, 390, 1280]) {
     // Togli l'avvenimento, poi togli il turno: il giorno se ne va
     await p.locator('#main-container button', { hasText: 'Togli l\'avvenimento' }).first().click(); await p.waitForTimeout(150);
     c = await statoCasella(p, GIORNO);
-    ok((await p.evaluate((g) => giornoFamiglia(g).avvenimento, GIORNO)) === '' && c.stella === null && c.sinistra === 'R' && c.title === 'tua moglie: Riposo',
+    ok((await p.evaluate((g) => giornoFamiglia(g).avvenimento, GIORNO)) === '' && c.stella === null && c.sinistra === 'R' && c.title === 'Moglie: Riposo',
       '«Togli l\'avvenimento»: via la stellina, il turno resta', c);
     ok(await p.locator('#main-container .testo-avvenimento').count() === 0 && (await p.inputValue('#fam-avvenimento')) === '', 'e via anche la riga in cima, col campo vuoto');
     await p.click('#fam-moglie-R'); await p.waitForTimeout(120);

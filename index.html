@@ -4466,7 +4466,8 @@
             window.bozzaProfilo = null;   // salvata: la bozza non serve piu'
             showToast(pivaStorta
                 ? 'Scheda salvata. Controlla la partita IVA: le 11 cifre non tornano.'
-                : `Ciao ${esc(dati.nome || dati.cognome)}, scheda salvata!`);
+                // showToast scrive con textContent: esc() qui farebbe vedere «&amp;»
+                : `Ciao ${dati.nome || dati.cognome}, scheda salvata!`);
             renderNav();
             renderContent();
         }
@@ -5476,8 +5477,10 @@
                 if (fuori.length >= TURNI_PERSONA_NUMERO_MAX) return;
                 if (!x || typeof x !== 'object' || Array.isArray(x)) return;
                 const nome = turnoPersonaAmmesso(x.nome);
-                if (!nome || visti.has(nome)) return;
-                visti.add(nome);
+                // «Notte» e «notte» nella legenda escono uguali: doppioni anche
+                // quando arrivano dal Cloud o da un backup, come nel modulo.
+                if (!nome || visti.has(nome.toLowerCase())) return;
+                visti.add(nome.toLowerCase());
                 const colore = colorePersona(x.colore) ? x.colore : COLORI_PERSONA[fuori.length % COLORI_PERSONA.length].id;
                 fuori.push({ nome, sigla: siglaPersona(x.sigla, nome), colore });
             });
