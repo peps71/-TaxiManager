@@ -657,6 +657,40 @@
         }
         .campo-scuro option { color: #1f2937; background-color: #fff; }
 
+        /* I SEGNI DI FAMIGLIA NELLA CASELLA DEL CALENDARIO
+           La casella e' gia' piena in altezza (numero, ore o tipo di
+           giornata, incasso: a 320 punti sta in 33x44), e una riga in piu'
+           la allungherebbe solo nelle settimane che ce l'hanno. I due segni
+           nuovi stanno allora negli angoli in alto, appoggiati sopra: a
+           sinistra la lettera del turno della moglie, a destra la stellina
+           dell'avvenimento. Il colore lo danno le classi di sempre
+           (bg-sky-400, bg-indigo-600...): qui solo la forma e il posto. */
+        .pastiglia-famiglia {
+            display: inline-block; text-align: center;
+            font-weight: 900; line-height: 1; border-radius: 3px;
+        }
+        /* Sul telefono stanno a cavallo del filo in alto (top: -1px, alti
+           8 punti): un paio di punti piu' in basso e coprivano la cima del
+           numero, «12» diventava «1?». Prima di ritoccarli, misurare la
+           casella a 320 punti con numero, ore e incasso tutti e tre. */
+        .segno-famiglia {
+            position: absolute; top: -1px;
+            font-size: 8px; padding: 0 2px;
+            pointer-events: none;
+        }
+        .segno-famiglia.a-sinistra { left: 3px; }
+        .segno-famiglia.a-destra { right: 3px; }
+        /* Da tablet in su la casella e' larga piu' di cento punti: il segno
+           da otto punti diventava un granello. */
+        @media (min-width: 640px) {
+            .segno-famiglia { top: 4px; font-size: 11px; padding: 2px 4px; border-radius: 4px; }
+            .segno-famiglia.a-sinistra { left: 4px; }
+            .segno-famiglia.a-destra { right: 4px; }
+        }
+        /* L'avvenimento e' testo libero: una parola lunga senza spazi (un
+           indirizzo, un link incollato) non deve allargare la scheda. */
+        .testo-avvenimento { overflow-wrap: anywhere; }
+
         /* Il campo data dentro la scheda scura: nativo, ma vestito da scuro. */
         .eroe input[type="date"] {
             background-color: transparent; color: #fff; border: 0;
@@ -1168,6 +1202,10 @@
         :root[data-tema="scuro"] .bg-yellow-400.text-gray-900,
         :root[data-tema="scuro"] .bg-yellow-400 .text-gray-900,
         :root[data-tema="scuro"] .bg-yellow-500 .text-gray-900 { color: #14120d; }
+        /* Stessa cosa per le lettere del turno della moglie nel calendario
+           (celeste, arancio, verde pieni): il fondo resta acceso anche di
+           notte, e la lettera deve restare nera per leggersi. */
+        :root[data-tema="scuro"] .pastiglia-famiglia.text-gray-900 { color: #14120d; }
 
         /* ---- LA STAMPA RESTA CHIARA -------------------------------
            Il foglio per il commercialista si stampa su carta bianca. Se il
@@ -10583,6 +10621,123 @@
             portaInVista('sh-data');
         }
 
+        // ---- LA FAMIGLIA NEL CALENDARIO ----------------------------------
+        // Il turno della moglie e un avvenimento personale, giorno per giorno:
+        // l'archivio e le sue regole stanno in IL CALENDARIO DI FAMIGLIA, qui
+        // c'e' solo come si vedono e come si toccano. Nessun avviso parte da
+        // solo: e' un promemoria da guardare, non una sveglia.
+        // Una lettera per turno, e un colore pieno che resta acceso anche di
+        // notte (i fondi -400/-500/-600 il modo scuro non li tocca). Celeste il
+        // mattino, arancio il pomeriggio, indaco la notte, verde il riposo:
+        // nessuno e' il giallo del lavoro o il fucsia del rinforzo.
+        const SEGNI_MOGLIE = {
+            'Mattina':    { lettera: 'M', colore: 'bg-sky-400 text-gray-900' },
+            'Pomeriggio': { lettera: 'P', colore: 'bg-orange-500 text-gray-900' },
+            'Notte':      { lettera: 'N', colore: 'bg-indigo-600 text-white' },
+            'Riposo':     { lettera: 'R', colore: 'bg-green-500 text-gray-900' }
+        };
+
+        // Dopo il ridisegno il tasto toccato e' un elemento nuovo: chi usa la
+        // tastiera perderebbe il segno e ripartirebbe dall'inizio della pagina.
+        function rimettiFuocoSu(id, cera) {
+            if (!cera) return;
+            const el = document.getElementById(id);
+            if (el) el.focus({ preventScroll: true });
+        }
+
+        // Toccare il turno gia' scelto lo toglie: e' il modo piu' breve per
+        // correggere un tocco sbagliato, senza un tasto «Nessuno» in piu'.
+        function scegliTurnoMoglie(iso, turno) {
+            if (!TURNI_MOGLIE.includes(turno)) return;
+            const id = 'fam-moglie-' + SEGNI_MOGLIE[turno].lettera;
+            const aveva = document.activeElement && document.activeElement.id === id;
+            const nuovo = giornoFamiglia(iso).moglie === turno ? '' : turno;
+            if (!salvaGiornoFamiglia(iso, { moglie: nuovo })) {
+                showToast('Turno non salvato: riprova.', 'avviso');
+                return;
+            }
+            showToast(nuovo ? `Tua moglie il ${ggMm(iso)}: ${nuovo}.` : `Turno di tua moglie tolto dal ${ggMm(iso)}.`);
+            renderContent();
+            rimettiFuocoSu(id, aveva);
+        }
+
+        // Quello che si sta scrivendo resta da parte finche' non si salva: il
+        // calendario si ridisegna anche da solo (un turno toccato qui sopra,
+        // un dato arrivato dal Cloud) e il campo rinascerebbe vuoto.
+        function bozzaAvvenimentoGiorno(iso, testo) {
+            window.bozzaAvvenimento = { iso, testo: String(testo || '') };
+        }
+
+        function salvaAvvenimentoGiorno(iso) {
+            const campo = document.getElementById('fam-avvenimento');
+            const testo = String(campo ? campo.value : '').trim();
+            const prima = giornoFamiglia(iso).avvenimento;
+            // Campo vuoto: se c'era un testo vale come «Togli», se non c'era
+            // non c'e' niente da salvare e lo si dice.
+            if (!testo && !prima) { showToast('Scrivi prima l\'avvenimento.', 'avviso'); return; }
+            if (!salvaGiornoFamiglia(iso, { avvenimento: testo })) {
+                showToast('Avvenimento non salvato: riprova.', 'avviso');
+                return;
+            }
+            window.bozzaAvvenimento = null;
+            showToast(testo ? `Avvenimento segnato il ${ggMm(iso)}.` : `Avvenimento tolto dal ${ggMm(iso)}.`);
+            renderContent();
+        }
+
+        function togliAvvenimentoGiorno(iso) {
+            if (!salvaGiornoFamiglia(iso, { avvenimento: '' })) {
+                showToast('Avvenimento non tolto: riprova.', 'avviso');
+                return;
+            }
+            window.bozzaAvvenimento = null;
+            showToast(`Avvenimento tolto dal ${ggMm(iso)}.`);
+            renderContent();
+        }
+
+        // La sezione «Famiglia» della giornata aperta. Sta sul fondo scuro
+        // della giornata, come le altre: tasti grandi (44 punti) perche' si
+        // usa con una mano, in piedi accanto alla macchina.
+        function sezioneFamigliaHTML(iso) {
+            const f = giornoFamiglia(iso);
+            const bozza = window.bozzaAvvenimento && window.bozzaAvvenimento.iso === iso ? window.bozzaAvvenimento.testo : null;
+            const nelCampo = bozza !== null ? bozza : f.avvenimento;
+            return `
+                <div class="pt-3 border-t border-gray-800 space-y-3">
+                    <p class="text-xs font-black uppercase tracking-wider text-yellow-400">Famiglia</p>
+                    <div>
+                        <p id="fam-moglie-titolo" class="text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Turno di tua moglie</p>
+                        <div role="group" aria-labelledby="fam-moglie-titolo" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                            ${TURNI_MOGLIE.map(turno => {
+                                const s = SEGNI_MOGLIE[turno];
+                                const scelto = f.moglie === turno;
+                                return `
+                                <button id="fam-moglie-${s.lettera}" onclick="scegliTurnoMoglie('${escJs(iso)}', '${escJs(turno)}')" aria-pressed="${scelto ? 'true' : 'false'}"
+                                        class="flex items-center justify-center gap-2 py-3 px-2 rounded-xl text-sm font-black ${scelto ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}">
+                                    <span class="pastiglia-famiglia shrink-0 w-5 py-0.5 text-xs ${s.colore}" aria-hidden="true">${s.lettera}</span>
+                                    <span>${esc(turno)}</span>
+                                </button>`;
+                            }).join('')}
+                        </div>
+                        <p class="text-xs text-gray-500 leading-tight mt-1.5">Toccando di nuovo il turno scelto lo si toglie.</p>
+                    </div>
+                    <div>
+                        <label for="fam-avvenimento" class="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Avvenimento</label>
+                        <div class="flex gap-1.5">
+                            <input type="text" id="fam-avvenimento" maxlength="${AVVENIMENTO_MAX}" value="${esc(nelCampo)}"
+                                   placeholder="Matrimonio, visita, viaggio…" autocomplete="off" enterkeyhint="done"
+                                   oninput="bozzaAvvenimentoGiorno('${escJs(iso)}', this.value)"
+                                   onkeydown="if (event.key === 'Enter') { event.preventDefault(); salvaAvvenimentoGiorno('${escJs(iso)}'); }"
+                                   class="campo-scuro flex-1 min-w-0 px-3 py-2.5 text-base" />
+                            <button onclick="salvaAvvenimentoGiorno('${escJs(iso)}')" class="shrink-0 px-4 py-3 rounded-xl text-sm font-black bg-yellow-400 hover:bg-yellow-500 text-gray-900">Salva</button>
+                        </div>
+                        ${f.avvenimento ? `
+                            <button onclick="togliAvvenimentoGiorno('${escJs(iso)}')" class="mt-1.5 px-4 py-3 rounded-xl text-sm font-black bg-gray-700 hover:bg-gray-600 text-white">Togli l'avvenimento</button>
+                        ` : ''}
+                        <p class="text-xs text-gray-500 leading-tight mt-1.5">Solo un appunto da vedere sul calendario: non fa partire avvisi.</p>
+                    </div>
+                </div>`;
+        }
+
         function renderSezioneCalendario() {
             const mese = meseCalendarioAttivo();
             const [anno, mm] = mese.split('-').map(Number);
@@ -10632,10 +10787,18 @@
                 const aperto = window.giornoCalendarioAperto === iso;
                 const rossa = classeEvidenziaGiorno(iso) === 'text-red-500';
                 const incasso = t && !isRiposo(t) ? incassoDi(iso) : 0;
+                const fam = giornoFamiglia(iso);
+                const segno = SEGNI_MOGLIE[fam.moglie];
+                // Il testo intero dell'avvenimento si legge passandoci sopra
+                // col mouse sul Mac; sul telefono basta toccare la casella.
+                const voceFamiglia = [segno ? `tua moglie: ${fam.moglie}` : '', fam.avvenimento ? `avvenimento: ${fam.avvenimento}` : ''].filter(Boolean).join(', ');
 
                 return `
                     <button onclick="toccaGiornoCalendario('${escJs(iso)}')"
-                            class="aspect-square w-full rounded-lg border ${stile.cella} ${aperto ? 'ring-2 ring-gray-900' : ''} ${isOggi ? 'ring-2 ring-yellow-500' : ''} p-1 flex flex-col items-center justify-center gap-0.5 transition-colors hover:brightness-95">
+                            ${voceFamiglia ? `title="${esc(voceFamiglia)}"` : ''}
+                            class="relative aspect-square w-full rounded-lg border ${stile.cella} ${aperto ? 'ring-2 ring-gray-900' : ''} ${isOggi ? 'ring-2 ring-yellow-500' : ''} p-1 flex flex-col items-center justify-center gap-0.5 transition-colors hover:brightness-95">
+                        ${segno ? `<span role="img" aria-label="${esc('moglie ' + fam.moglie)}" class="pastiglia-famiglia segno-famiglia a-sinistra ${segno.colore}">${segno.lettera}</span>` : ''}
+                        ${fam.avvenimento ? `<span role="img" aria-label="avvenimento" class="pastiglia-famiglia segno-famiglia a-destra bg-red-600 text-white">★</span>` : ''}
                         <span class="text-sm font-black ${t ? stile.testo : (rossa ? 'text-red-500' : 'text-gray-500')} leading-none">${giorno}</span>
                         ${t ? `<span class="text-[9px] font-bold ${stile.testo} leading-none truncate max-w-full px-0.5">${isRiposo(t) ? stile.breve : (t.ore ? esc(t.ore) + 'h' : '·')}</span>` : ''}
                         ${incasso > 0 ? `<span class="text-[8px] font-black text-green-700 leading-none">${Math.round(incasso)}€</span>` : ''}
@@ -10646,6 +10809,7 @@
                 const iso = window.giornoCalendarioAperto;
                 if (!iso) return '';
                 const t = turnoDi(iso);
+                const avvenimento = giornoFamiglia(iso).avvenimento;
                 const lavoro = ['sei30', 'otto', 'una', 'notte', 'spezzato', 'rinforzo'];
                 const nonLavorate = ['festivo', 'recupero', 'malattia', 'sciopero'];
                 return `
@@ -10662,6 +10826,10 @@
                             </div>
                             <button onclick="toccaGiornoCalendario('${escJs(iso)}')" title="Chiudi la giornata" aria-label="Chiudi la giornata" class="tasto-icona shrink-0 rounded-xl text-gray-400 hover:text-white text-xl leading-none flex items-center justify-center">×</button>
                         </div>
+
+                        ${avvenimento ? `
+                            <p class="testo-avvenimento text-sm font-bold bg-yellow-400 text-gray-900 rounded-xl px-3 py-2 leading-tight"><span aria-hidden="true">★ </span><span class="font-black">Avvenimento:</span> ${esc(avvenimento)}</p>
+                        ` : ''}
 
                         <div>
                             <p class="text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Turno di lavoro</p>
@@ -10680,6 +10848,8 @@
                                 `).join('')}
                             </div>
                         </div>
+
+                        ${sezioneFamigliaHTML(iso)}
 
                         ${(() => {
                             const diQuelGiorno = (window.shifts || []).filter(x => String(x.data) === String(iso));
@@ -10773,6 +10943,11 @@
                             <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-orange-200 border border-orange-400 align-middle"></span> recupero festivo</span>
                             <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-white border border-gray-300 align-middle"></span> da compilare</span>
                             <span class="text-green-700">● incassato</span>
+                            <!-- Le lettere da sole non dicono di chi sono: la riga le
+                                 spiega una per una, «moglie» davanti e attaccato alla prima
+                                 (andando a capo non deve restare da solo). -->
+                            ${TURNI_MOGLIE.map((turno, i) => `<span class="whitespace-nowrap">${i === 0 ? 'moglie: ' : ''}<span class="pastiglia-famiglia px-1 py-0.5 ${SEGNI_MOGLIE[turno].colore}" aria-hidden="true">${SEGNI_MOGLIE[turno].lettera}</span> ${esc(turno.toLowerCase())}</span>`).join('')}
+                            <span><span class="pastiglia-famiglia px-1 py-0.5 bg-red-600 text-white" aria-hidden="true">★</span> avvenimento</span>
                         </div>
                     </div>
 
