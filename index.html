@@ -662,7 +662,8 @@
            giornata, incasso: a 320 punti sta in 33x44), e una riga in piu'
            la allungherebbe solo nelle settimane che ce l'hanno. I due segni
            nuovi stanno allora negli angoli in alto, appoggiati sopra: a
-           sinistra la lettera del turno della moglie, a destra la stellina
+           sinistra la lettera del turno dell'altra persona (era la moglie;
+           dalla v185 la sceglie la scheda), a destra la stellina
            dell'avvenimento. Il colore lo danno le classi di sempre
            (bg-sky-400, bg-indigo-600...): qui solo la forma e il posto. */
         .pastiglia-famiglia {
@@ -690,6 +691,11 @@
         /* L'avvenimento e' testo libero: una parola lunga senza spazi (un
            indirizzo, un link incollato) non deve allargare la scheda. */
         .testo-avvenimento { overflow-wrap: anywhere; }
+        /* Lo stesso per i nomi dei turni dell'altra persona e per il suo nome
+           (v185): li scrive l'utente, fino a 20 e 30 caratteri. Vanno a capo
+           invece di essere tagliati coi puntini: «Pomeriggio» tagliato in
+           «Pomerig…» non si distingueva da un altro turno. */
+        .nome-turno-persona { overflow-wrap: anywhere; }
 
         /* Il campo data dentro la scheda scura: nativo, ma vestito da scuro. */
         .eroe input[type="date"] {
@@ -1208,8 +1214,9 @@
         :root[data-tema="scuro"] .bg-yellow-400.text-gray-900,
         :root[data-tema="scuro"] .bg-yellow-400 .text-gray-900,
         :root[data-tema="scuro"] .bg-yellow-500 .text-gray-900 { color: #14120d; }
-        /* Stessa cosa per le lettere del turno della moglie nel calendario
-           (celeste, arancio, verde pieni): il fondo resta acceso anche di
+        /* Stessa cosa per le lettere del turno dell'altra persona nel
+           calendario (celeste, arancio, verde, turchese, rosa, e il grigio
+           del turno che non c'e' piu': tutti pieni): il fondo resta acceso anche di
            notte, e la lettera deve restare nera per leggersi. */
         :root[data-tema="scuro"] .pastiglia-famiglia.text-gray-900 { color: #14120d; }
 
@@ -4090,6 +4097,8 @@
                         </p>
                     </div>
 
+                    ${sezionePersonaModuloHTML()}
+
                     <p id="prof-avviso" class="text-xs font-bold text-gray-400"></p>
                     <button onclick="salvaProfiloDalModulo()" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 font-black py-3 px-6 rounded-xl shadow-sm transition-colors">
                         ${esc(etichettaTasto)}
@@ -4239,6 +4248,165 @@
             renderContent();
         }
 
+        // ============================================================
+        //  I TURNI DI UN'ALTRA PERSONA, NEL MODULO
+        //  Una sezione facoltativa della scheda: l'interruttore, il nome, e i
+        //  turni con nome, sigla e colore. Come il colore del turno e il logo,
+        //  tutto quello che si tocca qui sta nella BOZZA (bozzaProfilo
+        //  .altraPersona) finche' non si salva la scheda: il modulo si
+        //  ridisegna a ogni tasto (un turno in piu', l'interruttore) e anche
+        //  da solo (un dato arrivato dal Cloud), e quello che si stava
+        //  scrivendo non deve sparire. Per questo i campi scrivono nella
+        //  bozza a ogni lettera, e non si raccolgono solo alla fine.
+        //  La configurazione vera e' in L'ALTRA PERSONA NEL CALENDARIO.
+        // ============================================================
+        function personaNelModulo() {
+            const b = window.bozzaProfilo;
+            return b && b.altraPersona ? b.altraPersona : configPersona();
+        }
+
+        // La bozza della sezione, creata alla prima modifica partendo dalla
+        // configurazione salvata. raccogliBozzaProfilo tiene anche quello che
+        // si e' battuto negli altri campi della scheda.
+        function bozzaPersona() {
+            const b = raccogliBozzaProfilo();
+            if (!b.altraPersona) b.altraPersona = JSON.parse(JSON.stringify(configPersona()));
+            window.bozzaProfilo = b;
+            return b.altraPersona;
+        }
+
+        function ciSonoGiorniPersona() {
+            return elencoFamiglia().some(x => { const g = pulisciGiornoFamiglia(x); return !!(g && g.moglie); });
+        }
+
+        function rimettiFuocoNelModulo(id) {
+            const el = document.getElementById(id);
+            if (el) el.focus({ preventScroll: false });
+        }
+
+        function alternaPersonaModulo(acceso) {
+            bozzaPersona().attivo = !!acceso;
+            renderContent();
+            rimettiFuocoNelModulo('prof-persona-attivo');
+        }
+
+        function bozzaNomePersona(v) {
+            bozzaPersona().nome = String(v || '').slice(0, NOME_PERSONA_MAX);
+        }
+
+        // Nome, sigla o colore di un turno. La sigla e il colore cambiano anche
+        // l'anteprima accanto, senza ridisegnare: chi sta scrivendo resta dove
+        // sta, con la tastiera aperta.
+        function bozzaTurnoPersona(i, campo, v) {
+            const c = bozzaPersona();
+            const t = c.turni[i];
+            if (!t || !['nome', 'sigla', 'colore'].includes(campo)) return;
+            t[campo] = String(v || '');
+            const anteprima = document.getElementById('prof-persona-anteprima-' + i);
+            if (anteprima) {
+                anteprima.textContent = siglaPersona(t.sigla, t.nome) || '?';
+                anteprima.className = 'pastiglia-famiglia shrink-0 px-2 py-1 text-sm ' + (colorePersona(t.colore) || COLORI_PERSONA[0]).classi;
+            }
+        }
+
+        function aggiungiTurnoPersona() {
+            const c = bozzaPersona();
+            if (c.turni.length >= TURNI_PERSONA_NUMERO_MAX) return;
+            // Il primo colore che nessun turno usa ancora, cosi' due turni non
+            // nascono uguali.
+            const libero = COLORI_PERSONA.find(k => !c.turni.some(t => t.colore === k.id)) || COLORI_PERSONA[0];
+            c.turni.push({ nome: '', sigla: '', colore: libero.id });
+            renderContent();
+            rimettiFuocoNelModulo('prof-persona-turno-' + (c.turni.length - 1));
+        }
+
+        function togliTurnoPersona(i) {
+            const c = bozzaPersona();
+            if (c.turni.length <= 1 || !c.turni[i]) return;
+            c.turni.splice(i, 1);
+            renderContent();
+            rimettiFuocoNelModulo('prof-persona-turno-' + Math.min(i, c.turni.length - 1));
+        }
+
+        function rimettiTurniPersona() {
+            bozzaPersona().turni = turniPersonaPredefiniti();
+            renderContent();
+            rimettiFuocoNelModulo('prof-persona-predefiniti');
+        }
+
+        function sezionePersonaModuloHTML() {
+            const c = personaNelModulo();
+            const etichetta = 'block text-xs font-black uppercase tracking-wider text-gray-500 mb-1';
+            const campo = 'w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-gray-900';
+            const riga = (t, i) => {
+                const colore = colorePersona(t.colore) || COLORI_PERSONA[0];
+                const chi = t.nome ? `«${t.nome}»` : (i + 1) + '';
+                return `
+                <div class="rounded-xl border border-gray-200 p-2.5 space-y-2">
+                    <div class="flex items-center gap-2">
+                        <span id="prof-persona-anteprima-${i}" class="pastiglia-famiglia shrink-0 px-2 py-1 text-sm ${colore.classi}" aria-hidden="true">${esc(siglaPersona(t.sigla, t.nome) || '?')}</span>
+                        <input type="text" id="prof-persona-turno-${i}" value="${esc(t.nome)}" maxlength="${TURNO_PERSONA_MAX}"
+                               placeholder="Es. Spezzato" autocomplete="off" aria-label="Nome del turno ${i + 1}"
+                               oninput="bozzaTurnoPersona(${i}, 'nome', this.value)"
+                               class="flex-1 min-w-0 p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-gray-900" />
+                        ${c.turni.length > 1 ? `
+                            <button type="button" onclick="togliTurnoPersona(${i})" aria-label="${esc('Togli il turno ' + chi)}" title="Togli il turno"
+                                    class="tasto-icona shrink-0 rounded-xl text-red-600 bg-red-50 hover:bg-red-100 font-black text-lg leading-none">×</button>` : ''}
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="min-w-0">
+                            <label for="prof-persona-sigla-${i}" class="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1">Sigla</label>
+                            <input type="text" id="prof-persona-sigla-${i}" value="${esc(t.sigla)}" maxlength="1" autocomplete="off" autocapitalize="characters"
+                                   oninput="bozzaTurnoPersona(${i}, 'sigla', this.value)"
+                                   class="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 font-black text-gray-900 text-center" />
+                        </div>
+                        <div class="min-w-0">
+                            <label for="prof-persona-colore-${i}" class="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1">Colore</label>
+                            <select id="prof-persona-colore-${i}" onchange="bozzaTurnoPersona(${i}, 'colore', this.value)"
+                                    class="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-yellow-400 font-bold text-gray-900 bg-white">
+                                ${COLORI_PERSONA.map(k => `<option value="${esc(k.id)}" ${k.id === colore.id ? 'selected' : ''}>${esc(k.nome)}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>`;
+            };
+            return `
+                <!-- I TURNI DI UN'ALTRA PERSONA: facoltativi, spenti per chi
+                     comincia. Vedi L'ALTRA PERSONA NEL CALENDARIO. -->
+                <div id="prof-persona" class="space-y-3 pt-4 border-t border-gray-100">
+                    <div>
+                        <p class="text-sm font-black text-gray-900">Turni di un'altra persona (facoltativo)</p>
+                        <p class="text-xs text-gray-500 leading-relaxed mt-1">Per vedere nel calendario, accanto ai tuoi, i turni di chi vive con te: una lettera colorata per giorno. Gli avvenimenti (★) si segnano comunque, anche senza.</p>
+                    </div>
+                    <label for="prof-persona-attivo" class="flex items-center gap-2.5 cursor-pointer select-none bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5">
+                        <input type="checkbox" id="prof-persona-attivo" ${c.attivo ? 'checked' : ''} onchange="alternaPersonaModulo(this.checked)" class="w-5 h-5 accent-yellow-500 shrink-0" />
+                        <span class="text-sm font-bold text-gray-900">Segna nel calendario i turni di un'altra persona</span>
+                    </label>
+                    ${!c.attivo && ciSonoGiorniPersona() ? `
+                        <p class="text-xs font-bold text-gray-500 leading-relaxed">I giorni già segnati non si cancellano: restano nascosti e tornano riaccendendo l'opzione.</p>` : ''}
+                    ${c.attivo ? `
+                        <div>
+                            <label for="prof-persona-nome" class="${etichetta}">Nome</label>
+                            <input type="text" id="prof-persona-nome" value="${esc(c.nome)}" maxlength="${NOME_PERSONA_MAX}"
+                                   placeholder="Es. Maria, mia moglie, mio figlio" autocomplete="off"
+                                   oninput="bozzaNomePersona(this.value)" class="${campo}" />
+                        </div>
+                        <div>
+                            <p id="prof-persona-turni-titolo" class="${etichetta}">Turni</p>
+                            <div class="space-y-2" role="group" aria-labelledby="prof-persona-turni-titolo">
+                                ${c.turni.map(riga).join('')}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 mt-2">
+                                ${c.turni.length < TURNI_PERSONA_NUMERO_MAX ? `
+                                    <button type="button" onclick="aggiungiTurnoPersona()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm">+ Turno</button>
+                                ` : `<span class="text-xs font-bold text-gray-500">Al massimo ${TURNI_PERSONA_NUMERO_MAX} turni.</span>`}
+                                <button type="button" id="prof-persona-predefiniti" onclick="rimettiTurniPersona()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2.5 px-4 rounded-xl text-sm">Rimetti i turni predefiniti</button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2 leading-relaxed">Rinominando o togliendo un turno i giorni già segnati non si perdono: si vedono con l'iniziale su grigio.</p>
+                        </div>` : ''}
+                </div>`;
+        }
+
         function salvaProfiloDalModulo() {
             const leggi = (id) => (document.getElementById('prof-' + id) || {}).value || '';
             const dati = {};
@@ -4257,6 +4425,30 @@
             // La partita IVA sbagliata non blocca il salvataggio - potresti non
             // averla sottomano - ma lo dice, perche' finisce sui documenti.
             const pivaStorta = dati.piva && !partitaIvaValida(dati.piva);
+            // I turni dell'altra persona: si salvano solo se la sezione e'
+            // stata toccata (c'e' la bozza). Se no si lascia il campo com'e':
+            // un dispositivo che non ha ancora ricevuto la scelta fatta
+            // sull'altro, salvando la partita IVA, non deve rimandare su la
+            // configurazione spenta di partenza.
+            const anno = String(new Date().getFullYear());
+            const bozzaP = window.bozzaProfilo && window.bozzaProfilo.altraPersona;
+            if (bozzaP) {
+                const nomi = (bozzaP.turni || []).map(x => String(x.nome || '').trim()).filter(Boolean);
+                if (bozzaP.attivo && new Set(nomi).size < nomi.length) {
+                    showToast('Due turni hanno lo stesso nome: cambiane uno, è il nome che lega i giorni al turno.', 'avviso');
+                    return;
+                }
+                dati.altraPersona = pulisciConfigPersona(bozzaP);
+                // Scelta fatta adesso: vale come risposta per quest'anno.
+                dati.altraPersonaAnno = anno;
+            } else if (!profiloCompilato() && !annoPersonaValido((window.profilo || {}).altraPersonaAnno)) {
+                // Chi compila la scheda la prima volta ha la sezione davanti:
+                // la domanda di inizio anno arriva dal gennaio prossimo. Solo
+                // la prima volta: chi la scheda l'aveva gia' e corregge la
+                // sigla manda sul Cloud la sigla e basta (l'anno, se manca,
+                // lo scrive assicuraAnnoPersona su questo disco).
+                dati.altraPersonaAnno = anno;
+            }
             salvaProfilo(dati);
             window.bozzaProfilo = null;   // salvata: la bozza non serve piu'
             showToast(pivaStorta
@@ -5055,9 +5247,12 @@
 
         // ============================================================
         //  IL CALENDARIO DI FAMIGLIA
-        //  Giorno per giorno, il turno della moglie (Mattina, Pomeriggio,
-        //  Notte, Riposo) e un avvenimento personale scritto a parole: serve
-        //  a vedere sul calendario quando conviene prendersi un riposo.
+        //  Giorno per giorno, il turno di un'altra persona (nato come «il
+        //  turno della moglie»: Mattina, Pomeriggio, Notte, Riposo; dalla
+        //  v185 chi sia e quali turni abbia lo decide la scheda del
+        //  titolare, vedi L'ALTRA PERSONA NEL CALENDARIO) e un avvenimento
+        //  personale scritto a parole: serve a vedere sul calendario quando
+        //  conviene prendersi un riposo.
         //  Non entra in nessun conto, non tocca i turni del titolare, e non
         //  fa partire nessun promemoria da solo.
         //  Una riga per giorno, con la data come identificativo: lo stesso
@@ -5065,12 +5260,33 @@
         //  Cloud, e non si raddoppia. Un giorno con tutti e due i campi
         //  vuoti non si tiene: si cancella, qui e sul Cloud - cosi'
         //  l'archivio contiene solo i giorni che dicono qualcosa.
-        //  Forma: { id: 'AAAA-MM-GG', data: 'AAAA-MM-GG', moglie: '' o uno
-        //  dei TURNI_MOGLIE, avvenimento: '' o un testo di al massimo
-        //  AVVENIMENTO_MAX caratteri }.
+        //  Forma: { id: 'AAAA-MM-GG', data: 'AAAA-MM-GG', moglie: '' o il
+        //  nome di un turno (al massimo TURNO_PERSONA_MAX caratteri),
+        //  avvenimento: '' o un testo di al massimo AVVENIMENTO_MAX caratteri }.
+        //  IL CAMPO SI CHIAMA ANCORA «moglie»: e' quello scritto in tutti i
+        //  giorni gia' segnati, sul telefono, sul Cloud e nei backup.
+        //  Rinominarlo vorrebbe dire una migrazione di dati veri e due
+        //  versioni dell'app che non si capiscono piu' fra il telefono e il
+        //  Mac; il nome del campo non lo vede nessuno. Nel codice nuovo la
+        //  variabile si chiama «persona».
+        //  Fino alla v184 il turno doveva essere uno dei TURNI_MOGLIE; ora i
+        //  turni si rinominano e se ne aggiungono, quindi si accetta ogni
+        //  nome non vuoto: un turno rinominato o tolto non deve cancellare i
+        //  giorni dove c'era scritto (si vedono con un segno neutro).
         // ============================================================
         const TURNI_MOGLIE = Object.freeze(['Mattina', 'Pomeriggio', 'Notte', 'Riposo']);
         const AVVENIMENTO_MAX = 200;
+        const TURNO_PERSONA_MAX = 20;
+
+        // Il nome di un turno com'e' ammesso nell'archivio: un testo, senza
+        // spazi ai lati, da 1 a TURNO_PERSONA_MAX caratteri. '' se non va.
+        // Troppo lungo non si taglia: un nome tagliato non corrisponderebbe
+        // piu' a nessun turno, e meglio dirlo vuoto che inventarne uno.
+        function turnoPersonaAmmesso(v) {
+            if (typeof v !== 'string') return '';
+            const t = v.trim();
+            return t && t.length <= TURNO_PERSONA_MAX ? t : '';
+        }
 
         function elencoFamiglia() {
             if (!Array.isArray(window.famiglia)) window.famiglia = [];
@@ -5103,7 +5319,7 @@
         function pulisciGiornoFamiglia(x) {
             if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
             if (!giornoFamigliaValido(x.id)) return null;
-            const moglie = TURNI_MOGLIE.includes(x.moglie) ? x.moglie : '';
+            const moglie = turnoPersonaAmmesso(x.moglie);
             const avvenimento = typeof x.avvenimento === 'string' ? x.avvenimento.trim().slice(0, AVVENIMENTO_MAX) : '';
             if (!moglie && !avvenimento) return null;
             if (x.data === x.id && x.moglie === moglie && x.avvenimento === avvenimento) return x;
@@ -5124,7 +5340,8 @@
         // Si cambiano solo i campi passati: salvaGiornoFamiglia(iso, { moglie:
         // 'Notte' }) lascia com'e' l'avvenimento, e viceversa. Un campo
         // undefined conta come non passato. false se qualcosa non va (la
-        // data, un turno che non c'e', un avvenimento che non e' un testo):
+        // data, un turno che non e' un nome ammesso, un avvenimento che non
+        // e' un testo):
         // allora non si tocca niente. Con il disco pieno la riga resta in
         // memoria e parte lo stesso per il Cloud, come per gli altri
         // archivi (vedi UNA SOLA PORTA PER SCRIVERE SUL DISCO).
@@ -5132,11 +5349,11 @@
             if (!giornoFamigliaValido(iso) || !campi || typeof campi !== 'object') return false;
             const nuovaMoglie = campi.moglie;
             const nuovoAvv = campi.avvenimento;
-            if (nuovaMoglie !== undefined && nuovaMoglie !== '' && !TURNI_MOGLIE.includes(nuovaMoglie)) return false;
+            if (nuovaMoglie !== undefined && nuovaMoglie !== '' && !turnoPersonaAmmesso(nuovaMoglie)) return false;
             if (nuovoAvv !== undefined && typeof nuovoAvv !== 'string') return false;
             const prima = rigaFamiglia(iso);
             const ora = giornoFamiglia(iso);
-            const moglie = nuovaMoglie !== undefined ? nuovaMoglie : ora.moglie;
+            const moglie = nuovaMoglie !== undefined ? turnoPersonaAmmesso(nuovaMoglie) : ora.moglie;
             const avvenimento = nuovoAvv !== undefined ? nuovoAvv.trim().slice(0, AVVENIMENTO_MAX) : ora.avvenimento;
             const resto = elencoFamiglia().filter(x => !(x && String(x.id) === iso));
             if (!moglie && !avvenimento) {
@@ -5160,6 +5377,180 @@
         window.TURNI_MOGLIE = TURNI_MOGLIE;
         window.giornoFamiglia = giornoFamiglia;
         window.salvaGiornoFamiglia = salvaGiornoFamiglia;
+
+        // ============================================================
+        //  L'ALTRA PERSONA NEL CALENDARIO (dalla v185)
+        //  Il calendario segnava i turni della moglie del titolare, per nome
+        //  e per forza. L'app deve andar bene per chiunque: ora i turni sono
+        //  di «un'altra persona» col nome che le dai tu, la funzione si
+        //  accende solo se serve, e i turni (quanti, come si chiamano, che
+        //  lettera e che colore hanno) si decidono nella scheda del titolare.
+        //  Gli avvenimenti (★) invece restano sempre, per tutti.
+        //
+        //  DOVE STA: nel profilo, due campi nuovi.
+        //   - altraPersona = { attivo, nome, turni: [{ nome, sigla, colore }] }
+        //   - altraPersonaAnno = 'AAAA', l'ultimo anno in cui si e' risposto
+        //     alla domanda «segni ancora i turni?» (vedi LA DOMANDA DI INIZIO
+        //     ANNO).
+        //  Il profilo si sincronizza campo per campo: cosi' la scelta fatta
+        //  sul telefono arriva sul Mac senza un archivio nuovo da spedire.
+        //
+        //  PERCHE' NON STANNO IN PROFILO_VUOTO: un valore di partenza li'
+        //  dentro finirebbe scritto sul disco alla prima occasione, e da quel
+        //  momento non si saprebbe piu' distinguere «mai scelto» da «scelto
+        //  spento» - che e' proprio quello che serve alla migrazione. Assenti
+        //  vuol dire mai scelto; chi li legge passa sempre da configPersona(),
+        //  che li ripulisce (vengono dal modulo, da un backup, dal Cloud).
+        //
+        //  TOGLIERE L'OPZIONE NON CANCELLA NIENTE: i giorni segnati restano
+        //  nell'archivio (e sul Cloud, e nei backup), solo non si vedono.
+        //  Riaccendendola tornano.
+        // ============================================================
+        const NOME_PERSONA_MAX = 30;
+        const TURNI_PERSONA_NUMERO_MAX = 8;
+        // I colori ammessi: id fissi (quello che si salva) e classi gia' nel
+        // foglio. Sono fondi pieni -400/-600 che il modo scuro non tocca, con
+        // la sigla nera o bianca secondo quale si legge meglio: il contrasto
+        // della lettera sul fondo sta fra 4,8 (rosa, grigio) e 8,3 (celeste).
+        // I primi quattro sono quelli di sempre dei turni della moglie. Niente
+        // giallo (e' il lavoro), fucsia (il rinforzo) o rosso (la stellina).
+        const COLORI_PERSONA = Object.freeze([
+            { id: 'celeste', nome: 'Celeste',     classi: 'bg-sky-400 text-gray-900' },
+            { id: 'arancio', nome: 'Arancio',     classi: 'bg-orange-500 text-gray-900' },
+            { id: 'indaco',  nome: 'Indaco',      classi: 'bg-indigo-600 text-white' },
+            { id: 'verde',   nome: 'Verde',       classi: 'bg-green-500 text-gray-900' },
+            { id: 'blu',     nome: 'Blu',         classi: 'bg-blue-600 text-white' },
+            { id: 'acqua',   nome: 'Turchese',    classi: 'bg-teal-500 text-gray-900' },
+            { id: 'rosa',    nome: 'Rosa',        classi: 'bg-rose-500 text-gray-900' },
+            { id: 'grigio',  nome: 'Grigio',      classi: 'bg-slate-500 text-white' }
+        ]);
+        // Un giorno segnato con un turno che nella scheda non c'e' piu' (tolto
+        // o rinominato): la prima lettera su un grigio chiaro, diverso da tutti
+        // i colori qui sopra, e il nome intero nel title e per VoiceOver.
+        const CLASSE_TURNO_PERSONA_IGNOTO = 'bg-gray-400 text-gray-900';
+        const TURNI_PERSONA_PREDEFINITI = Object.freeze([
+            Object.freeze({ nome: 'Mattina',    sigla: 'M', colore: 'celeste' }),
+            Object.freeze({ nome: 'Pomeriggio', sigla: 'P', colore: 'arancio' }),
+            Object.freeze({ nome: 'Notte',      sigla: 'N', colore: 'indaco' }),
+            Object.freeze({ nome: 'Riposo',     sigla: 'R', colore: 'verde' })
+        ]);
+
+        function turniPersonaPredefiniti() {
+            return TURNI_PERSONA_PREDEFINITI.map(t => Object.assign({}, t));
+        }
+
+        function colorePersona(id) {
+            return COLORI_PERSONA.find(c => c.id === id) || null;
+        }
+
+        // Una lettera sola (un carattere vero: Array.from non spezza le
+        // lettere accentate composte male ne' i simboli fuori dal piano base),
+        // maiuscola. Vuota: si prende l'iniziale del nome del turno.
+        function siglaPersona(sigla, nome) {
+            const prima = (v) => Array.from(String(v || '').trim())[0] || '';
+            return (prima(sigla) || prima(nome)).toLocaleUpperCase('it-IT');
+        }
+
+        // I turni come l'app li scrive: un nome ammesso (vedi
+        // turnoPersonaAmmesso), senza doppioni - e' il nome che lega un giorno
+        // al suo turno -, una sigla non vuota, un colore della tavolozza (se
+        // no il primo libero, in giro), al massimo TURNI_PERSONA_NUMERO_MAX.
+        function pulisciTurniPersona(elenco) {
+            if (!Array.isArray(elenco)) return [];
+            const visti = new Set();
+            const fuori = [];
+            elenco.forEach(x => {
+                if (fuori.length >= TURNI_PERSONA_NUMERO_MAX) return;
+                if (!x || typeof x !== 'object' || Array.isArray(x)) return;
+                const nome = turnoPersonaAmmesso(x.nome);
+                if (!nome || visti.has(nome)) return;
+                visti.add(nome);
+                const colore = colorePersona(x.colore) ? x.colore : COLORI_PERSONA[fuori.length % COLORI_PERSONA.length].id;
+                fuori.push({ nome, sigla: siglaPersona(x.sigla, nome), colore });
+            });
+            return fuori;
+        }
+
+        // La configurazione ripulita, o null se non e' un oggetto (cioe' mai
+        // scelta). Senza turni validi si riparte dai quattro predefiniti:
+        // un'opzione accesa senza un tasto da toccare non servirebbe a niente.
+        function pulisciConfigPersona(x) {
+            if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+            const turni = pulisciTurniPersona(x.turni);
+            return {
+                attivo: x.attivo === true,
+                nome: typeof x.nome === 'string' ? x.nome.trim().slice(0, NOME_PERSONA_MAX) : '',
+                turni: turni.length ? turni : turniPersonaPredefiniti()
+            };
+        }
+
+        function annoPersonaValido(v) {
+            return typeof v === 'string' && /^\d{4}$/.test(v);
+        }
+
+        // LA MIGRAZIONE DI CHI LA USAVA GIA'
+        // Fino alla v184 i turni della moglie c'erano per tutti. Chi ne ha
+        // segnato almeno uno, e una scelta non l'ha mai fatta, se li ritrova
+        // accesi col nome «Moglie» e i quattro turni di sempre, e quest'anno
+        // non gli si chiede niente.
+        // Si scrive SOLO SUL DISCO DI QUESTO DISPOSITIVO, non fra i campi da
+        // spedire. Il motivo: il Mac e il telefono la fanno ognuno per conto
+        // suo e arrivano allo stesso risultato (i giorni sono sincronizzati);
+        // spedendola invece, un dispositivo rimasto indietro rimanderebbe su
+        // «Moglie» coi turni di partenza SOPRA una scheda che nel frattempo
+        // l'altro ha cambiato (un nome scritto, un turno rinominato). Cosi'
+        // quello che arriva dal Cloud vince sempre, e la prima modifica vera
+        // (dal modulo o dalla domanda di inizio anno) parte come ogni campo.
+        // Si guarda a ogni lettura e non solo all'avvio: i giorni possono
+        // arrivare dal Cloud dopo, su un dispositivo appena collegato.
+        function migraAltraPersona() {
+            const p = window.profilo || {};
+            if (p.altraPersona && typeof p.altraPersona === 'object' && !Array.isArray(p.altraPersona)) return false;
+            if (!ciSonoGiorniPersona()) return false;
+            const dopo = { altraPersona: { attivo: true, nome: 'Moglie', turni: turniPersonaPredefiniti() } };
+            if (!annoPersonaValido(p.altraPersonaAnno)) dopo.altraPersonaAnno = String(new Date().getFullYear());
+            window.profilo = Object.assign({}, p, dopo);
+            scriviLocale('taxi_profilo', window.profilo);
+            return true;
+        }
+
+        // Quello che il resto dell'app legge: sempre un oggetto pulito.
+        function configPersona() {
+            migraAltraPersona();
+            return pulisciConfigPersona((window.profilo || {}).altraPersona)
+                || { attivo: false, nome: '', turni: turniPersonaPredefiniti() };
+        }
+
+        function personaAttiva() {
+            return configPersona().attivo;
+        }
+
+        // Come si chiama nelle frasi: «Turno di Maria», «Turno dell'altra
+        // persona» se il nome non c'e'.
+        function diPersona(cfg) {
+            const c = cfg || configPersona();
+            return c.nome ? 'di ' + c.nome : 'dell\'altra persona';
+        }
+        function nomePersona(cfg) {
+            const c = cfg || configPersona();
+            return c.nome || 'altra persona';
+        }
+
+        // Il segno di un giorno: sigla e classi del turno con quel nome, o -
+        // se nella scheda non c'e' piu' - l'iniziale su grigio. null se il
+        // giorno non ha un turno.
+        function segnoPersona(turno, cfg) {
+            if (!turno) return null;
+            const c = cfg || configPersona();
+            const t = c.turni.find(x => x.nome === turno);
+            if (t) return { sigla: t.sigla, classi: (colorePersona(t.colore) || COLORI_PERSONA[0]).classi, noto: true };
+            return { sigla: siglaPersona('', turno), classi: CLASSE_TURNO_PERSONA_IGNOTO, noto: false };
+        }
+
+        window.configPersona = configPersona;
+        window.pulisciConfigPersona = pulisciConfigPersona;
+        window.migraAltraPersona = migraAltraPersona;
+        window.COLORI_PERSONA = COLORI_PERSONA;
 
         // ============================================================
         //  LE FOTO: LO SCONTRINO, IL DANNO, IL DOCUMENTO
@@ -10259,6 +10650,7 @@
             return `
                 <div class="fade-in space-y-5 max-w-7xl mx-auto">
                     ${avvisoProfilo()}
+                    ${avvisoAnnoPersona()}
                     ${avvisoManutenzione()}
 
                     <!-- ============================================================
@@ -10610,7 +11002,8 @@
         }
 
         // ---- LA FAMIGLIA NEL CALENDARIO ----------------------------------
-        // Il turno della moglie e un avvenimento personale, giorno per giorno:
+        // Il turno dell'altra persona (se l'opzione e' accesa: vedi L'ALTRA
+        // PERSONA NEL CALENDARIO) e un avvenimento personale, giorno per giorno:
         // l'archivio e le sue regole stanno in IL CALENDARIO DI FAMIGLIA, qui
         // c'e' solo come si vedono e come si toccano. Nessun avviso parte da
         // solo: e' un promemoria da guardare, non una sveglia.
@@ -10618,6 +11011,9 @@
         // notte (i fondi -400/-500/-600 il modo scuro non li tocca). Celeste il
         // mattino, arancio il pomeriggio, indaco la notte, verde il riposo:
         // nessuno e' il giallo del lavoro o il fucsia del rinforzo.
+        // Dalla v185 sigle e colori li decide la scheda (COLORI_PERSONA,
+        // TURNI_PERSONA_PREDEFINITI: gli stessi di qui, per partire uguali);
+        // questa tabella resta per chi la cercasse col nome di prima.
         const SEGNI_MOGLIE = {
             'Mattina':    { lettera: 'M', colore: 'bg-sky-400 text-gray-900' },
             'Pomeriggio': { lettera: 'P', colore: 'bg-orange-500 text-gray-900' },
@@ -10635,18 +11031,43 @@
 
         // Toccare il turno gia' scelto lo toglie: e' il modo piu' breve per
         // correggere un tocco sbagliato, senza un tasto «Nessuno» in piu'.
+        // Il nome della funzione e' quello di prima (lo chiamano i tasti e le
+        // prove); il turno ora e' uno di quelli della scheda.
         function scegliTurnoMoglie(iso, turno) {
-            if (!TURNI_MOGLIE.includes(turno)) return;
-            const id = 'fam-moglie-' + SEGNI_MOGLIE[turno].lettera;
+            const cfg = configPersona();
+            const i = cfg.turni.findIndex(x => x.nome === turno);
+            if (!cfg.attivo || i < 0) return;
+            const id = idTastoTurnoPersona(cfg, i);
             const aveva = document.activeElement && document.activeElement.id === id;
             const nuovo = giornoFamiglia(iso).moglie === turno ? '' : turno;
             if (!salvaGiornoFamiglia(iso, { moglie: nuovo })) {
                 showToast('Turno non salvato: riprova.', 'avviso');
                 return;
             }
-            showToast(nuovo ? `Tua moglie il ${ggMm(iso)}: ${nuovo}.` : `Turno di tua moglie tolto dal ${ggMm(iso)}.`);
+            showToast(nuovo ? `Turno ${diPersona(cfg)} il ${ggMm(iso)}: ${nuovo}.` : `Turno ${diPersona(cfg)} tolto dal ${ggMm(iso)}.`);
             renderContent();
             rimettiFuocoSu(id, aveva);
+        }
+
+        // Un giorno segnato con un turno che nella scheda non c'e' piu': non ha
+        // un tasto da ritoccare per toglierlo, quindi ne ha uno suo.
+        function togliTurnoPersonaGiorno(iso) {
+            if (!salvaGiornoFamiglia(iso, { moglie: '' })) {
+                showToast('Turno non tolto: riprova.', 'avviso');
+                return;
+            }
+            showToast(`Turno ${diPersona()} tolto dal ${ggMm(iso)}.`);
+            renderContent();
+        }
+
+        // L'id del tasto di un turno: fam-moglie-<sigla> come prima (M, P, N,
+        // R: la tastiera e le prove lo ritrovano), ma solo se la sigla e' una
+        // lettera o una cifra e nessun altro turno ce l'ha; se no la
+        // posizione, perche' due id uguali sulla pagina non si possono avere.
+        function idTastoTurnoPersona(cfg, i) {
+            const s = cfg.turni[i].sigla;
+            const unica = cfg.turni.filter(x => x.sigla === s).length === 1;
+            return 'fam-moglie-' + (/^[A-Za-z0-9]$/.test(s) && unica ? s : 'n' + i);
         }
 
         // Quello che si sta scrivendo resta da parte finche' non si salva: il
@@ -10685,29 +11106,39 @@
         // La sezione «Famiglia» della giornata aperta. Sta sul fondo scuro
         // della giornata, come le altre: tasti grandi (44 punti) perche' si
         // usa con una mano, in piedi accanto alla macchina.
+        // La parte dei turni c'e' solo con l'opzione accesa; l'avvenimento
+        // sempre, e allora la sezione si chiama solo «Impegni».
         function sezioneFamigliaHTML(iso) {
             const f = giornoFamiglia(iso);
+            const cfg = configPersona();
             const bozza = window.bozzaAvvenimento && window.bozzaAvvenimento.iso === iso ? window.bozzaAvvenimento.testo : null;
             const nelCampo = bozza !== null ? bozza : f.avvenimento;
+            const fuoriElenco = cfg.attivo && f.moglie && !cfg.turni.some(x => x.nome === f.moglie);
             return `
                 <div class="pt-3 border-t border-gray-800 space-y-3">
-                    <p class="text-xs font-black uppercase tracking-wider text-yellow-400">Famiglia</p>
+                    <p class="text-xs font-black uppercase tracking-wider text-yellow-400">${cfg.attivo ? 'Famiglia e impegni' : 'Impegni'}</p>
+                    ${cfg.attivo ? `
                     <div>
-                        <p id="fam-moglie-titolo" class="text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Turno di tua moglie</p>
+                        <p id="fam-moglie-titolo" class="text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5 nome-turno-persona">Turno ${esc(diPersona(cfg))}</p>
                         <div role="group" aria-labelledby="fam-moglie-titolo" class="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                            ${TURNI_MOGLIE.map(turno => {
-                                const s = SEGNI_MOGLIE[turno];
-                                const scelto = f.moglie === turno;
+                            ${cfg.turni.map((turno, i) => {
+                                const s = segnoPersona(turno.nome, cfg);
+                                const scelto = f.moglie === turno.nome;
                                 return `
-                                <button id="fam-moglie-${s.lettera}" onclick="scegliTurnoMoglie('${escJs(iso)}', '${escJs(turno)}')" aria-pressed="${scelto ? 'true' : 'false'}"
-                                        class="flex items-center justify-center gap-2 py-3 px-2 rounded-xl text-sm font-black ${scelto ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}">
-                                    <span class="pastiglia-famiglia shrink-0 w-5 py-0.5 text-xs ${s.colore}" aria-hidden="true">${s.lettera}</span>
-                                    <span>${esc(turno)}</span>
+                                <button id="${esc(idTastoTurnoPersona(cfg, i))}" onclick="scegliTurnoMoglie('${escJs(iso)}', '${escJs(turno.nome)}')" aria-pressed="${scelto ? 'true' : 'false'}"
+                                        class="flex items-center justify-center gap-1.5 py-3 px-1.5 rounded-xl text-sm font-black min-w-0 ${scelto ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 hover:bg-gray-600 text-white'}">
+                                    <span class="pastiglia-famiglia shrink-0 w-5 py-0.5 text-xs ${s.classi}" aria-hidden="true">${esc(s.sigla)}</span>
+                                    <span class="min-w-0 leading-tight nome-turno-persona">${esc(turno.nome)}</span>
                                 </button>`;
                             }).join('')}
                         </div>
+                        ${fuoriElenco ? `
+                            <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                                <p class="text-xs font-bold text-gray-400 leading-tight min-w-0 nome-turno-persona">Segnato «${esc(f.moglie)}», un turno che nella scheda non c'è più.</p>
+                                <button onclick="togliTurnoPersonaGiorno('${escJs(iso)}')" class="px-4 py-3 rounded-xl text-sm font-black bg-gray-700 hover:bg-gray-600 text-white">Togli il turno</button>
+                            </div>` : ''}
                         <p class="text-xs text-gray-500 leading-tight mt-1.5">Toccando di nuovo il turno scelto lo si toglie.</p>
-                    </div>
+                    </div>` : ''}
                     <div>
                         <label for="fam-avvenimento" class="block text-xs font-black uppercase tracking-wider text-gray-500 mb-1.5">Avvenimento</label>
                         <div class="flex gap-1.5">
@@ -10765,6 +11196,8 @@
             const oreMese = lavorati.reduce((tot, t) => tot + importoDi(t.ore), 0);
 
             const inSpostamento = (window.shifts || []).find(t => String(t.id) === String(window.spostaTurnoId));
+            // Letta una volta per tutto il mese, non trentuno.
+            const persona = configPersona();
 
             const cella = (iso) => {
                 if (!iso) return '<div class="aspect-square"></div>';
@@ -10776,16 +11209,18 @@
                 const rossa = classeEvidenziaGiorno(iso) === 'text-red-500';
                 const incasso = t && !isRiposo(t) ? incassoDi(iso) : 0;
                 const fam = giornoFamiglia(iso);
-                const segno = SEGNI_MOGLIE[fam.moglie];
+                // Con l'opzione spenta il turno resta nell'archivio ma non si
+                // disegna: riaccendendola ricompare.
+                const segno = persona.attivo ? segnoPersona(fam.moglie, persona) : null;
                 // Il testo intero dell'avvenimento si legge passandoci sopra
                 // col mouse sul Mac; sul telefono basta toccare la casella.
-                const voceFamiglia = [segno ? `tua moglie: ${fam.moglie}` : '', fam.avvenimento ? `avvenimento: ${fam.avvenimento}` : ''].filter(Boolean).join(', ');
+                const voceFamiglia = [segno ? `${nomePersona(persona)}: ${fam.moglie}` : '', fam.avvenimento ? `avvenimento: ${fam.avvenimento}` : ''].filter(Boolean).join(', ');
 
                 return `
                     <button onclick="toccaGiornoCalendario('${escJs(iso)}')"
                             ${voceFamiglia ? `title="${esc(voceFamiglia)}"` : ''}
                             class="relative aspect-square w-full rounded-lg border ${stile.cella} ${aperto ? 'ring-2 ring-gray-900' : ''} ${isOggi ? 'ring-2 ring-yellow-500' : ''} p-1 flex flex-col items-center justify-center gap-0.5 transition-colors hover:brightness-95">
-                        ${segno ? `<span role="img" aria-label="${esc('moglie ' + fam.moglie)}" class="pastiglia-famiglia segno-famiglia a-sinistra ${segno.colore}">${segno.lettera}</span>` : ''}
+                        ${segno ? `<span role="img" aria-label="${esc(nomePersona(persona) + ' ' + fam.moglie)}" class="pastiglia-famiglia segno-famiglia a-sinistra ${segno.classi}">${esc(segno.sigla)}</span>` : ''}
                         ${fam.avvenimento ? `<span role="img" aria-label="avvenimento" class="pastiglia-famiglia segno-famiglia a-destra bg-red-600 text-white">★</span>` : ''}
                         <span class="text-sm font-black ${t ? stile.testo : (rossa ? 'text-red-500' : 'text-gray-500')} leading-none">${giorno}</span>
                         ${t ? `<span class="text-[9px] font-bold ${stile.testo} leading-none truncate max-w-full px-0.5">${isRiposo(t) ? stile.breve : (t.ore ? esc(t.ore) + 'h' : '·')}</span>` : ''}
@@ -10873,6 +11308,8 @@
 
                     ${window.showShiftForm ? moduloTurnoHTML() : ''}
 
+                    ${avvisoAnnoPersona()}
+
                     ${daCompletare.length ? `
                         <div class="riquadro-tinto tinta-gialla chiama rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 no-print">
                             <div>
@@ -10932,15 +11369,112 @@
                             <span><span class="inline-block w-2.5 h-2.5 rounded-sm bg-white border border-gray-300 align-middle"></span> da compilare</span>
                             <span class="text-green-700">● incassato</span>
                             <!-- Le lettere da sole non dicono di chi sono: la riga le
-                                 spiega una per una, «moglie» davanti e attaccato alla prima
-                                 (andando a capo non deve restare da solo). -->
-                            ${TURNI_MOGLIE.map((turno, i) => `<span class="whitespace-nowrap">${i === 0 ? 'moglie: ' : ''}<span class="pastiglia-famiglia px-1 py-0.5 ${SEGNI_MOGLIE[turno].colore}" aria-hidden="true">${SEGNI_MOGLIE[turno].lettera}</span> ${esc(turno.toLowerCase())}</span>`).join('')}
+                                 spiega una per una, il nome della persona davanti e
+                                 attaccato alla prima (andando a capo non deve restare
+                                 da solo). Il nome lo sceglie l'utente e arriva a 30
+                                 caratteri: sta fuori dal pezzo che non va a capo, se
+                                 no a 320 punti la riga uscirebbe dalla scheda. Solo
+                                 con l'opzione accesa. -->
+                            ${persona.attivo ? persona.turni.map((turno, i) => {
+                                const voce = `<span class="whitespace-nowrap"><span class="pastiglia-famiglia px-1 py-0.5 ${segnoPersona(turno.nome, persona).classi}" aria-hidden="true">${esc(turno.sigla)}</span> ${esc(turno.nome.toLocaleLowerCase('it-IT'))}</span>`;
+                                return i === 0 ? `<span class="nome-turno-persona">${esc(nomePersona(persona))}: ${voce}</span>` : voce;
+                            }).join('') : ''}
                             <span><span class="pastiglia-famiglia px-1 py-0.5 bg-red-600 text-white" aria-hidden="true">★</span> avvenimento</span>
                         </div>
                     </div>
 
                     ${pannello()}
                 </div>`;
+        }
+
+        // ============================================================
+        //  LA DOMANDA DI INIZIO ANNO
+        //  I turni di un'altra persona servono per un periodo (un lavoro, una
+        //  scuola) e poi magari non piu': una volta l'anno si chiede se
+        //  tenerli, o - a chi non li usa - se gli servono. Una risposta
+        //  qualsiasi scrive altraPersonaAnno nel profilo, che va sul Cloud:
+        //  risposto sul telefono, il Mac non chiede piu'.
+        //  LA REGOLA: si chiede se la scheda e' compilata e altraPersonaAnno
+        //  e' di un anno prima di quello di adesso. Se manca del tutto (chi
+        //  aveva gia' la scheda prima della v185, o un profilo arrivato da un
+        //  backup vecchio) si scrive l'anno di adesso senza chiedere niente:
+        //  la domanda arriva dal gennaio dopo. Chi compila la scheda per la
+        //  prima volta ha davanti la sezione nel modulo, e salvando l'anno
+        //  si scrive li' (vedi salvaProfiloDalModulo): niente domanda subito.
+        //  L'anno scritto senza chiedere resta su questo disco e non si
+        //  spedisce: e' lo stesso valore su ogni dispositivo, e spedirlo da
+        //  uno rimasto indietro coprirebbe una risposta vera data sull'altro.
+        // ============================================================
+        function assicuraAnnoPersona() {
+            const p = window.profilo || {};
+            if (!profiloCompilato() || annoPersonaValido(p.altraPersonaAnno)) return;
+            window.profilo = Object.assign({}, p, { altraPersonaAnno: String(new Date().getFullYear()) });
+            scriviLocale('taxi_profilo', window.profilo);
+        }
+
+        function domandaPersonaDaFare() {
+            if (!profiloCompilato()) return false;
+            configPersona();                 // la migrazione, se tocca, scrive l'anno
+            assicuraAnnoPersona();
+            const a = (window.profilo || {}).altraPersonaAnno;
+            return annoPersonaValido(a) && a < String(new Date().getFullYear());
+        }
+
+        function avvisoAnnoPersona() {
+            if (!domandaPersonaDaFare()) return '';
+            const cfg = configPersona();
+            return `
+                <div class="riquadro-tinto tinta-indaco chiama rounded-2xl p-4 no-print">
+                    <p class="font-black text-gray-900 nome-turno-persona">${cfg.attivo
+                        ? `Nuovo anno: segni ancora i turni ${esc(diPersona(cfg))}?`
+                        : 'Nuovo anno: vuoi segnare nel calendario i turni di un\'altra persona?'}</p>
+                    <p class="text-xs text-gray-600 mt-1 leading-relaxed">${cfg.attivo
+                        ? 'Togliendoli, i giorni già segnati non si cancellano: restano nascosti e tornano riaccendendo l\'opzione nella scheda del titolare.'
+                        : 'Per esempio i turni di chi vive con te, accanto ai tuoi. Si può cambiare quando vuoi dalla scheda del titolare.'}</p>
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        <button onclick="rispostaAnnoPersona(true)" class="bg-gray-900 hover:bg-gray-800 text-yellow-400 text-sm font-black px-5 py-2.5 rounded-xl">${cfg.attivo ? 'Sì' : 'Sì, attivala'}</button>
+                        <button onclick="rispostaAnnoPersona(false)" class="bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-black px-5 py-2.5 rounded-xl">${cfg.attivo ? 'No, toglili' : 'No'}</button>
+                    </div>
+                </div>`;
+        }
+
+        function rispostaAnnoPersona(si) {
+            const cfg = configPersona();
+            const anno = String(new Date().getFullYear());
+            if (cfg.attivo) {
+                salvaProfilo({ altraPersona: Object.assign({}, cfg, { attivo: !!si }), altraPersonaAnno: anno });
+                showToast(si
+                    ? `I turni ${diPersona(cfg)} restano nel calendario.`
+                    : `Turni ${diPersona(cfg)} tolti dal calendario. I giorni segnati restano: tornano riaccendendo l'opzione nella scheda del titolare.`);
+                renderContent();
+                return;
+            }
+            if (!si) {
+                salvaProfilo({ altraPersonaAnno: anno });
+                renderContent();
+                return;
+            }
+            // Si accende subito (la risposta e' «si'»), e si apre la sezione
+            // del modulo per scrivere il nome e sistemare i turni.
+            salvaProfilo({ altraPersona: Object.assign({}, cfg, { attivo: true }), altraPersonaAnno: anno });
+            window.bozzaProfilo = null;
+            switchTab('cloud');
+            const sezione = document.getElementById('prof-persona');
+            if (sezione) sezione.scrollIntoView({ block: 'start' });
+            rimettiFuocoNelModulo('prof-persona-nome');
+            // Aprendo Gestione si rileggono le copie del Cloud, e quando
+            // arrivano la scheda si ridisegna da sola: il campo rinasce e il
+            // fuoco finirebbe sul fondo della pagina. Se nel frattempo non si
+            // e' toccato altro, lo si rimette sul nome.
+            setTimeout(() => {
+                const a = document.activeElement;
+                if (!a || a === document.body) {
+                    const s = document.getElementById('prof-persona');
+                    if (s) s.scrollIntoView({ block: 'start' });
+                    rimettiFuocoNelModulo('prof-persona-nome');
+                }
+            }, 400);
+            showToast('Turni accesi: scrivi il nome e, se serve, cambia i turni. Poi «Salva la scheda».');
         }
 
         // Il benvenuto: compare finche' la scheda non e' compilata, e poi non si
@@ -15683,7 +16217,10 @@
             if (altre.length) {
                 const articolo = { scadenze: 'le scadenze', note: 'le note', versamenti: 'i versamenti',
                                    vetture: 'le vetture', 'voci di budget': 'le voci di budget', impostazioni: 'le impostazioni',
-                                   'calendario di famiglia': 'i turni di tua moglie e gli avvenimenti' };
+                                   // Il nome lo sceglie l'utente (era «tua moglie» per tutti):
+                                   // senza l'opzione accesa si dice il calendario e basta.
+                                   'calendario di famiglia': personaAttiva() && configPersona().nome
+                                       ? `i turni ${diPersona()} e gli avvenimenti` : 'i giorni del calendario di famiglia' };
                 const elenco = altre.length === 1
                     ? articolo[altre[0]]
                     : altre.slice(0, -1).join(', ') + ' e ' + altre[altre.length - 1];
@@ -15729,6 +16266,13 @@
                 Object.keys(PROFILO_VUOTO).forEach(k => {
                     if (typeof prof[k] === 'string') pulito[k] = prof[k].trim();
                 });
+                // I turni di un'altra persona (dalla v185) non sono testi e non
+                // stanno in PROFILO_VUOTO (vedi L'ALTRA PERSONA NEL CALENDARIO):
+                // passano dalla stessa pulizia di sempre. Un backup di prima non
+                // li ha, e allora qui resta quello che c'e'.
+                const personaDelBackup = pulisciConfigPersona(prof.altraPersona);
+                if (personaDelBackup) pulito.altraPersona = personaDelBackup;
+                if (annoPersonaValido(prof.altraPersonaAnno)) pulito.altraPersonaAnno = prof.altraPersonaAnno;
                 // IL LOGO ARRIVA DA UN FILE, E UN FILE PUO' SCRIVERLO CHIUNQUE
                 // Gli altri campi sono paroline e finiscono dentro del testo.
                 // Questo invece finisce nell'indirizzo di un'immagine, quindi
