@@ -148,6 +148,60 @@ sul Cloud. In quel caso si scarica un backup da quell'indirizzo e lo si ricarica
 Da `Gestione → Backup e impostazioni` si scarica un backup completo in JSON (movimenti, turni, scadenze e
 impostazioni fiscali) e un CSV dell'anno da passare al commercialista.
 
+## I turni di un'altra persona, per tutti (versione 185)
+
+Il calendario di famiglia della versione 182 era pensato per il titolare e sua moglie. Ma
+l'app deve andar bene a chiunque: adesso i turni sono di **un'altra persona qualunque**,
+col nome che si sceglie, e l'opzione è **facoltativa**.
+
+### Dove si sceglie
+
+- Nella **scheda del titolare** — quella del primo avvio, con nome, cognome, partita IVA e
+  colore, che si riapre da «Gestione → Backup e impostazioni» — c'è la sezione **«Turni di
+  un'altra persona (facoltativo)»**: un interruttore, il nome della persona e i suoi turni.
+- I turni partono da **Mattina, Pomeriggio, Notte, Riposo**, ma ognuno si può rinominare,
+  togliere o aggiungere (fino a 8), con la sua **lettera** e il suo **colore**. «Rimetti i
+  turni predefiniti» torna ai quattro di partenza, dopo aver chiesto.
+- **A ogni inizio anno**, in cima a «Oggi» e al Calendario, l'app chiede: «segni ancora i
+  turni di …?» se l'opzione è accesa, oppure «vuoi segnare i turni di un'altra persona?» se
+  è spenta. La risposta vale per tutti i dispositivi. Chi compila la scheda per la prima
+  volta non riceve la domanda subito.
+
+### Cosa succede togliendola
+
+I giorni già segnati **restano nascosti**, non si cancellano: spariscono le lettere e i
+tasti dal calendario, e tornano riaccendendo l'opzione. Gli **avvenimenti ★ restano
+sempre**, per tutti, anche con l'opzione spenta: la sezione del giorno si chiama allora
+«Impegni».
+
+Rinominare un turno non cancella i giorni già segnati col nome vecchio: si vedono con
+l'iniziale su grigio, e si possono togliere dal giorno.
+
+### Per chi la usava già
+
+Chi aveva già segnato dei turni trova l'opzione **accesa da sola**, col nome «Moglie» e i
+quattro turni di sempre — il nome si cambia dalla scheda — e quest'anno nessuna domanda.
+
+### I dati
+
+L'archivio dei giorni (`taxi_famiglia`) **non cambia formato**: il campo si chiama ancora
+`moglie`, ma accetta qualsiasi nome di turno. Le scelte stanno in due campi nuovi del
+profilo (`altraPersona`, `altraPersonaAnno`), sincronizzati come il resto del profilo e
+ripuliti in entrata da Cloud e backup.
+
+**Da sapere: aggiornare tutti i dispositivi prima di creare turni con nomi nuovi.** Un
+dispositivo rimasto alla 184 conosce solo i quattro turni di sempre: se lì si tocca un
+giorno con un turno inventato («Spezzato»), quel turno si perde. Coi quattro predefiniti
+il problema non c'è.
+
+### Le prove
+
+`prove/testAltraPersona.mjs` (nuova): migrazione, opzione spenta e riaccesa, interfaccia a
+320/390/1280 di giorno e al buio, modulo dai tasti veri, turno rinominato, nomi con codice
+dentro, configurazione storta da Cloud e backup, domanda di gennaio su due dispositivi.
+`testFamiglia` aggiornata ai nomi liberi e alle frasi nuove. Sulla versione 184 tutte e due
+falliscono dove la funzione è cambiata.
+
 ## I messaggi in cima (versione 184)
 
 I messaggi che compaiono per qualche secondo — «Cloud attivo per…», «Corsa annullata», gli
