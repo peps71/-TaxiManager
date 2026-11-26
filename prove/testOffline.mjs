@@ -285,7 +285,7 @@ await caso('cambio di account', async () => {
     { qui: await idsQui(), u1: await idsServer('u1'), u2: await idsServer('u2') });
   c('Annulla: l\'avviso dice come fare', avvisi.some(t => t.includes('Per usare u2@esempio.it con i suoi dati') && /backup/.test(t) && /azzera/.test(t) && /rientra/.test(t)), avvisi);
   c('Annulla: l\'avviso, parola per parola (con l\'«Attenzione» su quello che passa da solo)', avvisi.includes('Per usare u2@esempio.it con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra. '
-    + 'Attenzione: note, scadenze, vetture, versamenti, voci di budget, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in u2@esempio.it dove lì non ce ne sono ancora.'), avvisi);
+    + 'Attenzione: note, scadenze, vetture, versamenti, voci di budget, calendario di famiglia, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in u2@esempio.it dove lì non ce ne sono ancora.'), avvisi);
   dialoghi.length = 0; await ricarica();
   c('riaperta dopo Annulla: nessuna domanda', dialoghi.length === 0, dialoghi);
   // di nuovo u2, e questa volta OK

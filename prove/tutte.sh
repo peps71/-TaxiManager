@@ -56,6 +56,7 @@ titolo "rinominare una voce";     giro testRinomina.mjs
 titolo "spese senza voce";        giro testOrfane.mjs
 titolo "versamenti contanti";     giro testVersamenti.mjs
 titolo "note degli avvenimenti"; giro testNote.mjs
+titolo "calendario di famiglia";  giro testFamiglia.mjs
 titolo "foto allegate";           giro testFoto.mjs
 titolo "impostazioni fiscali";    giro testFiscali.mjs
 titolo "conguaglio apribile";     giro testConguaglio.mjs

@@ -109,7 +109,7 @@ await ricarica();
 const DOMANDA = (email, cosa, lasciate) => `Sei entrato con ${email}. Su questo telefono ci sono già ${cosa} di un altro account o mai caricati${lasciate || ''}.\n\n`
   + `OK: li porto anche in ${email}, insieme a quello che c'è già.\nAnnulla: esco da ${email} e non tocco niente.`;
 const AVVISO_ANNULLA = (email) => `Per usare ${email} con i suoi dati: scarica un backup, azzera movimenti e turni da «Gestione → Backup e impostazioni» e rientra. `
-  + `Attenzione: note, scadenze, vetture, versamenti, voci di budget, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in ${email} dove lì non ce ne sono ancora.`;
+  + `Attenzione: note, scadenze, vetture, versamenti, voci di budget, calendario di famiglia, la tua scheda e le impostazioni fiscali di questo telefono, entrando, vanno in ${email} dove lì non ce ne sono ancora.`;
 const caso = async (titolo, fn) => {
   console.log('--- ' + titolo + ' ---');
   try { await fn(); }
@@ -229,12 +229,15 @@ await caso('S5: azzera da fuori dal Cloud, poi entra con un altro account', asyn
 
 await caso('il telefono senza movimenti ne\' turni: il resto passa da solo nell\'altro account', async () => {
   // E' quello che l'avviso dopo Annulla mette in guardia: azzerati movimenti
-  // e turni, note, scadenze, vetture, versamenti, voci di budget, scheda e
-  // impostazioni fiscali vanno nelle cartelle ancora vuote del nuovo account.
+  // e turni, note, scadenze, vetture, versamenti, voci di budget, calendario
+  // di famiglia, scheda e impostazioni fiscali vanno nelle cartelle ancora
+  // vuote del nuovo account (il calendario dalla 86d0d55: l'avviso lo nomina,
+  // e qui si guarda che sia vero).
   await ini({ __uid: '', taxi_note: [{ id: 'n1', testo: 'nota di A', data: '2026-10-01' }], taxi_scadenze: [{ id: 's1', nome: 'Bollo di A', data: '2026-11-01' }],
     taxi_profilo: { nome: 'Mario di A' }, taxi_in_sospeso: { v: 1, uid: 'u1', n: 0, dal: null, per: {} },
     taxi_veicoli: [{ id: 'v1', targa: 'AA000AA' }], taxi_voci_fisse: [{ slug: 'radio', nome: 'Radio', importo: 50, frequenza: 'mensile' }],
-    taxi_versamenti: [{ id: 'w1', data: '2026-06-30', importo: 100, tipo: 'irpef' }], taxi_fiscal_settings: { inpsPerc: 24.48 } });
+    taxi_versamenti: [{ id: 'w1', data: '2026-06-30', importo: 100, tipo: 'irpef' }], taxi_fiscal_settings: { inpsPerc: 24.48 },
+    taxi_famiglia: [{ id: '2026-11-20', data: '2026-11-20', moglie: 'Notte', avvenimento: 'cena di A' }] });
   dialoghi.length = 0; risposta = true;
   await ricarica();
   await entra('u2');
@@ -243,6 +246,7 @@ await caso('il telefono senza movimenti ne\' turni: il resto passa da solo nell\
   c('nessuna domanda', dialoghi.length === 0, dialoghi);
   c('in u2 arrivano nota, scadenza, vettura, versamento, voce di budget', su('taxi_note') === 'n1' && su('taxi_scadenze') === 's1' && su('taxi_veicoli') === 'v1' && su('taxi_versamenti') === 'w1' && su('taxi_voci_fisse') !== '',
     { note: su('taxi_note'), sc: su('taxi_scadenze'), ve: su('taxi_veicoli'), vers: su('taxi_versamenti'), voci: su('taxi_voci_fisse') });
+  c('e il calendario di famiglia', su('taxi_famiglia') === '2026-11-20' && (cl[B + 'u2/taxi_famiglia/2026-11-20'] || {}).avvenimento === 'cena di A', su('taxi_famiglia'));
   c('e la scheda e le impostazioni fiscali', (cl[B + 'u2/profilo/dati'] || {}).nome === 'Mario di A' && !!cl[B + 'u2/impostazioni/fiscali'], { prof: cl[B + 'u2/profilo/dati'] });
 });
 
